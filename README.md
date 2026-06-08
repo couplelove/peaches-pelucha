@@ -43,27 +43,39 @@ For the real, synced app, do the 5-minute setup below.
 > private 2-person app with no logins, so the database is intentionally open to
 > anyone who has these values — just don't post your URL/key publicly.
 
-### 4. Put the app online (PRIVATE repo)
-The Supabase key is baked into `config.js` so the app connects automatically and
-nobody has to type anything. Because the key is in the code, the repo must be
-**private** — and you deploy through a host that serves private repos for free.
+### 4. Host on GitHub Pages with auto-deploy
+This repo ships a GitHub Actions workflow (`.github/workflows/deploy.yml`) that
+publishes to GitHub Pages on every push. The Supabase key is **not** in the repo
+(`config.js` is blank) — the workflow injects it from repo **Secrets** at deploy
+time, so the published site still connects automatically with no setup screen.
 
-1. On <https://github.com> click **New repository**, name it `peaches-pelucha`,
-   set it to **Private**, leave it empty, create it.
-2. From this folder:
+1. **Create a public repo.** On <https://github.com> → **New repository**, name it
+   `peaches-pelucha`, **Public**, empty, create.
+   *(Public is required for free GitHub Pages. The key isn't in the code or
+   history, so the repo source is safe — see the note below about the live page.)*
+2. **Add two secrets.** Repo → **Settings → Secrets and variables → Actions →
+   New repository secret**, add:
+   - `SUPABASE_URL` = `https://ddaidwngxdbvfbchfixn.supabase.co`
+   - `SUPABASE_ANON_KEY` = your `sb_publishable_…` key
+3. **Turn on Pages via Actions.** Repo → **Settings → Pages → Build and
+   deployment → Source = GitHub Actions**.
+4. **Push:**
    ```bash
    git remote add origin https://github.com/<your-username>/peaches-pelucha.git
    git push -u origin main
    ```
-3. Connect a free host to that repo:
-   - **Cloudflare Pages** (<https://pages.cloudflare.com>) or **Vercel**
-     (<https://vercel.com>) → "Import" your private repo. No build command,
-     output/root is the repo itself. It gives you a live URL.
-   - (Netlify works too. **GitHub Pages' free tier needs a *public* repo**, so
-     don't use it while the key is in `config.js`.)
+   The **Actions** tab runs the deploy; when it's green your site is live at
+   `https://<your-username>.github.io/peaches-pelucha/`.
+5. **From now on, every `git push` auto-deploys.** 🎉
 
-> Want it dead simple with no GitHub at all? Drag this folder onto
-> <https://app.netlify.com/drop> — instant URL, key already included.
+> 🔒 The repo *source/history* never contains the key. But this is a no-backend
+> app, so the **published page** does include the key (that's how it talks to
+> Supabase with no login) — same as any client-only deploy. The Pages URL is
+> unguessable; just don't post it publicly. To rotate the key later, change it in
+> Supabase + the `SUPABASE_ANON_KEY` secret and push.
+
+> Prefer no GitHub? Drag this folder onto <https://app.netlify.com/drop> — but
+> first paste your values into `config.js` (and don't commit that).
 
 ### 5. First open — it just connects
 1. Open your live URL on each phone. It connects automatically (no setup screen).
@@ -114,18 +126,19 @@ shows up on the other's phone within a second.
 | `index.html` | App entry / shell |
 | `app.js` | The whole app (Preact, loaded from a CDN — no build needed) |
 | `styles.css` | The peachy theme |
-| `config.js` | Your Supabase URL + key (so it auto-connects) — keep the repo private |
+| `config.js` | Blank in the repo; filled by the deploy workflow from Secrets |
+| `.github/workflows/deploy.yml` | Auto-deploy to GitHub Pages on push |
 | `schema.sql` | Run this once in Supabase to create the tables |
+| `migrations/001_matches.sql` | Adds the live-game table to an existing DB |
 | `manifest.webmanifest`, `sw.js`, `icons/` | PWA install + offline shell |
 | `demo-client.js` | In-memory backend for `?demo=1` only |
 | `tools/make_icons.py` | Regenerates the app icons (optional) |
 
 ### A note on the key
-The Supabase URL + key live in `config.js` so both phones connect automatically.
-That key can read/write your database, so **keep the GitHub repo private** and
-deploy via Cloudflare Pages / Vercel / Netlify (which serve private repos). Don't
-push this to a public repo or free GitHub Pages with the key filled in. If you'd
-rather not store the key at all, blank out the two values in `config.js` and the
-app will ask for them once per phone instead.
+The repo and its history never contain the Supabase key — `config.js` is blank,
+and the GitHub Actions workflow injects the key from the `SUPABASE_URL` /
+`SUPABASE_ANON_KEY` repo Secrets at deploy time. The **published page** still
+contains the key (a no-login client app must, to reach Supabase), so keep the URL
+private and don't post it. To rotate: update Supabase + the secret, then push.
 
 Made with 💗 for Peaches & Pelucha.
