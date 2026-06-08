@@ -57,9 +57,9 @@ time, so the published site still connects automatically with no setup screen.
    New repository secret**, add:
    - `SUPABASE_URL` = `https://ddaidwngxdbvfbchfixn.supabase.co`
    - `SUPABASE_ANON_KEY` = your `sb_publishable_…` key
-3. **Turn on Pages via Actions.** Repo → **Settings → Pages → Build and
-   deployment → Source = GitHub Actions**.
-4. **Push:**
+3. *(Pages turns on automatically on the first run. If your org disables that,
+   set it manually: Repo → **Settings → Pages → Source = GitHub Actions**.)*
+4. **Push** (do this after the secrets exist, so the first deploy connects):
    ```bash
    git remote add origin https://github.com/<your-username>/peaches-pelucha.git
    git push -u origin main
