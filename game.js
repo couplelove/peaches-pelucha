@@ -1,0 +1,316 @@
+import { h } from "https://esm.sh/preact@10.23.2";
+import { useState, useEffect, useMemo, useCallback, useRef } from "https://esm.sh/preact@10.23.2/hooks";
+import htm from "https://esm.sh/htm@3.1.1";
+import * as E from "./engine.js";
+
+const html = htm.bind(h);
+
+// Muted, editorial card colours — distinguishable but not candy.
+const CARD_BG = { red: "#bf4a3c", blue: "#356b8c", green: "#3e7a58", yellow: "#b0822c" };
+
+/* ----------------------------------------------------------- match hook --- */
+function useMatch(client) {
+  const [match, setMatch] = useState(undefined); // undefined=loading, null=none
+  const load = useCallback(async () => {
+    const { data } = await client.from("matches").select("*")
+      .eq("status", "playing").order("created_at", { ascending: false }).limit(1);
+    setMatch((data && data[0]) || null);
+  }, [client]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const ch = client.channel("pp-match")
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (p) => {
+        if (p.eventType === "DELETE") { load(); return; }
+        const row = p.new;
+        if (row.status === "playing") setMatch(row);
+        else load();
+      }).subscribe();
+    return () => { client.removeChannel(ch); };
+  }, [client, load]);
+  return [match, setMatch, load];
+}
+
+/* ----------------------------------------------------------- PlayTab ------ */
+export function PlayTab(ctx) {
+  const { client, players, me, api, flash } = ctx;
+  const [match, setMatch, reload] = useMatch(client);
+  const busy = useRef(false);
+
+  const commit = useCallback(async (newState) => {
+    if (!match || busy.current) return;
+    busy.current = true;
+    const prevStatus = match.state.status;
+    const version = match.version;
+    // Keep the row 'playing' so both phones can still load the Hand-Over /
+    // Match-Over screens from `state.status`. It's only retired to 'finished'
+    // when a brand-new match replaces it (see MatchOver → newMatch).
+    const status = "playing";
+    const optimistic = { ...match, state: newState, version: version + 1, status };
+    setMatch(optimistic);
+    const { data, error } = await client.from("matches")
+      .update({ state: newState, version: version + 1, status, updated_at: new Date().toISOString() })
+      .eq("id", match.id).eq("version", version).select();
+    busy.current = false;
+    if (error) { flash("⚠️ " + error.message); reload(); return; }
+    if (!data || !data.length) { flash("Out of sync — refreshing"); reload(); return; }
+    // First client to see the win records it for lifetime + grants the trophy.
+    if (newState.status === "matchOver" && prevStatus !== "matchOver" && newState.winner) {
+      await recordWin(client, api, newState.winner);
+    }
+  }, [match, client, api, flash, reload, setMatch]);
+
+  if (match === undefined) {
+    return html`<div class="card center"><div class="muted">Loading game…</div></div>`;
+  }
+  if (match === null) {
+    return html`<${StartMatch} players=${players} client=${client} onStarted=${(row) => setMatch(row)} flash=${flash} />`;
+  }
+  return html`<${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} />`;
+}
+
+async function recordWin(client, api, winnerId) {
+  await client.from("games").insert({ name: "Phase 10", status: "finished", winner_id: winnerId, finished_at: new Date().toISOString() });
+}
+
+function StartMatch({ players, client, onStarted, flash }) {
+  const [sel, setSel] = useState(players.slice(0, 2).map((p) => p.id));
+  const toggle = (id) => setSel((s) => s.includes(id) ? s.filter((x) => x !== id) : (s.length < 2 ? [...s, id] : s));
+  const start = async () => {
+    if (sel.length !== 2) { flash("Pick exactly two players"); return; }
+    const state = E.startMatch(sel);
+    const { data, error } = await client.from("matches").insert({ state, version: 0, status: "playing" }).select().single();
+    if (error) { flash("⚠️ " + error.message); return; }
+    onStarted(data);
+  };
+  return html`
+    <div class="card">
+      <h2>New Phase 10 match 🎴</h2>
+      <p class="sub">Pick the two of you. The app deals real cards you can play from anywhere.</p>
+      <div class="list">
+        ${players.map((p) => html`<div class="line" key=${p.id} onClick=${() => toggle(p.id)}>
+          <div class="l"><span class="em">${p.emoji}</span><b>${p.name}</b></div>
+          <div class=${`chk ${sel.includes(p.id) ? "on" : ""}`}>${sel.includes(p.id) ? "✓" : ""}</div>
+        </div>`)}
+      </div>
+      <button class="btn block mt" disabled=${sel.length !== 2} onClick=${start}>Deal first hand</button>
+    </div>`;
+}
+
+/* ----------------------------------------------------------- Card --------- */
+function Card({ card, sel, onClick, small }) {
+  let face, bg = "#fff", color = "#fff8f3";
+  if (E.isNumber(card)) { bg = CARD_BG[card.color]; face = card.num; }
+  else if (E.isWild(card)) { bg = "#2b2521"; color = "#e7c98a"; face = "★"; }      // ink card, gold star
+  else { bg = "#8c8077"; color = "#fff8f3"; face = "⊘"; }                          // warm grey skip
+  return html`<button class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${onClick ? "" : "static"}`}
+    style=${`background:${bg};color:${color}`} onClick=${onClick} disabled=${!onClick}>${face}</button>`;
+}
+
+function Meld({ meld, hittable, onHit }) {
+  return html`<div class=${`meld ${hittable ? "hit" : ""}`} onClick=${hittable ? onHit : null}>
+    ${meld.cards.map((c) => html`<${Card} key=${c.id} card=${c} small=${true} />`)}
+    ${hittable && html`<span class="hitplus">＋</span>`}
+  </div>`;
+}
+
+/* ----------------------------------------------------------- Board -------- */
+function Board(props) {
+  const { match, commit, players, me } = props;
+  const s = match.state;
+  const meId = me.id;
+  const oppId = s.players.find((p) => p !== meId) || s.players[0];
+  const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔", color: "#999" };
+  const myTurn = s.turn === meId && s.status === "playing";
+
+  const [mode, setMode] = useState("normal"); // normal | laying | hitting
+  const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
+  useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
+
+  const myHand = E.sortHand(s.hands[meId] || []);
+  const me_ = pinfo(meId), opp_ = pinfo(oppId);
+
+  // ---- hand over / match over panels ----
+  if (s.status === "handOver") return html`<${HandOver} ...${props} oppId=${oppId} pinfo=${pinfo} />`;
+  if (s.status === "matchOver") return html`<${MatchOver} ...${props} pinfo=${pinfo} />`;
+
+  const draw = (src) => commit(E.drawFrom(s, meId, src));
+  const doDiscard = () => { if (pick) commit(E.discard(s, meId, pick)); };
+  const doHit = (ownerId, idx) => { if (pick) { commit(E.hit(s, meId, pick, ownerId, idx)); setPick(null); } };
+
+  const topDiscard = s.discard[s.discard.length - 1];
+  const discardIsSkip = topDiscard && E.isSkip(topDiscard);
+
+  return html`
+    <div class="card game">
+      <div class="row between">
+        <div class="ghand">Hand ${s.handNumber}</div>
+        <div class=${`turnbadge ${myTurn ? "you" : "them"}`}>
+          ${s.turn === meId ? "Your turn" : `${opp_.emoji} ${opp_.name}'s turn`}
+        </div>
+      </div>
+
+      <!-- opponent -->
+      <${PlayerStrip} info=${opp_} phase=${s.phaseOf[oppId]} score=${s.scores[oppId]}
+        handCount=${(s.hands[oppId] || []).length} laid=${s.laidDown[oppId]} skip=${!!s.skipped[oppId]} mine=${false} />
+      ${(s.table[oppId] || []).length > 0 && html`<div class="melds">
+        ${s.table[oppId].map((m, i) => html`<${Meld} key=${i} meld=${m}
+          hittable=${mode === "hitting" && !!pick && E.canHit(m, myHand.find((c) => c.id === pick))}
+          onHit=${() => doHit(oppId, i)} />`)}
+      </div>`}
+
+      <!-- piles -->
+      <div class="piles">
+        <button class=${`pile draw ${myTurn && s.turnPhase === "draw" ? "live" : ""}`}
+          disabled=${!(myTurn && s.turnPhase === "draw")} onClick=${() => draw("pile")}>
+          <div class="pcardback">🂠</div><div class="pilelbl">Draw · ${s.draw.length}</div>
+        </button>
+        <button class=${`pile ${myTurn && s.turnPhase === "draw" && !discardIsSkip ? "live" : ""}`}
+          disabled=${!(myTurn && s.turnPhase === "draw" && !discardIsSkip)} onClick=${() => draw("discard")}>
+          ${topDiscard ? html`<${Card} card=${topDiscard} />` : html`<div class="pcardback">—</div>`}
+          <div class="pilelbl">${discardIsSkip ? "Skip (can't take)" : "Discard"}</div>
+        </button>
+      </div>
+
+      <!-- my melds -->
+      ${(s.table[meId] || []).length > 0 && html`<div class="melds mine">
+        ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m}
+          hittable=${mode === "hitting" && !!pick && E.canHit(m, myHand.find((c) => c.id === pick))}
+          onHit=${() => doHit(meId, i)} />`)}
+      </div>`}
+
+      <!-- me -->
+      <${PlayerStrip} info=${me_} phase=${s.phaseOf[meId]} score=${s.scores[meId]}
+        handCount=${myHand.length} laid=${s.laidDown[meId]} skip=${!!s.skipped[meId]} mine=${true} />
+
+      ${mode === "laying"
+        ? html`<${LayDown} state=${s} meId=${meId} hand=${myHand} commit=${commit} cancel=${() => setMode("normal")} />`
+        : html`
+        <div class="phasereq">Your phase ${s.phaseOf[meId]}: <b>${E.phaseText(s.phaseOf[meId])}</b></div>
+        <div class="hand">
+          ${myHand.map((c) => html`<${Card} key=${c.id} card=${c} sel=${pick === c.id}
+            onClick=${(myTurn && s.turnPhase === "play") ? () => setPick(pick === c.id ? null : c.id) : null} />`)}
+        </div>
+
+        ${!myTurn && html`<div class="waitbar">⏳ Waiting for ${opp_.emoji} ${opp_.name}…</div>`}
+        ${myTurn && s.turnPhase === "draw" && html`<div class="waitbar">👆 Draw a card to start your turn</div>`}
+        ${myTurn && s.turnPhase === "play" && html`
+          <div class="actionbar">
+            ${!s.laidDown[meId] && html`<button class="btn good sm" onClick=${() => setMode("laying")}>Lay down phase</button>`}
+            ${s.laidDown[meId] && html`<button class=${`btn plum sm ${mode === "hitting" ? "" : "ghost"}`}
+              onClick=${() => setMode(mode === "hitting" ? "normal" : "hitting")}>${mode === "hitting" ? "Done hitting" : "Hit a meld"}</button>`}
+            <button class="btn sm" disabled=${!pick || mode === "hitting"} onClick=${doDiscard}>
+              ${pick && E.isSkip(myHand.find((c) => c.id === pick)) ? "Play Skip ⊘" : "Discard"}
+            </button>
+          </div>
+          ${mode === "hitting" && html`<div class="hint">Pick a card, then tap a glowing meld to add it.</div>`}
+          ${mode !== "hitting" && html`<div class="hint">Select a card, then Discard to end your turn.</div>`}
+        `}
+      `}
+
+      <${LogStrip} log=${s.log} pinfo=${pinfo} oppId=${oppId} meId=${meId} />
+    </div>`;
+}
+
+function PlayerStrip({ info, phase, score, handCount, laid, skip, mine }) {
+  return html`<div class=${`pstrip ${mine ? "mine" : ""}`} style=${`border-color:${info.color}55`}>
+    <div class="l"><span class="av" style=${`background:${info.color}22`}>${info.emoji}</span>
+      <div><b>${info.name}${mine ? " (you)" : ""}</b>
+        <div class="tiny muted">Phase ${phase} · ${handCount} cards${laid ? " · laid down ✓" : ""}${skip ? " · skipped ⊘" : ""}</div></div></div>
+    <div class="score">${score}</div>
+  </div>`;
+}
+
+function LogStrip({ log, pinfo, oppId, meId }) {
+  const last = (log || []).slice(-1)[0];
+  if (!last) return null;
+  return html`<div class="logstrip tiny muted">📝 ${last}</div>`;
+}
+
+/* ----------------------------------------------------------- LayDown ------ */
+function LayDown({ state, meId, hand, commit, cancel }) {
+  const groups = E.phaseGroups(state.phaseOf[meId]);
+  const [assign, setAssign] = useState(groups.map(() => []));   // card ids per group
+  const [active, setActive] = useState(0);
+  const usedAll = new Set(assign.flat());
+
+  const groupsCards = assign.map((ids) => ids.map((id) => hand.find((c) => c.id === id)));
+  const ok = E.validPhase(state.phaseOf[meId], groupsCards);
+
+  const tapCard = (id) => {
+    setAssign((a) => {
+      const next = a.map((g) => g.filter((x) => x !== id));     // remove from any group
+      if (a.flat().includes(id)) return next;                   // was assigned -> just removed
+      if (next[active].length >= groups[active].count) return a; // bucket full
+      next[active] = [...next[active], id];
+      return next;
+    });
+  };
+
+  return html`<div class="laydown">
+    <div class="row between"><b>Lay down phase ${state.phaseOf[meId]}</b>
+      <button class="linkbtn" onClick=${cancel}>cancel</button></div>
+    <div class="buckets">
+      ${groups.map((g, i) => html`<button class=${`bucket ${active === i ? "on" : ""} ${E.validGroup(g, groupsCards[i]) ? "good" : ""}`}
+        key=${i} onClick=${() => setActive(i)}>
+        ${g.type === "set" ? "Set" : g.type === "run" ? "Run" : "Colour"} of ${g.count}
+        <span class="bc">${assign[i].length}/${g.count}</span>
+        <div class="bchips">${groupsCards[i].map((c) => c && html`<${Card} key=${c.id} card=${c} small=${true} />`)}</div>
+      </button>`)}
+    </div>
+    <div class="hint">Tap the bucket to fill, then tap your cards. Tap a card again to remove it.</div>
+    <div class="hand">
+      ${hand.map((c) => html`<${Card} key=${c.id} card=${c} sel=${usedAll.has(c.id)} onClick=${() => tapCard(c.id)} />`)}
+    </div>
+    <button class="btn good block mt" disabled=${!ok}
+      onClick=${() => { commit(E.layDown(state, meId, assign)); cancel(); }}>
+      ${ok ? "Lay it down ✓" : "Fill the phase to continue"}
+    </button>
+  </div>`;
+}
+
+/* ----------------------------------------------------------- HandOver ----- */
+function HandOver({ match, commit, pinfo, oppId, me }) {
+  const s = match.state;
+  const d = s.lastHand?.detail || {};
+  const outName = s.lastHand ? pinfo(s.lastHand.outPid).name : "";
+  return html`<div class="card">
+    <h2>Hand ${s.lastHand?.handNumber} over 🏁</h2>
+    <p class="sub">${pinfo(s.lastHand?.outPid).emoji} ${outName} went out.</p>
+    <div class="list">
+      ${s.players.map((p) => { const x = d[p] || {}; const info = pinfo(p);
+        return html`<div class="line" key=${p}>
+          <div class="l"><span class="em">${info.emoji}</span><div class="txt"><b>${info.name}</b>
+            <span class="tiny muted">${x.laid ? `completed phase ${x.fromPhase} → now on ${Math.min(x.fromPhase + 1, 10)}` : `still on phase ${x.fromPhase}`}</span></div></div>
+          <div class="row"><span class="amt neg">+${x.points}</span><span class="pill">total ${s.scores[p]}</span></div>
+        </div>`; })}
+    </div>
+    <button class="btn block mt" onClick=${() => commit(E.startHand(s))}>Deal next hand 🎴</button>
+  </div>`;
+}
+
+/* ----------------------------------------------------------- MatchOver ---- */
+function MatchOver({ match, setMatch, players, me, pinfo, client, flash }) {
+  const s = match.state;
+  const w = pinfo(s.winner);
+  const newMatch = async () => {
+    const state = E.startMatch(s.players);
+    await client.from("matches").update({ status: "finished" }).eq("id", match.id);
+    const { data, error } = await client.from("matches").insert({ state, version: 0, status: "playing" }).select().single();
+    if (error) { flash("⚠️ " + error.message); return; }
+    setMatch(data); // realtime swaps the other phone to the fresh match too
+  };
+  return html`<div class="card center">
+    <div style="font-size:54px">👑</div>
+    <h2 style="margin:.2em 0">${w.emoji} ${w.name} wins!</h2>
+    <p class="sub">Finished all 10 phases.</p>
+    <div class="list" style="text-align:left">
+      ${[...s.players].sort((a, b) => s.scores[a] - s.scores[b]).map((p) => { const info = pinfo(p);
+        return html`<div class="line" key=${p}>
+          <div class="l"><span class="em">${info.emoji}</span><b>${info.name}</b></div>
+          <div class="row"><span class="pill">phase ${s.phaseOf[p]}</span><span class="amt">${s.scores[p]} pts</span></div>
+        </div>`; })}
+    </div>
+    <p class="tiny muted mt">🏆 logged to Lifetime · trophy hearts granted</p>
+    <button class="btn block mt" onClick=${newMatch}>New match 🎴</button>
+  </div>`;
+}

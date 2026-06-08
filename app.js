@@ -1,0 +1,776 @@
+import { h, render, Fragment } from "https://esm.sh/preact@10.23.2";
+import {
+  useState, useEffect, useMemo, useRef, useCallback,
+} from "https://esm.sh/preact@10.23.2/hooks";
+import htm from "https://esm.sh/htm@3.1.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PlayTab } from "./game.js";
+
+const html = htm.bind(h);
+
+/* ============================================================ helpers ===== */
+
+const LS = {
+  url: "pp.supabase.url",
+  key: "pp.supabase.key",
+  me: "pp.currentPlayer",
+};
+
+function getCreds() {
+  const cfg = window.PP_CONFIG || {};
+  const url = (cfg.SUPABASE_URL || localStorage.getItem(LS.url) || "").trim();
+  const key = (cfg.SUPABASE_ANON_KEY || localStorage.getItem(LS.key) || "").trim();
+  return { url, key };
+}
+
+const EMOJIS = ["🍑", "🧸", "💗", "🐰", "🦊", "🐻", "🐧", "🦄", "🌸", "⭐", "🍓", "🐼", "🐨", "🦁", "🌷", "🍦"];
+const COLORS = ["#ff7a91", "#9b6bff", "#3fb27f", "#f2a900", "#ff9e6e", "#5aa9e6", "#e35aa9", "#7bc47f"];
+
+// Standard Phase 10 phase requirements (for reference labels).
+const PHASES = [
+  "2 sets of 3", "1 set of 3 + 1 run of 4", "1 set of 4 + 1 run of 4",
+  "1 run of 7", "1 run of 8", "1 run of 9", "2 sets of 4",
+  "7 cards of one color", "1 set of 5 + 1 set of 2", "1 set of 5 + 1 set of 3",
+];
+
+const fmt = (n) => (n > 0 ? "+" : "") + n;
+const coins = (n) => `${n} 💗`;
+
+/* ============================================================ root ======== */
+
+const DEMO = new URLSearchParams(location.search).has("demo");
+
+function Root() {
+  const [creds, setCreds] = useState(getCreds());
+  const [client, setClient] = useState(null);
+  const [credError, setCredError] = useState("");
+
+  useEffect(() => {
+    if (DEMO) {
+      import("./demo-client.js").then((m) => setClient(m.createDemoClient()));
+      return;
+    }
+    if (creds.url && creds.key) {
+      try {
+        setClient(createClient(creds.url, creds.key, { auth: { persistSession: false } }));
+        setCredError("");
+      } catch (e) {
+        setCredError(String(e.message || e));
+        setClient(null);
+      }
+    } else {
+      setClient(null);
+    }
+  }, [creds.url, creds.key]);
+
+  const saveCreds = (url, key) => {
+    localStorage.setItem(LS.url, url.trim());
+    localStorage.setItem(LS.key, key.trim());
+    setCreds({ url: url.trim(), key: key.trim() });
+  };
+
+  if (DEMO) {
+    if (!client) return html`<div class="boot"><div class="boot-heart">💗</div><div class="boot-text">Demo…</div></div>`;
+    return html`<${App} client=${client} onResetCreds=${() => { location.search = ""; }} />`;
+  }
+  if (!creds.url || !creds.key) {
+    return html`<${SetupScreen} onSave=${saveCreds} error=${credError} />`;
+  }
+  if (!client) {
+    return html`<${SetupScreen} onSave=${saveCreds} error=${credError || "Connecting…"} current=${creds} />`;
+  }
+  return html`<${App} client=${client} onResetCreds=${() => { localStorage.removeItem(LS.url); localStorage.removeItem(LS.key); setCreds({ url: "", key: "" }); }} />`;
+}
+
+/* ============================================================ setup ======= */
+
+function SetupScreen({ onSave, error, current }) {
+  const [url, setUrl] = useState(current?.url || "");
+  const [key, setKey] = useState(current?.key || "");
+  return html`
+    <div class="login">
+      <div style="font-size:52px">🍑💗🧸</div>
+      <h1>Peaches & Pelucha</h1>
+      <p>One-time setup. Paste your Supabase project's <b>URL</b> and <b>anon key</b><br/>(Supabase → Project Settings → API). They stay on this phone.</p>
+      <div class="card" style="text-align:left; max-width:420px; margin:0 auto;">
+        <label class="field"><span>Project URL</span>
+          <input value=${url} onInput=${(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" /></label>
+        <label class="field"><span>anon public key</span>
+          <input value=${key} onInput=${(e) => setKey(e.target.value)} placeholder="eyJhbGciOi..." /></label>
+        ${error && html`<div class="banner" style="background:#ffeef1;color:#b00020">${error}</div>`}
+        <button class="btn block" disabled=${!url || !key} onClick=${() => onSave(url, key)}>Connect 💞</button>
+      </div>
+      <p class="tiny muted">Haven't set up the database yet? Run <b>schema.sql</b> in the Supabase SQL editor first.</p>
+    </div>`;
+}
+
+/* ============================================================ app ========= */
+
+function App({ client, onResetCreds }) {
+  const [players, setPlayers] = useState([]);
+  const [game, setGame] = useState(null);        // active game with rounds+entries
+  const [earnRules, setEarnRules] = useState([]);
+  const [rewards, setRewards] = useState([]);
+  const [txns, setTxns] = useState([]);
+  const [bets, setBets] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [everOk, setEverOk] = useState(false);   // a load has succeeded at least once
+  const [err, setErr] = useState("");
+
+  const [meId, setMeId] = useState(localStorage.getItem(LS.me) || "");
+  const [tab, setTab] = useState("score");
+  const [modal, setModal] = useState(null);       // {type, ...props}
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef(null);
+
+  const flash = useCallback((msg) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 1900);
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    try {
+      const [pRes, gRes, erRes, rwRes, txRes, btRes] = await Promise.all([
+        client.from("players").select("*").order("created_at"),
+        client.from("games").select("*").eq("status", "active").order("created_at", { ascending: false }).limit(1),
+        client.from("earn_rules").select("*").order("sort"),
+        client.from("rewards").select("*").order("sort"),
+        client.from("transactions").select("*").order("created_at", { ascending: false }),
+        client.from("bets").select("*").order("created_at", { ascending: false }),
+      ]);
+      for (const r of [pRes, gRes, erRes, rwRes, txRes, btRes]) if (r.error) throw r.error;
+
+      setPlayers(pRes.data || []);
+      setEarnRules(erRes.data || []);
+      setRewards(rwRes.data || []);
+      setTxns(txRes.data || []);
+      setBets(btRes.data || []);
+
+      const g = (gRes.data || [])[0];
+      if (g) {
+        const [gpRes, rdRes] = await Promise.all([
+          client.from("game_players").select("*").eq("game_id", g.id).order("seat"),
+          client.from("rounds").select("*, round_entries(*)").eq("game_id", g.id).order("round_number"),
+        ]);
+        if (gpRes.error) throw gpRes.error;
+        if (rdRes.error) throw rdRes.error;
+        setGame({ ...g, gamePlayers: gpRes.data || [], rounds: rdRes.data || [] });
+      } else {
+        setGame(null);
+      }
+      setErr("");
+      setEverOk(true);
+      setLoaded(true);
+    } catch (e) {
+      setErr(e.message || String(e));
+      setLoaded(true);
+    }
+  }, [client]);
+
+  // initial load + realtime sync
+  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    const ch = client.channel("pp-sync")
+      .on("postgres_changes", { event: "*", schema: "public" }, () => loadAll())
+      .subscribe();
+    return () => { client.removeChannel(ch); };
+  }, [client, loadAll]);
+
+  const me = players.find((p) => p.id === meId) || null;
+  const pickMe = (id) => { localStorage.setItem(LS.me, id); setMeId(id); };
+
+  // balances from transactions
+  const balances = useMemo(() => {
+    const b = {};
+    for (const p of players) b[p.id] = 0;
+    for (const t of txns) b[t.player_id] = (b[t.player_id] || 0) + t.amount;
+    return b;
+  }, [players, txns]);
+
+  /* ---- data actions (all log to state via loadAll on realtime) ---- */
+  const api = useMemo(() => makeApi(client, loadAll, flash), [client, loadAll, flash]);
+
+  if (err && !everOk) {
+    const needsSchema = /could not find the table|does not exist|schema cache/i.test(err);
+    return html`<div class="login"><div style="font-size:40px">😕</div><h1>Connection trouble</h1>
+      ${needsSchema
+        ? html`<p>Connected to Supabase, but the tables aren't there yet.<br/>Run <b>schema.sql</b> in your project's SQL Editor, then tap Try again.</p>
+               <p class="tiny muted">(${err})</p>`
+        : html`<p>${err}</p>`}
+      <button class="btn" onClick=${loadAll}>Try again</button>
+      <button class="linkbtn" onClick=${onResetCreds}>Change connection settings</button></div>`;
+  }
+  if (!loaded) return html`<div class="boot"><div class="boot-heart">💗</div><div class="boot-text">Loading…</div></div>`;
+
+  if (!me) {
+    return html`<${Login} players=${players} onPick=${pickMe}
+      onAdd=${() => setModal({ type: "editPlayer" })}
+      modal=${modal} setModal=${setModal} api=${api} />`;
+  }
+
+  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash };
+
+  return html`
+    <div class="app-shell">
+      <div class="topbar">
+        <div class="brand"><span class="dot">🍑</span> Peaches & Pelucha <span class="dot">🧸</span></div>
+        <button class="whoami" onClick=${() => setModal({ type: "switch" })}>
+          <span class="av" style=${`background:${me.color}22`}>${me.emoji}</span>
+          ${me.name}
+        </button>
+      </div>
+
+      ${err && html`<div class="banner" style="background:#ffeef1;color:#b00020">⚠️ ${err}</div>`}
+
+      ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
+      ${tab === "wallet" && html`<${WalletTab} ...${ctx} />`}
+      ${tab === "bets" && html`<${BetsTab} ...${ctx} />`}
+      ${tab === "shop" && html`<${ShopTab} ...${ctx} />`}
+      ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
+
+      <nav class="nav">
+        ${[["score", "🏆", "Score"], ["wallet", "💗", "Wallet"], ["bets", "🎲", "Bets"], ["shop", "🎁", "Shop"], ["more", "⚙️", "More"]].map(
+          ([k, ic, label]) => html`
+          <button class=${tab === k ? "active" : ""} onClick=${() => setTab(k)}>
+            <span class="ic">${ic}</span>${label}
+          </button>`)}
+      </nav>
+
+      ${modal && html`<${Modal} modal=${modal} close=${() => setModal(null)} ...${ctx} pickMe=${pickMe} onResetCreds=${onResetCreds} />`}
+      ${toast && html`<div class="toast">${toast}</div>`}
+    </div>`;
+}
+
+/* ============================================================ API ========= */
+
+function makeApi(client, reload, flash) {
+  const guard = async (fn, okMsg) => {
+    const { error } = await fn();
+    if (error) { flash("⚠️ " + error.message); return false; }
+    if (okMsg) flash(okMsg);
+    await reload();
+    return true;
+  };
+  return {
+    reload,
+    addPlayer: (name, emoji, color) =>
+      guard(() => client.from("players").insert({ name, emoji, color }), `Added ${name} ${emoji}`),
+    updatePlayer: (id, patch) =>
+      guard(() => client.from("players").update(patch).eq("id", id), "Saved"),
+    deletePlayer: (id) => guard(() => client.from("players").delete().eq("id", id), "Removed"),
+
+    newGame: async (name, playerIds) => {
+      const { data, error } = await client.from("games").insert({ name: name || null }).select().single();
+      if (error) { flash("⚠️ " + error.message); return; }
+      await client.from("game_players").insert(playerIds.map((id, i) => ({ game_id: data.id, player_id: id, seat: i })));
+      flash("New game! 🎴");
+      reload();
+    },
+    addRound: async (gameId, roundNumber, entries) => {
+      const { data, error } = await client.from("rounds").insert({ game_id: gameId, round_number: roundNumber }).select().single();
+      if (error) { flash("⚠️ " + error.message); return; }
+      const rows = entries.map((e) => ({ round_id: data.id, player_id: e.player_id, points: e.points, completed_phase: e.completed_phase }));
+      const { error: e2 } = await client.from("round_entries").insert(rows);
+      if (e2) { flash("⚠️ " + e2.message); return; }
+      flash("Round saved ✅");
+      reload();
+    },
+    deleteRound: (roundId) => guard(() => client.from("rounds").delete().eq("id", roundId), "Round removed"),
+    finishGame: (gameId, winnerId) =>
+      guard(() => client.from("games").update({ status: "finished", winner_id: winnerId, finished_at: new Date().toISOString() }).eq("id", gameId), "Game finished 🏁"),
+
+    earn: (playerId, amount, description, type = "earn") =>
+      guard(() => client.from("transactions").insert({ player_id: playerId, amount, description, type }),
+        `${fmt(amount)} 💗 ${description}`),
+    gift: async (fromId, toId, amount, note) => {
+      const desc = note || "Gift";
+      const { error } = await client.from("transactions").insert([
+        { player_id: fromId, amount: -amount, type: "gift", description: `Gift → ${desc}` },
+        { player_id: toId, amount: amount, type: "gift", description: `Gift ← ${desc}` },
+      ]);
+      if (error) { flash("⚠️ " + error.message); return; }
+      flash(`Gifted ${amount} 💗`);
+      reload();
+    },
+    cashout: (playerId, cost, label) =>
+      guard(() => client.from("transactions").insert({ player_id: playerId, amount: -cost, type: "cashout", description: `Redeemed: ${label}` }),
+        `Redeemed ${label} 🎁`),
+    deleteTxn: (id) => guard(() => client.from("transactions").delete().eq("id", id), "Entry removed"),
+
+    addEarnRule: (label, amount, emoji) => guard(() => client.from("earn_rules").insert({ label, amount, emoji }), "Added"),
+    updateEarnRule: (id, patch) => guard(() => client.from("earn_rules").update(patch).eq("id", id), "Saved"),
+    deleteEarnRule: (id) => guard(() => client.from("earn_rules").delete().eq("id", id), "Removed"),
+
+    addReward: (label, cost, emoji) => guard(() => client.from("rewards").insert({ label, cost, emoji }), "Added"),
+    updateReward: (id, patch) => guard(() => client.from("rewards").update(patch).eq("id", id), "Saved"),
+    deleteReward: (id) => guard(() => client.from("rewards").delete().eq("id", id), "Removed"),
+
+    newBet: (description, stake, challengerId, opponentId) =>
+      guard(() => client.from("bets").insert({ description, stake, challenger_id: challengerId, opponent_id: opponentId }), "Bet placed 🎲"),
+    settleBet: async (bet, winnerId) => {
+      const loserId = winnerId === bet.challenger_id ? bet.opponent_id : bet.challenger_id;
+      const { error } = await client.from("transactions").insert([
+        { player_id: winnerId, amount: bet.stake, type: "bet", description: `Won bet: ${bet.description}` },
+        { player_id: loserId, amount: -bet.stake, type: "bet", description: `Lost bet: ${bet.description}` },
+      ]);
+      if (error) { flash("⚠️ " + error.message); return; }
+      await client.from("bets").update({ status: "settled", winner_id: winnerId, settled_at: new Date().toISOString() }).eq("id", bet.id);
+      flash("Bet settled 🏁");
+      reload();
+    },
+    voidBet: (id) => guard(() => client.from("bets").update({ status: "void" }).eq("id", id), "Bet voided"),
+    deleteBet: (id) => guard(() => client.from("bets").delete().eq("id", id), "Bet deleted"),
+  };
+}
+
+/* ============================================================ login ======= */
+
+function Login({ players, onPick, onAdd, modal, setModal, api }) {
+  return html`
+    <div class="login">
+      <div style="font-size:52px">🍑💗🧸</div>
+      <h1>Who's playing?</h1>
+      <p>Tap yourself to jump in.</p>
+      <div class="player-grid" style="max-width:420px;margin:0 auto">
+        ${players.map((p) => html`
+          <button class="player-pick" key=${p.id} onClick=${() => onPick(p.id)}>
+            <span class="av" style=${`background:${p.color}22`}>${p.emoji}</span>
+            <span class="nm">${p.name}</span>
+          </button>`)}
+        <button class="player-pick" onClick=${onAdd}>
+          <span class="av" style="background:#fff0f3">➕</span>
+          <span class="nm">Add player</span>
+        </button>
+      </div>
+      ${modal && html`<${Modal} modal=${modal} close=${() => setModal(null)} players=${players} api=${api} />`}
+    </div>`;
+}
+
+/* ============================================================ Score ======= */
+// The Score tab is now the live, playable Phase 10 game (see game.js), with the
+// lifetime wins card underneath.
+function ScoreTab(ctx) {
+  return html`<${Fragment}>
+    <${PlayTab} ...${ctx} />
+    <${LifetimeCard} ...${ctx} />
+  <//>`;
+}
+
+function LifetimeCard({ txns, bets, players, client }) {
+  // lifetime wins from finished games
+  const [wins, setWins] = useState(null);
+  useEffect(() => {
+    let live = true;
+    client.from("games").select("winner_id").eq("status", "finished").then(({ data }) => {
+      if (!live) return;
+      const w = {};
+      (data || []).forEach((g) => { if (g.winner_id) w[g.winner_id] = (w[g.winner_id] || 0) + 1; });
+      setWins(w);
+    });
+    return () => { live = false; };
+  }, [client, txns]);
+
+  return html`
+    <div class="card">
+      <h2>Lifetime 🏆</h2>
+      <div class="list">
+        ${players.map((p) => html`
+          <div class="line" key=${p.id}>
+            <div class="l"><span class="em">${p.emoji}</span><div class="txt"><b>${p.name}</b></div></div>
+            <span class="pill gold">${wins ? (wins[p.id] || 0) : "…"} ${(wins?.[p.id] || 0) === 1 ? "win" : "wins"}</span>
+          </div>`)}
+      </div>
+    </div>`;
+}
+
+/* ============================================================ Wallet ====== */
+
+function WalletTab(ctx) {
+  const { players, balances, txns, me, setModal, api } = ctx;
+  return html`
+    <div class="card">
+      <h2>Love currency 💗</h2>
+      <div class="score-head">
+        ${players.map((p) => html`
+          <div class="score-tile">
+            <div class="nm"><i class="dot" style=${`background:${p.color}`}></i>${p.emoji} ${p.name}</div>
+            <div class="pts tnum">${balances[p.id] || 0}</div>
+            <div class="ph">hearts</div>
+          </div>`)}
+      </div>
+      <div class="spread mt">
+        <button class="btn block" onClick=${() => setModal({ type: "earn" })}>Grant hearts</button>
+        <button class="btn ghost block" onClick=${() => setModal({ type: "gift" })}>Gift</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row between"><h2 style="margin:0">Recent activity</h2></div>
+      <${TxnList} txns=${txns.slice(0, 40)} players=${players} api=${api} canDelete=${true} />
+    </div>`;
+}
+
+function TxnList({ txns, players, api, canDelete }) {
+  if (!txns.length) return html`<div class="empty"><span class="big">🌱</span>Nothing yet.</div>`;
+  const nameOf = (id) => players.find((p) => p.id === id) || { emoji: "❔", name: "?" };
+  return html`<div class="list">
+    ${txns.map((t) => {
+      const p = nameOf(t.player_id);
+      return html`<div class="line" key=${t.id}>
+        <div class="l"><span class="em">${p.emoji}</span>
+          <div class="txt"><b>${t.description || t.type}</b>
+            <span class="tiny muted">${p.name} · ${when(t.created_at)}</span></div></div>
+        <div class="row">
+          <span class=${`amt ${t.amount >= 0 ? "pos" : "neg"}`}>${fmt(t.amount)}</span>
+          ${canDelete && html`<button class="linkbtn danger" title="delete" onClick=${() => api.deleteTxn(t.id)}>✕</button>`}
+        </div>
+      </div>`;
+    })}
+  </div>`;
+}
+
+/* ============================================================ Bets ======== */
+
+function BetsTab(ctx) {
+  const { bets, players, me, api, setModal } = ctx;
+  const nameOf = (id) => players.find((p) => p.id === id) || { emoji: "❔", name: "?" };
+  const open = bets.filter((b) => b.status === "open");
+  const done = bets.filter((b) => b.status !== "open");
+  return html`
+    <div class="card">
+      <div class="row between"><h2 style="margin:0">Open bets 🎲</h2>
+        <button class="btn sm" onClick=${() => setModal({ type: "newBet" })}>＋ New</button></div>
+      ${!open.length && html`<div class="empty"><span class="big">🤝</span>No live wagers. Make one!</div>`}
+      <div class="list">
+        ${open.map((b) => {
+          const c = nameOf(b.challenger_id), o = nameOf(b.opponent_id);
+          return html`<div class="line" key=${b.id} style="flex-direction:column;align-items:stretch;gap:8px">
+            <div class="row between">
+              <div class="l"><div class="txt"><b>${b.description}</b>
+                <span class="tiny muted">${c.emoji}${c.name} vs ${o.emoji}${o.name} · stake ${b.stake} 💗</span></div></div>
+              <span class="pill open">open</span>
+            </div>
+            <div class="spread">
+              <button class="btn good sm" onClick=${() => api.settleBet(b, b.challenger_id)}>${c.emoji} ${c.name} won</button>
+              <button class="btn good sm" onClick=${() => api.settleBet(b, b.opponent_id)}>${o.emoji} ${o.name} won</button>
+            </div>
+            <button class="linkbtn" onClick=${() => api.voidBet(b.id)}>void bet</button>
+          </div>`;
+        })}
+      </div>
+    </div>
+
+    ${done.length > 0 && html`<div class="card"><h2>History</h2><div class="list">
+      ${done.map((b) => {
+        const w = b.winner_id ? nameOf(b.winner_id) : null;
+        return html`<div class="line" key=${b.id}>
+          <div class="l"><span class="em">${b.status === "void" ? "🚫" : "🏁"}</span>
+            <div class="txt"><b>${b.description}</b>
+              <span class="tiny muted">${b.status === "void" ? "voided" : `${w?.emoji}${w?.name} won ${b.stake} 💗`}</span></div></div>
+          ${b.status === "settled" ? html`<span class="pill win">+${b.stake}</span>` : html`<span class="pill">—</span>`}
+        </div>`;
+      })}
+    </div></div>`}`;
+}
+
+/* ============================================================ Shop ======== */
+
+function ShopTab(ctx) {
+  const { rewards, me, balances, api, setModal } = ctx;
+  const bal = balances[me.id] || 0;
+  const active = rewards.filter((r) => r.active);
+  return html`
+    <div class="card center">
+      <div class="muted tiny">${me.emoji} ${me.name}, you have</div>
+      <div class="balance-big">${bal} 💗</div>
+    </div>
+    <div class="card">
+      <div class="row between"><h2 style="margin:0">Reward shop 🎁</h2>
+        <button class="btn sm ghost" onClick=${() => setModal({ type: "manageRewards" })}>Edit</button></div>
+      ${!active.length && html`<div class="empty"><span class="big">🎁</span>No rewards yet — add some!</div>`}
+      <div class="list">
+        ${active.map((r) => {
+          const can = bal >= r.cost;
+          return html`<div class="line" key=${r.id}>
+            <div class="l"><span class="em">${r.emoji}</span><div class="txt"><b>${r.label}</b>
+              <span class="tiny muted">${r.cost} 💗</span></div></div>
+            <button class="btn sm ${can ? "" : ""}" disabled=${!can}
+              onClick=${() => setModal({ type: "confirmCashout", reward: r })}>${can ? "Redeem" : "Need more"}</button>
+          </div>`;
+        })}
+      </div>
+    </div>`;
+}
+
+/* ============================================================ More ======== */
+
+function MoreTab(ctx) {
+  const { players, setModal, txns, api, onResetCreds } = ctx;
+  return html`
+    <div class="card">
+      <h2>Players</h2>
+      <div class="list">
+        ${players.map((p) => html`<div class="line" key=${p.id}>
+          <div class="l"><span class="av" style=${`background:${p.color}22;width:34px;height:34px;border-radius:50%;display:grid;place-content:center`}>${p.emoji}</span>
+            <div class="txt"><b>${p.name}</b></div></div>
+          <button class="btn ghost sm" onClick=${() => setModal({ type: "editPlayer", player: p })}>Edit</button>
+        </div>`)}
+        <button class="btn ghost block" onClick=${() => setModal({ type: "editPlayer" })}>＋ Add player</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Customise</h2>
+      <div class="list">
+        <button class="btn ghost block" onClick=${() => setModal({ type: "manageEarn" })}>✨ Earn buttons</button>
+        <button class="btn ghost block" onClick=${() => setModal({ type: "manageRewards" })}>🎁 Reward shop</button>
+        <button class="btn ghost block" onClick=${() => setModal({ type: "history" })}>📜 Full history</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>This phone</h2>
+      <div class="list">
+        <button class="btn ghost block" onClick=${() => setModal({ type: "switch" })}>🔁 Switch player</button>
+        <button class="btn ghost block" onClick=${() => setModal({ type: "install" })}>📲 Install to home screen</button>
+        <button class="btn ghost block" onClick=${onResetCreds}>🔌 Change Supabase connection</button>
+      </div>
+      <p class="tiny muted center mt">Made with 💗 for Peaches & Pelucha</p>
+    </div>`;
+}
+
+/* ============================================================ Modal ======= */
+
+function Modal(props) {
+  const { modal, close } = props;
+  return html`<div class="modal-bg" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) close(); }}>
+    <div class="modal">
+      <div class="handle"></div>
+      <${ModalBody} ...${props} />
+    </div>
+  </div>`;
+}
+
+function ModalBody(props) {
+  const { modal } = props;
+  switch (modal.type) {
+    case "editPlayer": return html`<${EditPlayerModal} ...${props} />`;
+    case "switch": return html`<${SwitchModal} ...${props} />`;
+    case "earn": return html`<${EarnModal} ...${props} />`;
+    case "gift": return html`<${GiftModal} ...${props} />`;
+    case "newBet": return html`<${NewBetModal} ...${props} />`;
+    case "confirmCashout": return html`<${CashoutModal} ...${props} />`;
+    case "manageEarn": return html`<${ManageEarnModal} ...${props} />`;
+    case "manageRewards": return html`<${ManageRewardsModal} ...${props} />`;
+    case "history": return html`<${HistoryModal} ...${props} />`;
+    case "install": return html`<${InstallModal} ...${props} />`;
+    default: return null;
+  }
+}
+
+function EmojiPicker({ value, onChange }) {
+  return html`<div class="emoji-row">
+    ${EMOJIS.map((e) => html`<button class=${value === e ? "on" : ""} onClick=${() => onChange(e)}>${e}</button>`)}
+  </div>`;
+}
+function ColorPicker({ value, onChange }) {
+  return html`<div class="emoji-row">
+    ${COLORS.map((c) => html`<button class=${value === c ? "on" : ""} style=${`background:${c};width:30px;height:30px`} onClick=${() => onChange(c)}></button>`)}
+  </div>`;
+}
+
+function EditPlayerModal({ modal, close, api }) {
+  const p = modal.player;
+  const [name, setName] = useState(p?.name || "");
+  const [emoji, setEmoji] = useState(p?.emoji || "🍑");
+  const [color, setColor] = useState(p?.color || COLORS[0]);
+  const save = async () => {
+    if (!name.trim()) return;
+    if (p) await api.updatePlayer(p.id, { name: name.trim(), emoji, color });
+    else await api.addPlayer(name.trim(), emoji, color);
+    close();
+  };
+  return html`<div>
+    <h3>${p ? "Edit player" : "New player"}</h3>
+    <label class="field"><span>Name</span><input value=${name} onInput=${(e) => setName(e.target.value)} placeholder="Name or nickname" /></label>
+    <label class="field"><span>Emoji</span></label><${EmojiPicker} value=${emoji} onChange=${setEmoji} />
+    <label class="field mt"><span>Colour</span></label><${ColorPicker} value=${color} onChange=${setColor} />
+    <button class="btn block mt" onClick=${save}>${p ? "Save" : "Add"}</button>
+    ${p && html`<button class="linkbtn danger mt" onClick=${async () => { if (confirm(`Remove ${p.name}?`)) { await api.deletePlayer(p.id); close(); } }}>Delete player</button>`}
+  </div>`;
+}
+
+function SwitchModal({ players, close, pickMe, me }) {
+  return html`<div>
+    <h3>Switch player</h3>
+    <div class="player-grid">
+      ${players.map((p) => html`<button class="player-pick" key=${p.id} onClick=${() => { pickMe(p.id); close(); }}>
+        <span class="av" style=${`background:${p.color}22`}>${p.emoji}</span>
+        <span class="nm">${p.name}${me?.id === p.id ? " ✓" : ""}</span>
+      </button>`)}
+    </div>
+  </div>`;
+}
+
+function Stepper({ value, set, step = 5, min = 0 }) {
+  return html`<div class="stepper">
+    <button onClick=${() => set(Math.max(min, value - step))}>−</button>
+    <input style="text-align:center" inputmode="numeric" value=${value}
+      onInput=${(e) => { const v = parseInt(e.target.value.replace(/[^0-9-]/g, ""), 10); set(isNaN(v) ? 0 : v); }} />
+    <button onClick=${() => set(value + step)}>＋</button>
+  </div>`;
+}
+
+function EarnModal({ players, earnRules, me, close, api, setModal }) {
+  const [who, setWho] = useState(me.id);
+  const [custom, setCustom] = useState(20);
+  const [note, setNote] = useState("");
+  const active = earnRules.filter((r) => r.active);
+  return html`<div>
+    <h3>Grant hearts ✨</h3>
+    <label class="field"><span>To</span>
+      <div class="seg">${players.map((p) => html`<button class=${who === p.id ? "on" : ""} onClick=${() => setWho(p.id)}>${p.emoji} ${p.name}</button>`)}</div>
+    </label>
+    <div class="list">
+      ${active.map((r) => html`<div class="line" key=${r.id}>
+        <div class="l"><span class="em">${r.emoji}</span><b>${r.label}</b></div>
+        <button class="btn good sm" onClick=${async () => { await api.earn(who, r.amount, r.label); close(); }}>+${r.amount}</button>
+      </div>`)}
+    </div>
+    <hr class="soft" />
+    <label class="field"><span>Custom</span></label>
+    <div class="row between">
+      <input value=${note} onInput=${(e) => setNote(e.target.value)} placeholder="Reason (optional)" style="flex:1" />
+      <${Stepper} value=${custom} set=${setCustom} />
+    </div>
+    <button class="btn good block mt" onClick=${async () => { await api.earn(who, custom, note || "Hearts"); close(); }}>Grant ${custom} 💗</button>
+    <button class="linkbtn mt" onClick=${() => setModal({ type: "manageEarn" })}>Edit earn buttons →</button>
+  </div>`;
+}
+
+function GiftModal({ players, me, balances, close, api }) {
+  const other = players.find((p) => p.id !== me.id);
+  const [to, setTo] = useState(other?.id || me.id);
+  const [amt, setAmt] = useState(10);
+  const [note, setNote] = useState("");
+  const bal = balances[me.id] || 0;
+  return html`<div>
+    <h3>Gift hearts 💝</h3>
+    <p class="sub">From ${me.emoji} ${me.name} (balance ${bal} 💗)</p>
+    <label class="field"><span>To</span>
+      <div class="seg">${players.filter((p) => p.id !== me.id).map((p) => html`<button class=${to === p.id ? "on" : ""} onClick=${() => setTo(p.id)}>${p.emoji} ${p.name}</button>`)}</div>
+    </label>
+    <label class="field"><span>Note (optional)</span><input value=${note} onInput=${(e) => setNote(e.target.value)} placeholder="just because 💕" /></label>
+    <div class="center"><${Stepper} value=${amt} set=${setAmt} /></div>
+    <button class="btn plum block mt" disabled=${amt <= 0 || amt > bal || to === me.id}
+      onClick=${async () => { await api.gift(me.id, to, amt, note); close(); }}>${amt > bal ? "Not enough 💗" : `Send ${amt} 💗`}</button>
+  </div>`;
+}
+
+function NewBetModal({ players, me, close, api }) {
+  const other = players.find((p) => p.id !== me.id);
+  const [desc, setDesc] = useState("");
+  const [stake, setStake] = useState(10);
+  const [opp, setOpp] = useState(other?.id || "");
+  return html`<div>
+    <h3>New bet 🎲</h3>
+    <label class="field"><span>What's the wager?</span><input value=${desc} onInput=${(e) => setDesc(e.target.value)} placeholder="e.g. Loser cooks tonight" /></label>
+    <label class="field"><span>Against</span>
+      <div class="seg">${players.filter((p) => p.id !== me.id).map((p) => html`<button class=${opp === p.id ? "on" : ""} onClick=${() => setOpp(p.id)}>${p.emoji} ${p.name}</button>`)}</div>
+    </label>
+    <label class="field"><span>Stake (each puts up this many 💗)</span></label>
+    <div class="center"><${Stepper} value=${stake} set=${setStake} /></div>
+    <button class="btn block mt" disabled=${!desc.trim() || !opp || stake <= 0}
+      onClick=${async () => { await api.newBet(desc.trim(), stake, me.id, opp); close(); }}>Place bet</button>
+    <p class="tiny muted center mt">Hearts move when you settle the bet, not now.</p>
+  </div>`;
+}
+
+function CashoutModal({ modal, me, balances, close, api }) {
+  const r = modal.reward;
+  const bal = balances[me.id] || 0;
+  return html`<div class="center">
+    <div style="font-size:46px">${r.emoji}</div>
+    <h3>Redeem "${r.label}"?</h3>
+    <p class="sub">This spends <b>${r.cost} 💗</b>. You'll have ${bal - r.cost} 💗 left.</p>
+    <button class="btn gold block mt" disabled=${bal < r.cost} onClick=${async () => { await api.cashout(me.id, r.cost, r.label); close(); }}>Redeem 🎁</button>
+    <button class="linkbtn mt" onClick=${close}>Cancel</button>
+  </div>`;
+}
+
+function EmojiAmountForm({ initial, onSubmit, amountLabel, submitLabel }) {
+  const [label, setLabel] = useState(initial?.label || "");
+  const [amt, setAmt] = useState(initial?.amount ?? initial?.cost ?? 10);
+  const [emoji, setEmoji] = useState(initial?.emoji || "✨");
+  return html`<div class="card" style="background:#fff7f9;box-shadow:none">
+    <label class="field"><span>Label</span><input value=${label} onInput=${(e) => setLabel(e.target.value)} placeholder="What is it?" /></label>
+    <div class="row between">
+      <div><div class="tiny muted" style="font-weight:800;margin-bottom:5px">${amountLabel}</div><${Stepper} value=${amt} set=${setAmt} /></div>
+    </div>
+    <div class="tiny muted" style="font-weight:800;margin:10px 0 5px">Emoji</div>
+    <${EmojiPicker} value=${emoji} onChange=${setEmoji} />
+    <button class="btn block mt" disabled=${!label.trim()} onClick=${() => { onSubmit(label.trim(), amt, emoji); setLabel(""); }}>${submitLabel}</button>
+  </div>`;
+}
+
+function ManageEarnModal({ earnRules, close, api }) {
+  return html`<div>
+    <h3>Earn buttons ✨</h3>
+    <div class="list">
+      ${earnRules.map((r) => html`<div class="line" key=${r.id}>
+        <div class="l"><span class="em">${r.emoji}</span><div class="txt"><b>${r.label}</b><span class="tiny muted">+${r.amount} 💗</span></div></div>
+        <button class="linkbtn danger" onClick=${() => api.deleteEarnRule(r.id)}>✕</button>
+      </div>`)}
+    </div>
+    <hr class="soft" />
+    <${EmojiAmountForm} amountLabel="Hearts" submitLabel="Add earn button"
+      onSubmit=${(l, a, e) => api.addEarnRule(l, a, e)} />
+  </div>`;
+}
+
+function ManageRewardsModal({ rewards, close, api }) {
+  return html`<div>
+    <h3>Reward shop 🎁</h3>
+    <div class="list">
+      ${rewards.map((r) => html`<div class="line" key=${r.id}>
+        <div class="l"><span class="em">${r.emoji}</span><div class="txt"><b>${r.label}</b><span class="tiny muted">${r.cost} 💗</span></div></div>
+        <button class="linkbtn danger" onClick=${() => api.deleteReward(r.id)}>✕</button>
+      </div>`)}
+    </div>
+    <hr class="soft" />
+    <${EmojiAmountForm} initial=${{ emoji: "🎁" }} amountLabel="Cost" submitLabel="Add reward"
+      onSubmit=${(l, a, e) => api.addReward(l, a, e)} />
+  </div>`;
+}
+
+function HistoryModal({ txns, players, api }) {
+  return html`<div>
+    <h3>Full history 📜</h3>
+    <${TxnList} txns=${txns} players=${players} api=${api} canDelete=${true} />
+  </div>`;
+}
+
+function InstallModal() {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return html`<div>
+    <h3>Install to home screen 📲</h3>
+    ${ios ? html`<p>In <b>Safari</b>: tap the <b>Share</b> button (square with ↑), then <b>“Add to Home Screen”</b>. It'll open full-screen like an app.</p>`
+      : html`<p>In <b>Chrome</b>: tap the <b>⋮ menu</b>, then <b>“Add to Home screen” / “Install app.”</b></p>`}
+    <p class="tiny muted">Both phones can install it. Everything stays in sync through Supabase.</p>
+  </div>`;
+}
+
+/* ============================================================ utils ======= */
+
+function when(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " +
+      d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  } catch { return ""; }
+}
+
+/* ============================================================ mount ======= */
+
+render(html`<${Root} />`, document.getElementById("app"));
