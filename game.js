@@ -34,6 +34,7 @@ function useMatch(client) {
 export function PlayTab(ctx) {
   const { client, players, me, api, flash } = ctx;
   const [match, setMatch, reload] = useMatch(client);
+  const [immersive, setImmersive] = useState(true);  // live hand plays full-screen
   const busy = useRef(false);
 
   const commit = useCallback(async (newState) => {
@@ -63,9 +64,42 @@ export function PlayTab(ctx) {
     return html`<div class="card center"><div class="muted">Loading game…</div></div>`;
   }
   if (match === null) {
-    return html`<${StartMatch} players=${players} client=${client} onStarted=${(row) => setMatch(row)} flash=${flash} />`;
+    return html`<${StartMatch} players=${players} client=${client} onStarted=${(row) => { setMatch(row); setImmersive(true); }} flash=${flash} />`;
   }
-  return html`<${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} />`;
+  // The live hand plays full-screen (no menus). "‹ Menu" pops back to the tabbed
+  // app, where this same tab shows a compact Resume card.
+  if (immersive) {
+    return html`<div class="gamefs">
+      <div class="gamefs-bar">
+        <button class="btn ghost sm" onClick=${() => setImmersive(false)}>‹ Menu</button>
+        <div class="gamefs-title">🍑 Phase 10 🧸</div>
+        <span style="width:64px"></span>
+      </div>
+      <div class="gamefs-body">
+        <${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} />
+      </div>
+    </div>`;
+  }
+  return html`<${ResumeCard} match=${match} me=${me} players=${players} onOpen=${() => setImmersive(true)} />`;
+}
+
+function ResumeCard({ match, me, players, onOpen }) {
+  const s = match.state;
+  const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
+  const oppId = s.players.find((p) => p !== me.id) || s.players[0];
+  let status;
+  if (s.status === "matchOver") status = `${pinfo(s.winner).emoji} ${pinfo(s.winner).name} won 👑`;
+  else if (s.status === "handOver") status = "Hand over — deal the next one";
+  else status = s.turn === me.id ? "Your turn" : `Waiting for ${pinfo(oppId).emoji} ${pinfo(oppId).name}`;
+  return html`<div class="card">
+    <div class="row between">
+      <div>
+        <div class="eyebrow">Phase 10 · Hand ${s.handNumber}</div>
+        <div class="ghand" style="margin-top:4px">${status}</div>
+      </div>
+      <button class="btn" onClick=${onOpen}>Open game</button>
+    </div>
+  </div>`;
 }
 
 async function recordWin(client, api, winnerId) {
@@ -97,13 +131,49 @@ function StartMatch({ players, client, onStarted, flash }) {
 }
 
 /* ----------------------------------------------------------- Card --------- */
-function Card({ card, sel, onClick, small }) {
+function Card({ card, sel, onClick, small, cid, onPointerDown, onPointerMove, onPointerUp }) {
   let face, bg = "#fff", color = "#fff8f3";
   if (E.isNumber(card)) { bg = CARD_BG[card.color]; face = card.num; }
   else if (E.isWild(card)) { bg = "#2b2521"; color = "#e7c98a"; face = "★"; }      // ink card, gold star
   else { bg = "#8c8077"; color = "#fff8f3"; face = "⊘"; }                          // warm grey skip
-  return html`<button class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${onClick ? "" : "static"}`}
-    style=${`background:${bg};color:${color}`} onClick=${onClick} disabled=${!onClick}>${face}</button>`;
+  const interactive = !!(onClick || onPointerDown);
+  return html`<button data-cid=${cid}
+    class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${interactive ? "" : "static"}`}
+    style=${`background:${bg};color:${color}`} onClick=${onClick} disabled=${!interactive}
+    onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp}>${face}</button>`;
+}
+
+// Draggable hand: tap a card to select it, drag it to rearrange. Order is the
+// player's own (never force-sorted); Shuffle / Sort are opt-in.
+function Hand({ cards, interactive, selectedId, onSelect, onReorder }) {
+  const drag = useRef({ id: null, x: 0, y: 0, moved: false });
+  const down = (e, id) => {
+    drag.current = { id, x: e.clientX, y: e.clientY, moved: false };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+  };
+  const move = (e) => {
+    const d = drag.current;
+    if (!d.id) return;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) d.moved = true;
+    if (!d.moved) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const t = el && el.closest ? el.closest("[data-cid]") : null;
+    const tid = t && t.getAttribute("data-cid");
+    if (tid && tid !== d.id) {
+      const ids = cards.map((c) => c.id);
+      const from = ids.indexOf(d.id), to = ids.indexOf(tid);
+      if (from >= 0 && to >= 0) { const n = [...ids]; n.splice(from, 1); n.splice(to, 0, d.id); onReorder(n); }
+    }
+  };
+  const up = () => {
+    const d = drag.current;
+    if (d.id && !d.moved && interactive) onSelect(d.id);
+    drag.current = { id: null, x: 0, y: 0, moved: false };
+  };
+  return html`<div class="hand">
+    ${cards.map((c) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id}
+      onPointerDown=${(e) => down(e, c.id)} onPointerMove=${move} onPointerUp=${up} />`)}
+  </div>`;
 }
 
 function Meld({ meld, hittable, onHit }) {
@@ -126,7 +196,22 @@ function Board(props) {
   const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
   useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
 
-  const myHand = E.sortHand(s.hands[meId] || []);
+  // The player's own hand arrangement (persisted per device). Cards are NOT
+  // auto-sorted: a freshly dealt hand starts tidy, then keeps whatever order the
+  // player drags it into; newly drawn cards append to the end.
+  const handCards = s.hands[meId] || [];
+  const orderKey = `pp.order.${match.id}.${meId}`;
+  const [order, setOrder] = useState(() => { try { return JSON.parse(localStorage.getItem(orderKey) || "[]"); } catch { return []; } });
+  const setOrderSaved = (ids) => { setOrder(ids); try { localStorage.setItem(orderKey, JSON.stringify(ids)); } catch {} };
+  const myHand = useMemo(() => {
+    const byId = Object.fromEntries(handCards.map((c) => [c.id, c]));
+    const present = new Set(handCards.map((c) => c.id));
+    const kept = order.filter((id) => present.has(id));
+    const ids = (kept.length === 0 && handCards.length)
+      ? E.sortHand(handCards).map((c) => c.id)                                       // fresh hand → tidy default
+      : [...kept, ...handCards.filter((c) => !kept.includes(c.id)).map((c) => c.id)]; // keep arrangement, append draws
+    return ids.map((id) => byId[id]);
+  }, [handCards, order]);
   const me_ = pinfo(meId), opp_ = pinfo(oppId);
 
   // ---- hand over / match over panels ----
@@ -186,10 +271,15 @@ function Board(props) {
         ? html`<${LayDown} state=${s} meId=${meId} hand=${myHand} commit=${commit} cancel=${() => setMode("normal")} />`
         : html`
         <div class="phasereq">Your phase ${s.phaseOf[meId]}: <b>${E.phaseText(s.phaseOf[meId])}</b></div>
-        <div class="hand">
-          ${myHand.map((c) => html`<${Card} key=${c.id} card=${c} sel=${pick === c.id}
-            onClick=${(myTurn && s.turnPhase === "play") ? () => setPick(pick === c.id ? null : c.id) : null} />`)}
+        <div class="handbar">
+          <span class="hint" style="margin:0">drag to rearrange</span>
+          <div class="row">
+            <button class="linkbtn" onClick=${() => setOrderSaved(E.shuffle(handCards).map((c) => c.id))}>🔀 Shuffle</button>
+            <button class="linkbtn" onClick=${() => setOrderSaved(E.sortHand(handCards).map((c) => c.id))}>⇅ Sort</button>
+          </div>
         </div>
+        <${Hand} cards=${myHand} interactive=${myTurn && s.turnPhase === "play"}
+          selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved} />
 
         ${!myTurn && html`<div class="waitbar">⏳ Waiting for ${opp_.emoji} ${opp_.name}…</div>`}
         ${myTurn && s.turnPhase === "draw" && html`<div class="waitbar">👆 Draw a card to start your turn</div>`}

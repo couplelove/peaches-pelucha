@@ -35,7 +35,10 @@
   <script type="module" src="app.js"></script>
   <script>
     // Register the service worker so the app installs to the home screen.
-    if ("serviceWorker" in navigator) {
+    // Register the SW everywhere except localhost, where its caching gets in the
+    // way of seeing edits during development.
+    var isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+    if ("serviceWorker" in navigator && !isLocal) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("sw.js").catch(() => {});
       });
