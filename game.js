@@ -295,10 +295,10 @@ function Board(props) {
           <div class="actionbar">
             ${!s.laidDown[meId] && html`<button class="btn ghost sm" onClick=${() => setMode("laying")}>📋 Lay down phase</button>`}
             ${s.laidDown[meId] && html`<button class=${`btn ghost sm ${mode === "hitting" ? "on" : ""}`}
-              onClick=${() => setMode(mode === "hitting" ? "normal" : "hitting")}>${mode === "hitting" ? "Done hitting" : "✋ Hit a meld"}</button>`}
+              onClick=${() => setMode(mode === "hitting" ? "normal" : "hitting")}>${mode === "hitting" ? "Done" : "✋ Drop a card"}</button>`}
           </div>
           ${mode === "hitting"
-            ? html`<div class="hint">Tap one of your cards, then tap a glowing meld to add it. Tap “Done hitting” when finished.</div>`
+            ? html`<div class="hint">Tap one of your cards, then tap a glowing meld to drop it on. Tap “Done” when finished.</div>`
             : html`
               <button class="btn block discardbtn ${pick ? "" : "wait"}" disabled=${!pick} onClick=${doDiscard}>${discardLabel}</button>
               <div class="hint">${s.laidDown[meId]
