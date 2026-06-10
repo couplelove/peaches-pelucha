@@ -135,6 +135,21 @@ shows up on the other's phone within a second.
 | `demo-client.js` | In-memory backend for `?demo=1` only |
 | `tools/make_icons.py` | Regenerates the app icons (optional) |
 
+### "Your turn" push notifications (optional, one-time setup)
+The app can ping your phone when your partner finishes their turn. Three steps:
+
+1. **Table:** run `migrations/002_push.sql` in Supabase → SQL Editor.
+2. **Function:** Supabase → **Edge Functions → Deploy a new function**, name it
+   exactly `notify-turn`, paste `supabase/functions/notify-turn/index.ts`,
+   deploy. In the function's settings, turn **OFF** "Verify JWT" (the app calls
+   it with the new `sb_publishable` key, which isn't a JWT).
+3. **Secrets:** Edge Functions → **Secrets** → add `VAPID_PUBLIC_KEY` (the value
+   in `push.js`) and `VAPID_PRIVATE_KEY` (its private pair — keep it secret).
+
+Then on each phone, open the installed app → **More → "Get notified when it's
+your turn."** iPhone needs iOS 16.4+ and the home-screen app (not Safari tabs).
+Notifications appear when the app is closed/backgrounded — that's by design.
+
 ### A note on the key
 The repo and its history never contain the Supabase key — `config.js` is blank,
 and the GitHub Actions workflow injects the key from the `SUPABASE_URL` /

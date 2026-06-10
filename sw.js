@@ -1,7 +1,7 @@
 // Service worker for Peaches & Pelucha.
 // Strategy: cache the app shell so it installs and opens instantly / offline.
 // (Live data still needs a connection — that's Supabase, never cached.)
-const CACHE = "pp-v2";
+const CACHE = "pp-v3";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const SHELL = [
   "./app.js",
   "./engine.js",
   "./game.js",
+  "./push.js",
   "./config.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
@@ -28,6 +29,31 @@ self.addEventListener("activate", (e) => {
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
+  );
+});
+
+// ---- Push notifications ("Your turn" alerts) ----
+self.addEventListener("push", (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch {}
+  e.waitUntil(
+    self.registration.showNotification(data.title || "Peaches & Pelucha", {
+      body: data.body || "It's your turn! 💗",
+      icon: "icons/icon-192.png",
+      badge: "icons/icon-192.png",
+      tag: "pp-turn",          // collapse repeats into one notification
+      data: { url: "./" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((ws) => {
+      for (const w of ws) if ("focus" in w) return w.focus();
+      return clients.openWindow("./");
+    })
   );
 });
 

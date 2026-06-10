@@ -32,6 +32,7 @@ function seed() {
     ],
     bets: [],
     matches: [],
+    push_subscriptions: [],
   };
   // a sample active game with one round so the scoreboard isn't empty
   const g = { id: uid(), name: "Cozy night", status: "active", winner_id: null, created_at: nowISO(), finished_at: null };
@@ -132,6 +133,7 @@ export function createDemoClient() {
     from(table) { return query(db, table); },
     channel() { return { on() { return this; }, subscribe() { return this; } }; },
     removeChannel() {},
+    functions: { invoke: async () => ({ data: null, error: null }) }, // push no-op in demo
     _db: db,
   };
   // Demo-only handle so the app's in-memory data can be inspected/crafted from

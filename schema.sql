@@ -119,13 +119,23 @@ create table if not exists matches (
   updated_at timestamptz not null default now()
 );
 
+-- ---- Push notifications ("Your turn" alerts) -------------------------------
+create table if not exists push_subscriptions (
+  id         uuid primary key default gen_random_uuid(),
+  player_id  uuid not null references players(id) on delete cascade,
+  endpoint   text not null unique,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+
 -- ---- Open everything up (no auth) ------------------------------------------
 do $$
 declare t text;
 begin
   foreach t in array array[
     'players','games','game_players','rounds','round_entries',
-    'transactions','earn_rules','rewards','bets','matches'
+    'transactions','earn_rules','rewards','bets','matches','push_subscriptions'
   ] loop
     execute format('alter table %I enable row level security;', t);
     execute format('drop policy if exists anon_all on %I;', t);

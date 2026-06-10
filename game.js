@@ -2,6 +2,7 @@ import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useMemo, useCallback, useRef } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
 import * as E from "./engine.js";
+import { notifyTurn } from "./push.js";
 
 const html = htm.bind(h);
 
@@ -58,7 +59,14 @@ export function PlayTab(ctx) {
     if (newState.status === "matchOver" && prevStatus !== "matchOver" && newState.winner) {
       await recordWin(client, api, newState.winner);
     }
-  }, [match, client, api, flash, reload, setMatch]);
+    // My move handed the turn to my partner → nudge their phone (fire & forget).
+    // Covers a discard that flips the turn AND dealing a new hand they start.
+    const prevTurn = match.state.turn;
+    if (newState.status === "playing" && newState.turn !== me.id &&
+        (newState.turn !== prevTurn || prevStatus !== "playing")) {
+      notifyTurn(client, newState.turn, "Your turn! 🎴", `${me.emoji} ${me.name} played — hand ${newState.handNumber} is waiting.`);
+    }
+  }, [match, client, api, flash, reload, setMatch, me]);
 
   if (match === undefined) {
     return html`<div class="card center"><div class="muted">Loading game…</div></div>`;

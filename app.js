@@ -5,6 +5,7 @@ import {
 import htm from "https://esm.sh/htm@3.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PlayTab } from "./game.js";
+import { pushStatus, enablePush, disablePush } from "./push.js";
 
 const html = htm.bind(h);
 
@@ -506,7 +507,21 @@ function ShopTab(ctx) {
 /* ============================================================ More ======== */
 
 function MoreTab(ctx) {
-  const { players, setModal, txns, api, onResetCreds } = ctx;
+  const { players, setModal, txns, api, onResetCreds, client, me, flash } = ctx;
+  const [alerts, setAlerts] = useState("…");
+  useEffect(() => { pushStatus().then(setAlerts); }, []);
+  const toggleAlerts = async () => {
+    try {
+      if (alerts === "enabled") { await disablePush(client); flash("Turn alerts off"); }
+      else { await enablePush(client, me.id); flash("Turn alerts on 🔔"); }
+      setAlerts(await pushStatus());
+    } catch (e) { flash("⚠️ " + (e.message || e)); }
+  };
+  const alertsLabel =
+    alerts === "enabled" ? "🔔 Turn alerts: on — tap to turn off"
+    : alerts === "denied" ? "🔕 Notifications blocked in system settings"
+    : alerts === "unsupported" ? "🔕 Turn alerts (open the installed app)"
+    : "🔔 Get notified when it's your turn";
   return html`
     <div class="card">
       <h2>Players</h2>
@@ -532,6 +547,7 @@ function MoreTab(ctx) {
     <div class="card">
       <h2>This phone</h2>
       <div class="list">
+        <button class="btn ghost block" disabled=${alerts === "denied" || alerts === "…"} onClick=${toggleAlerts}>${alertsLabel}</button>
         <button class="btn ghost block" onClick=${() => setModal({ type: "switch" })}>🔁 Switch player</button>
         <button class="btn ghost block" onClick=${() => setModal({ type: "install" })}>📲 Install to home screen</button>
         <button class="btn ghost block" onClick=${onResetCreds}>🔌 Change Supabase connection</button>
