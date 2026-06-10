@@ -252,6 +252,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .hitplus { position: absolute; top: -8px; right: -8px; background: var(--good); color: #fff; width: 19px; height: 19px; border-radius: 50%; display: grid; place-content: center; font-weight: 700; font-size: 12px; }
 
 .actionbar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+.btn.ghost.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.discardbtn { margin-top: 10px; }
+.discardbtn.wait { background: var(--paper-2); color: var(--ink-3); border: 1px dashed var(--line); }
 .waitbar { text-align: center; background: var(--paper-2); color: var(--ink-2); border-radius: var(--r-sm); padding: 11px; font-weight: 500; font-size: 13px; margin-top: 10px; }
 .hint { text-align: center; font-size: 12px; color: var(--ink-3); margin-top: 10px; }
 .logstrip { text-align: center; margin-top: 12px; color: var(--ink-3); }

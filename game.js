@@ -146,15 +146,15 @@ function Card({ card, sel, onClick, small, cid, onPointerDown, onPointerMove, on
 // Draggable hand: tap a card to select it, drag it to rearrange. Order is the
 // player's own (never force-sorted); Shuffle / Sort are opt-in.
 function Hand({ cards, interactive, selectedId, onSelect, onReorder }) {
-  const drag = useRef({ id: null, x: 0, y: 0, moved: false });
+  const drag = useRef({ id: null, x: 0, y: 0, moved: false, reordered: false });
   const down = (e, id) => {
-    drag.current = { id, x: e.clientX, y: e.clientY, moved: false };
+    drag.current = { id, x: e.clientX, y: e.clientY, moved: false, reordered: false };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
   };
   const move = (e) => {
     const d = drag.current;
     if (!d.id) return;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) d.moved = true;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) d.moved = true;
     if (!d.moved) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const t = el && el.closest ? el.closest("[data-cid]") : null;
@@ -162,13 +162,14 @@ function Hand({ cards, interactive, selectedId, onSelect, onReorder }) {
     if (tid && tid !== d.id) {
       const ids = cards.map((c) => c.id);
       const from = ids.indexOf(d.id), to = ids.indexOf(tid);
-      if (from >= 0 && to >= 0) { const n = [...ids]; n.splice(from, 1); n.splice(to, 0, d.id); onReorder(n); }
+      if (from >= 0 && to >= 0) { const n = [...ids]; n.splice(from, 1); n.splice(to, 0, d.id); d.reordered = true; onReorder(n); }
     }
   };
   const up = () => {
     const d = drag.current;
-    if (d.id && !d.moved && interactive) onSelect(d.id);
-    drag.current = { id: null, x: 0, y: 0, moved: false };
+    // A gesture that never reordered another card counts as a tap → select it.
+    if (d.id && !d.reordered && interactive) onSelect(d.id);
+    drag.current = { id: null, x: 0, y: 0, moved: false, reordered: false };
   };
   return html`<div class="hand">
     ${cards.map((c) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id}
@@ -285,15 +286,20 @@ function Board(props) {
         ${myTurn && s.turnPhase === "draw" && html`<div class="waitbar">👆 Draw a card to start your turn</div>`}
         ${myTurn && s.turnPhase === "play" && html`
           <div class="actionbar">
-            ${!s.laidDown[meId] && html`<button class="btn good sm" onClick=${() => setMode("laying")}>Lay down phase</button>`}
-            ${s.laidDown[meId] && html`<button class=${`btn plum sm ${mode === "hitting" ? "" : "ghost"}`}
+            ${!s.laidDown[meId] && html`<button class="btn ghost sm" onClick=${() => setMode("laying")}>Lay down phase</button>`}
+            ${s.laidDown[meId] && html`<button class=${`btn ghost sm ${mode === "hitting" ? "on" : ""}`}
               onClick=${() => setMode(mode === "hitting" ? "normal" : "hitting")}>${mode === "hitting" ? "Done hitting" : "Hit a meld"}</button>`}
-            <button class="btn sm" disabled=${!pick || mode === "hitting"} onClick=${doDiscard}>
-              ${pick && E.isSkip(myHand.find((c) => c.id === pick)) ? "Play Skip ⊘" : "Discard"}
-            </button>
           </div>
-          ${mode === "hitting" && html`<div class="hint">Pick a card, then tap a glowing meld to add it.</div>`}
-          ${mode !== "hitting" && html`<div class="hint">Select a card, then Discard to end your turn.</div>`}
+          ${mode === "hitting"
+            ? html`<div class="hint">Tap a card, then tap a glowing meld to add it. Tap “Done hitting” to discard.</div>`
+            : html`
+              <button class="btn block discardbtn ${pick ? "" : "wait"}" disabled=${!pick} onClick=${doDiscard}>
+                ${!pick
+                  ? "Tap a card to discard"
+                  : (E.isSkip(myHand.find((c) => c.id === pick)) ? "Play Skip ⊘ — end turn" : "Discard — end turn")}
+              </button>
+              <div class="hint">${s.laidDown[meId] ? "You’ve laid down — discard a card to end your turn." : "Tap a card to select it, then discard to end your turn."}</div>
+            `}
         `}
       `}
 
