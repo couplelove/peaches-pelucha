@@ -265,5 +265,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .bucket { flex: 1 1 40%; min-width: 130px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 10px; font-weight: 600; font-size: 13px; color: var(--ink); cursor: pointer; text-align: left; }
 .bucket.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .bucket.good { border-color: var(--good); background: #eaf2ec; }
-.bucket .bc { float: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.bchips { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 8px; min-height: 42px; }
+.bucket .brow { display: flex; align-items: center; justify-content: space-between; }
+.bucket .bc { color: var(--ink-3); font-variant-numeric: tabular-nums; font-weight: 700; }
+.bucket.good .bc { color: var(--good); }
+.bchips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; min-height: 46px; align-items: center; }
+.bchips .pcard { cursor: pointer; }
+.bempty { font-size: 11px; color: var(--ink-3); font-weight: 500; }

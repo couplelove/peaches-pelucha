@@ -283,24 +283,29 @@ function Board(props) {
           selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved} />
 
         ${!myTurn && html`<div class="waitbar">⏳ Waiting for ${opp_.emoji} ${opp_.name}…</div>`}
-        ${myTurn && s.turnPhase === "draw" && html`<div class="waitbar">👆 Draw a card to start your turn</div>`}
-        ${myTurn && s.turnPhase === "play" && html`
+        ${myTurn && s.turnPhase === "draw" && html`<div class="waitbar">👆 Your turn — tap the deck or the discard pile to draw</div>`}
+        ${myTurn && s.turnPhase === "play" && (() => {
+          const picked = myHand.find((c) => c.id === pick);
+          const goingOut = myHand.length === 1;   // discarding the last card wins the hand
+          const discardLabel = !pick ? "Tap a card to discard"
+            : E.isSkip(picked) ? "Play Skip ⊘ — end turn"
+            : goingOut ? "Discard & go out 🎉"
+            : "Discard — end turn";
+          return html`
           <div class="actionbar">
-            ${!s.laidDown[meId] && html`<button class="btn ghost sm" onClick=${() => setMode("laying")}>Lay down phase</button>`}
+            ${!s.laidDown[meId] && html`<button class="btn ghost sm" onClick=${() => setMode("laying")}>📋 Lay down phase</button>`}
             ${s.laidDown[meId] && html`<button class=${`btn ghost sm ${mode === "hitting" ? "on" : ""}`}
-              onClick=${() => setMode(mode === "hitting" ? "normal" : "hitting")}>${mode === "hitting" ? "Done hitting" : "Hit a meld"}</button>`}
+              onClick=${() => setMode(mode === "hitting" ? "normal" : "hitting")}>${mode === "hitting" ? "Done hitting" : "✋ Hit a meld"}</button>`}
           </div>
           ${mode === "hitting"
-            ? html`<div class="hint">Tap a card, then tap a glowing meld to add it. Tap “Done hitting” to discard.</div>`
+            ? html`<div class="hint">Tap one of your cards, then tap a glowing meld to add it. Tap “Done hitting” when finished.</div>`
             : html`
-              <button class="btn block discardbtn ${pick ? "" : "wait"}" disabled=${!pick} onClick=${doDiscard}>
-                ${!pick
-                  ? "Tap a card to discard"
-                  : (E.isSkip(myHand.find((c) => c.id === pick)) ? "Play Skip ⊘ — end turn" : "Discard — end turn")}
-              </button>
-              <div class="hint">${s.laidDown[meId] ? "You’ve laid down — discard a card to end your turn." : "Tap a card to select it, then discard to end your turn."}</div>
-            `}
-        `}
+              <button class="btn block discardbtn ${pick ? "" : "wait"}" disabled=${!pick} onClick=${doDiscard}>${discardLabel}</button>
+              <div class="hint">${s.laidDown[meId]
+                ? "You’ve laid down. Discard a card to end your turn."
+                : "Optional: lay down your phase. To finish, tap a card and discard."}</div>
+            `}`;
+        })()}
       `}
 
       <${LogStrip} log=${s.log} pinfo=${pinfo} oppId=${oppId} meId=${meId} />
@@ -323,43 +328,58 @@ function LogStrip({ log, pinfo, oppId, meId }) {
 }
 
 /* ----------------------------------------------------------- LayDown ------ */
+// Build your phase by tapping cards into slots. Tap a card already in a slot to
+// pull it back (so you can freely re-place wilds). Slots auto-advance.
 function LayDown({ state, meId, hand, commit, cancel }) {
-  const groups = E.phaseGroups(state.phaseOf[meId]);
-  const [assign, setAssign] = useState(groups.map(() => []));   // card ids per group
+  const phase = state.phaseOf[meId];
+  const groups = E.phaseGroups(phase);
+  const [assign, setAssign] = useState(groups.map(() => []));   // card ids per slot
   const [active, setActive] = useState(0);
+  const cardById = useMemo(() => Object.fromEntries(hand.map((c) => [c.id, c])), [hand]);
   const usedAll = new Set(assign.flat());
+  const groupsCards = assign.map((ids) => ids.map((id) => cardById[id]).filter(Boolean));
+  const groupOk = groups.map((g, i) => E.validGroup(g, groupsCards[i]));
+  const ok = E.validPhase(phase, groupsCards);
 
-  const groupsCards = assign.map((ids) => ids.map((id) => hand.find((c) => c.id === id)));
-  const ok = E.validPhase(state.phaseOf[meId], groupsCards);
-
-  const tapCard = (id) => {
-    setAssign((a) => {
-      const next = a.map((g) => g.filter((x) => x !== id));     // remove from any group
-      if (a.flat().includes(id)) return next;                   // was assigned -> just removed
-      if (next[active].length >= groups[active].count) return a; // bucket full
-      next[active] = [...next[active], id];
-      return next;
-    });
-  };
+  const addCard = (id) => setAssign((a) => {
+    if (a.flat().includes(id)) return a;
+    let ai = active;
+    if (a[ai].length >= groups[ai].count) ai = groups.findIndex((g, k) => a[k].length < g.count);
+    if (ai < 0) return a;                       // every slot full
+    if (ai !== active) setActive(ai);
+    return a.map((g, i) => (i === ai ? [...g, id] : g));
+  });
+  const removeCard = (id) => setAssign((a) => a.map((g) => g.filter((x) => x !== id)));
+  const tapHandCard = (id) => (usedAll.has(id) ? removeCard(id) : addCard(id));
 
   return html`<div class="laydown">
-    <div class="row between"><b>Lay down phase ${state.phaseOf[meId]}</b>
-      <button class="linkbtn" onClick=${cancel}>cancel</button></div>
-    <div class="buckets">
-      ${groups.map((g, i) => html`<button class=${`bucket ${active === i ? "on" : ""} ${E.validGroup(g, groupsCards[i]) ? "good" : ""}`}
-        key=${i} onClick=${() => setActive(i)}>
-        ${g.type === "set" ? "Set" : g.type === "run" ? "Run" : "Colour"} of ${g.count}
-        <span class="bc">${assign[i].length}/${g.count}</span>
-        <div class="bchips">${groupsCards[i].map((c) => c && html`<${Card} key=${c.id} card=${c} small=${true} />`)}</div>
-      </button>`)}
+    <div class="row between">
+      <b>Lay down phase ${phase}</b>
+      <button class="linkbtn" onClick=${cancel}>Cancel</button>
     </div>
-    <div class="hint">Tap the bucket to fill, then tap your cards. Tap a card again to remove it.</div>
+    <div class="hint" style="margin:2px 0 10px">${E.phaseText(phase)}. Tap a slot, then tap cards — tap a card in a slot to take it back.</div>
+    <div class="buckets">
+      ${groups.map((g, i) => html`<div class=${`bucket ${active === i ? "on" : ""} ${groupOk[i] ? "good" : ""}`}
+        key=${i} onClick=${() => setActive(i)}>
+        <div class="brow"><span>${g.type === "set" ? "Set" : g.type === "run" ? "Run" : "Colour"} of ${g.count}</span>
+          <span class="bc">${assign[i].length}/${g.count}${groupOk[i] ? " ✓" : ""}</span></div>
+        <div class="bchips">
+          ${groupsCards[i].map((c) => html`<${Card} key=${c.id} card=${c} small=${true}
+            onClick=${(e) => { if (e && e.stopPropagation) e.stopPropagation(); removeCard(c.id); }} />`)}
+          ${assign[i].length === 0 && html`<span class="bempty">tap cards to add</span>`}
+        </div>
+      </div>`)}
+    </div>
     <div class="hand">
-      ${hand.map((c) => html`<${Card} key=${c.id} card=${c} sel=${usedAll.has(c.id)} onClick=${() => tapCard(c.id)} />`)}
+      ${hand.map((c) => html`<${Card} key=${c.id} card=${c} sel=${usedAll.has(c.id)} onClick=${() => tapHandCard(c.id)} />`)}
+    </div>
+    <div class="row between mt">
+      <button class="linkbtn" disabled=${!usedAll.size} onClick=${() => { setAssign(groups.map(() => [])); setActive(0); }}>Clear slots</button>
+      <span class="tiny muted">${ok ? "Looks valid ✓" : "Fill every slot"}</span>
     </div>
     <button class="btn good block mt" disabled=${!ok}
       onClick=${() => { commit(E.layDown(state, meId, assign)); cancel(); }}>
-      ${ok ? "Lay it down ✓" : "Fill the phase to continue"}
+      ${ok ? `Lay down phase ${phase} ✓` : "Fill the phase to lay down"}
     </button>
   </div>`;
 }
