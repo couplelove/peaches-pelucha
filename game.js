@@ -74,15 +74,35 @@ export function PlayTab(ctx) {
   if (match === null) {
     return html`<${StartMatch} players=${players} client=${client} onStarted=${(row) => { setMatch(row); setImmersive(true); }} flash=${flash} />`;
   }
-  // The live hand plays full-screen (no menus). "‹ Menu" pops back to the tabbed
-  // app, where this same tab shows a compact Resume card.
+  // The live hand plays full-screen. "‹" pops back to the tabbed app, where
+  // this tab shows a compact Resume card. "🏳" requests ending the match —
+  // it only ends when BOTH players agree.
   if (immersive) {
+    const s = match.state;
+    const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
+    const endReq = s.endRequest || null;
+    const requestEnd = () => commit({ ...s, endRequest: me.id });
+    const keepPlaying = () => commit({ ...s, endRequest: null });
+    const confirmEnd = async () => {
+      await client.from("matches").update({ status: "finished" }).eq("id", match.id);
+      setMatch(null); // partner's phone follows via realtime
+    };
     return html`<div class="gamefs">
       <div class="gamefs-bar">
-        <button class="btn ghost sm" onClick=${() => setImmersive(false)}>‹ Menu</button>
-        <div class="gamefs-title">🍑 Phase 10 🧸</div>
-        <span style="width:64px"></span>
+        <button class="iconbtn" onClick=${() => setImmersive(false)}>‹</button>
+        <div class="gamefs-title">Hand ${s.handNumber}</div>
+        <button class="iconbtn ${endReq ? "on" : ""}" title="End match" onClick=${endReq === me.id ? keepPlaying : requestEnd}>🏳</button>
       </div>
+      ${endReq && html`<div class="endbar">
+        ${endReq === me.id
+          ? html`<span>Waiting for ${pinfo(s.players.find((p) => p !== me.id)).emoji} to agree to end</span>
+                 <button class="linkbtn" onClick=${keepPlaying}>Cancel</button>`
+          : html`<span>${pinfo(endReq).emoji} ${pinfo(endReq).name} wants to end this match</span>
+                 <span class="row">
+                   <button class="btn sm" onClick=${confirmEnd}>End it</button>
+                   <button class="linkbtn" onClick=${keepPlaying}>Keep playing</button>
+                 </span>`}
+      </div>`}
       <div class="gamefs-body">
         <${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} />
       </div>
@@ -166,11 +186,11 @@ function fanOf(i, n, sel) {
 
 // Draggable fanned hand. Tap a card to select it; drag to rearrange; drag onto
 // a glowing pile to play it there. Order is the player's own (never re-sorted).
-function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld }) {
+function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard }) {
   const drag = useRef(null);
   const reset = (d) => {
     if (d && d.el) { d.el.classList.remove("dragging"); d.el.style.pointerEvents = ""; d.el.style.transform = d.el.dataset.tf || ""; }
-    if (d && d.hoverEl) d.hoverEl.classList.remove("hit");
+    if (d && d.hoverEl) d.hoverEl.classList.remove("hit", "droptgt");
     drag.current = null;
   };
   const down = (e, id) => {
@@ -189,16 +209,19 @@ function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMe
     // the card follows the finger (composed on top of its fan transform)
     d.el.style.transform = `translate(${e.clientX - d.x}px, ${e.clientY - d.y}px) ${d.el.dataset.tf || ""}`;
     const under = document.elementFromPoint(e.clientX, e.clientY);
-    // over a pile? highlight it if this card can legally join
-    const meldEl = under && under.closest ? under.closest("[data-meld]") : null;
-    if (meldEl) {
-      const ok = canDropOnMeld && canDropOnMeld(d.id, meldEl.getAttribute("data-owner"), +meldEl.getAttribute("data-idx"));
-      if (d.hoverEl && d.hoverEl !== meldEl) d.hoverEl.classList.remove("hit");
-      d.hoverEl = ok ? meldEl : null;
-      if (ok) meldEl.classList.add("hit");
+    // over a meld or the discard pile? highlight it if this card can go there
+    const dropEl = under && under.closest ? (under.closest("[data-meld]") || under.closest("[data-discard]")) : null;
+    if (dropEl) {
+      const isDiscard = dropEl.hasAttribute("data-discard");
+      const ok = isDiscard
+        ? !!(canDropOnDiscard && canDropOnDiscard(d.id))
+        : !!(canDropOnMeld && canDropOnMeld(d.id, dropEl.getAttribute("data-owner"), +dropEl.getAttribute("data-idx")));
+      if (d.hoverEl && d.hoverEl !== dropEl) d.hoverEl.classList.remove("hit", "droptgt");
+      d.hoverEl = ok ? dropEl : null;
+      if (ok) dropEl.classList.add(isDiscard ? "droptgt" : "hit");
       return;
     }
-    if (d.hoverEl) { d.hoverEl.classList.remove("hit"); d.hoverEl = null; }
+    if (d.hoverEl) { d.hoverEl.classList.remove("hit", "droptgt"); d.hoverEl = null; }
     // over another hand card? live-reorder
     const t = under && under.closest ? under.closest("[data-cid]") : null;
     const tid = t && t.getAttribute("data-cid");
@@ -211,10 +234,12 @@ function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMe
   const up = () => {
     const d = drag.current;
     if (!d) return;
-    if (d.hoverEl) {                              // released over a valid pile → play it
+    if (d.hoverEl) {                              // released over a valid target → play it
+      const isDiscard = d.hoverEl.hasAttribute("data-discard");
       const owner = d.hoverEl.getAttribute("data-owner"), idx = +d.hoverEl.getAttribute("data-idx");
       reset(d);
-      onDropOnMeld && onDropOnMeld(d.id, owner, idx);
+      if (isDiscard) onDropOnDiscard && onDropOnDiscard(d.id);
+      else onDropOnMeld && onDropOnMeld(d.id, owner, idx);
       return;
     }
     const wasTap = !d.reordered;
@@ -246,7 +271,7 @@ function Board(props) {
   const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔", color: "#999" };
   const myTurn = s.turn === meId && s.status === "playing";
 
-  const [mode, setMode] = useState("normal"); // normal | laying | hitting
+  const [mode, setMode] = useState("normal"); // normal | laying
   const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
   useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
 
@@ -290,109 +315,90 @@ function Board(props) {
     commit(E.hit(s, meId, cardId, owner, idx));
   };
 
+  // Discard pile is also a drop target: drag any card onto it to end your turn.
+  const canDropOnDiscard = () => myTurn && s.turnPhase === "play";
+  const onDropOnDiscard = (cardId) => {
+    if (!canDropOnDiscard()) return;
+    setPick(null);
+    commit(E.discard(s, meId, cardId));
+  };
+
+  // With a card selected, every pile it can legally join glows — tap to place.
+  const pickedCard = pick ? myHand.find((c) => c.id === pick) : null;
+  const tapHittable = (m) => !!pickedCard && myTurn && s.turnPhase === "play" && s.laidDown[meId] && E.canHit(m, pickedCard);
+
   const topDiscard = s.discard[s.discard.length - 1];
   const discardIsSkip = topDiscard && E.isSkip(topDiscard);
+  const goingOut = myHand.length === 1;
+  const discardLabel = pickedCard
+    ? (E.isSkip(pickedCard) ? "Play Skip ⊘" : goingOut ? "Go out 🎉" : "Discard")
+    : null;
 
   return html`
-    <div class="card game">
-      <div class="row between">
-        <div class="ghand">Hand ${s.handNumber}</div>
-        <div class=${`turnbadge ${myTurn ? "you" : "them"}`}>
-          ${s.turn === meId ? "Your turn" : `${opp_.emoji} ${opp_.name}'s turn`}
+    <div class="board">
+      <!-- opponent zone -->
+      <div class="zone opp">
+        <div class="pname">
+          <span class="nm">${opp_.emoji} ${opp_.name}</span>
+          ${s.turn === oppId && s.status === "playing" && html`<span class="gobadge">GO</span>`}
+          ${!!s.skipped[oppId] && html`<span class="gobadge skip">⊘</span>`}
+        </div>
+        <div class="microstat">P${s.phaseOf[oppId]} · ${s.scores[oppId]} · ${(s.hands[oppId] || []).length} cards</div>
+        ${(s.table[oppId] || []).length > 0 && html`<div class="melds">
+          ${s.table[oppId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${oppId} idx=${i}
+            hittable=${tapHittable(m)} onHit=${() => doHit(oppId, i)} />`)}
+        </div>`}
+      </div>
+
+      <!-- piles band -->
+      <div class="zone center">
+        <div class="piles">
+          <button class=${`pile lg draw ${myTurn && s.turnPhase === "draw" ? "live" : ""}`}
+            disabled=${!(myTurn && s.turnPhase === "draw")} onClick=${() => draw("pile")}>
+            <div class="deckstack"><div class="pcardback">🂠</div></div>
+            <div class="pilelbl">${s.draw.length}</div>
+          </button>
+          <button class=${`pile lg ${myTurn && s.turnPhase === "draw" && !discardIsSkip ? "live" : ""}`}
+            data-discard="1"
+            disabled=${!(myTurn && s.turnPhase === "draw" && !discardIsSkip)} onClick=${() => draw("discard")}>
+            ${topDiscard ? html`<${Card} card=${topDiscard} />` : html`<div class="pcardback">—</div>`}
+            <div class="pilelbl"> </div>
+          </button>
         </div>
       </div>
 
-      <!-- opponent -->
-      <${PlayerStrip} info=${opp_} phase=${s.phaseOf[oppId]} score=${s.scores[oppId]}
-        handCount=${(s.hands[oppId] || []).length} laid=${s.laidDown[oppId]} skip=${!!s.skipped[oppId]} mine=${false} />
-      ${(s.table[oppId] || []).length > 0 && html`<div class="melds">
-        ${s.table[oppId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${oppId} idx=${i}
-          hittable=${mode === "hitting" && !!pick && E.canHit(m, myHand.find((c) => c.id === pick))}
-          onHit=${() => doHit(oppId, i)} />`)}
-      </div>`}
+      <!-- my zone -->
+      <div class="zone mine">
+        ${(s.table[meId] || []).length > 0 && html`<div class="melds">
+          ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${meId} idx=${i}
+            hittable=${tapHittable(m)} onHit=${() => doHit(meId, i)} />`)}
+        </div>`}
 
-      <!-- piles -->
-      <div class="piles">
-        <button class=${`pile draw ${myTurn && s.turnPhase === "draw" ? "live" : ""}`}
-          disabled=${!(myTurn && s.turnPhase === "draw")} onClick=${() => draw("pile")}>
-          <div class="pcardback">🂠</div><div class="pilelbl">Draw · ${s.draw.length}</div>
-        </button>
-        <button class=${`pile ${myTurn && s.turnPhase === "draw" && !discardIsSkip ? "live" : ""}`}
-          disabled=${!(myTurn && s.turnPhase === "draw" && !discardIsSkip)} onClick=${() => draw("discard")}>
-          ${topDiscard ? html`<${Card} card=${topDiscard} />` : html`<div class="pcardback">—</div>`}
-          <div class="pilelbl">${discardIsSkip ? "Skip (can't take)" : "Discard"}</div>
-        </button>
+        ${mode === "laying"
+          ? html`<${LayDown} state=${s} meId=${meId} hand=${myHand} commit=${commit} cancel=${() => setMode("normal")} />`
+          : html`
+          ${myTurn && s.turnPhase === "play" && html`
+            ${pickedCard
+              ? html`<button class="bigpill act" onClick=${doDiscard}>${discardLabel}</button>`
+              : !s.laidDown[meId]
+                ? html`<button class="bigpill" onClick=${() => setMode("laying")}>Phase ${s.phaseOf[meId]} · ${E.phaseText(s.phaseOf[meId])}</button>`
+                : null}
+          `}
+          <${Hand} cards=${myHand} interactive=${myTurn && s.turnPhase === "play"}
+            selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
+            canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld}
+            canDropOnDiscard=${canDropOnDiscard} onDropOnDiscard=${onDropOnDiscard} />
+          <div class="pname me">
+            <button class="linkbtn micro" onClick=${() => setOrderSaved(E.shuffle(handCards).map((c) => c.id))}>🔀</button>
+            <span class="nm">${me_.emoji} ${me_.name}</span>
+            ${myTurn && html`<span class="gobadge">GO</span>`}
+            ${!!s.skipped[meId] && html`<span class="gobadge skip">⊘</span>`}
+            <button class="linkbtn micro" onClick=${() => setOrderSaved(E.sortHand(handCards).map((c) => c.id))}>⇅</button>
+          </div>
+          <div class="microstat">P${s.phaseOf[meId]} · ${s.scores[meId]}${s.laidDown[meId] ? " · down ✓" : ""}</div>
+        `}
       </div>
-
-      <!-- my melds -->
-      ${(s.table[meId] || []).length > 0 && html`<div class="melds mine">
-        ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${meId} idx=${i}
-          hittable=${mode === "hitting" && !!pick && E.canHit(m, myHand.find((c) => c.id === pick))}
-          onHit=${() => doHit(meId, i)} />`)}
-      </div>`}
-
-      <!-- me -->
-      <${PlayerStrip} info=${me_} phase=${s.phaseOf[meId]} score=${s.scores[meId]}
-        handCount=${myHand.length} laid=${s.laidDown[meId]} skip=${!!s.skipped[meId]} mine=${true} />
-
-      ${mode === "laying"
-        ? html`<${LayDown} state=${s} meId=${meId} hand=${myHand} commit=${commit} cancel=${() => setMode("normal")} />`
-        : html`
-        <div class="phasereq">Your phase ${s.phaseOf[meId]}: <b>${E.phaseText(s.phaseOf[meId])}</b></div>
-        <div class="handbar">
-          <span class="hint" style="margin:0">drag to rearrange</span>
-          <div class="row">
-            <button class="linkbtn" onClick=${() => setOrderSaved(E.shuffle(handCards).map((c) => c.id))}>🔀 Shuffle</button>
-            <button class="linkbtn" onClick=${() => setOrderSaved(E.sortHand(handCards).map((c) => c.id))}>⇅ Sort</button>
-          </div>
-        </div>
-        <${Hand} cards=${myHand} interactive=${myTurn && s.turnPhase === "play"}
-          selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
-          canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld} />
-
-        ${!myTurn && html`<div class="waitbar">⏳ Waiting for ${opp_.emoji} ${opp_.name}…</div>`}
-        ${myTurn && s.turnPhase === "draw" && html`<div class="waitbar">👆 Your turn — tap the deck or the discard pile to draw</div>`}
-        ${myTurn && s.turnPhase === "play" && (() => {
-          const picked = myHand.find((c) => c.id === pick);
-          const goingOut = myHand.length === 1;   // discarding the last card wins the hand
-          const discardLabel = !pick ? "Tap a card to discard"
-            : E.isSkip(picked) ? "Play Skip ⊘ — end turn"
-            : goingOut ? "Discard & go out 🎉"
-            : "Discard — end turn";
-          return html`
-          <div class="actionbar">
-            ${!s.laidDown[meId] && html`<button class="btn ghost sm" onClick=${() => setMode("laying")}>📋 Lay down phase</button>`}
-            ${s.laidDown[meId] && html`<button class=${`btn ghost sm ${mode === "hitting" ? "on" : ""}`}
-              onClick=${() => setMode(mode === "hitting" ? "normal" : "hitting")}>${mode === "hitting" ? "Done" : "✋ Drop a card"}</button>`}
-          </div>
-          ${mode === "hitting"
-            ? html`<div class="hint">Tap one of your cards, then tap a glowing meld to drop it on. Tap “Done” when finished.</div>`
-            : html`
-              <button class="btn block discardbtn ${pick ? "" : "wait"}" disabled=${!pick} onClick=${doDiscard}>${discardLabel}</button>
-              <div class="hint">${s.laidDown[meId]
-                ? "Drag a card onto any glowing pile to add it — or discard to end your turn."
-                : "Optional: lay down your phase. To finish, tap a card and discard."}</div>
-            `}`;
-        })()}
-      `}
-
-      <${LogStrip} log=${s.log} pinfo=${pinfo} oppId=${oppId} meId=${meId} />
     </div>`;
-}
-
-function PlayerStrip({ info, phase, score, handCount, laid, skip, mine }) {
-  return html`<div class=${`pstrip ${mine ? "mine" : ""}`} style=${`border-color:${info.color}55`}>
-    <div class="l"><span class="av" style=${`background:${info.color}22`}>${info.emoji}</span>
-      <div><b>${info.name}${mine ? " (you)" : ""}</b>
-        <div class="tiny muted">Phase ${phase} · ${handCount} cards${laid ? " · laid down ✓" : ""}${skip ? " · skipped ⊘" : ""}</div></div></div>
-    <div class="score">${score}</div>
-  </div>`;
-}
-
-function LogStrip({ log, pinfo, oppId, meId }) {
-  const last = (log || []).slice(-1)[0];
-  if (!last) return null;
-  return html`<div class="logstrip tiny muted">📝 ${last}</div>`;
 }
 
 /* ----------------------------------------------------------- LayDown ------ */
@@ -422,10 +428,9 @@ function LayDown({ state, meId, hand, commit, cancel }) {
 
   return html`<div class="laydown">
     <div class="row between">
-      <b>Lay down phase ${phase}</b>
-      <button class="linkbtn" onClick=${cancel}>Cancel</button>
+      <b>Phase ${phase}</b>
+      <button class="linkbtn" onClick=${cancel}>✕</button>
     </div>
-    <div class="hint" style="margin:2px 0 10px">${E.phaseText(phase)}. Tap a slot, then tap cards — tap a card in a slot to take it back.</div>
     <div class="buckets">
       ${groups.map((g, i) => html`<div class=${`bucket ${active === i ? "on" : ""} ${groupOk[i] ? "good" : ""}`}
         key=${i} onClick=${() => setActive(i)}>
@@ -434,7 +439,6 @@ function LayDown({ state, meId, hand, commit, cancel }) {
         <div class="bchips">
           ${groupsCards[i].map((c) => html`<${Card} key=${c.id} card=${c} small=${true}
             onClick=${(e) => { if (e && e.stopPropagation) e.stopPropagation(); removeCard(c.id); }} />`)}
-          ${assign[i].length === 0 && html`<span class="bempty">tap cards to add</span>`}
         </div>
       </div>`)}
     </div>
@@ -442,13 +446,9 @@ function LayDown({ state, meId, hand, commit, cancel }) {
       ${hand.map((c, i) => html`<${Card} key=${c.id} card=${c} sel=${usedAll.has(c.id)}
         fan=${fanOf(i, hand.length, usedAll.has(c.id))} onClick=${() => tapHandCard(c.id)} />`)}
     </div>
-    <div class="row between mt">
-      <button class="linkbtn" disabled=${!usedAll.size} onClick=${() => { setAssign(groups.map(() => [])); setActive(0); }}>Clear slots</button>
-      <span class="tiny muted">${ok ? "Looks valid ✓" : "Fill every slot"}</span>
-    </div>
     <button class="btn good block mt" disabled=${!ok}
       onClick=${() => { commit(E.layDown(state, meId, assign)); cancel(); }}>
-      ${ok ? `Lay down phase ${phase} ✓` : "Fill the phase to lay down"}
+      Lay down${ok ? " ✓" : ""}
     </button>
   </div>`;
 }
