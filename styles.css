@@ -224,7 +224,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pilelbl { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
 .pcardback { width: 46px; height: 64px; border-radius: 9px; background: var(--ink); display: grid; place-content: center; font-size: 22px; color: var(--paper); box-shadow: var(--shadow); }
 
-.pcard { width: 56px; height: 78px; border-radius: 11px; border: none; font-family: var(--serif); font-size: 27px; font-weight: 500; font-variant-numeric: tabular-nums; display: inline-grid; place-content: center; box-shadow: 0 2px 7px -2px rgba(43,37,33,.3); cursor: pointer; flex: 0 0 auto; transition: transform .18s cubic-bezier(.2,.8,.25,1.05), box-shadow .18s ease; }
+.pcard { width: 56px; height: 78px; border-radius: 11px; border: none; font-family: var(--serif); font-size: 27px; font-weight: 500; font-variant-numeric: tabular-nums; display: inline-grid; place-content: center; box-shadow: 0 2px 7px -2px rgba(43,37,33,.3); cursor: pointer; flex: 0 0 auto; transition: transform .18s cubic-bezier(.2,.8,.25,1.05), box-shadow .18s ease; position: relative; }
+/* corner index: stays readable on the exposed left edge of overlapped fan cards */
+.pcorner { position: absolute; top: 4px; left: 6px; font-size: 14px; line-height: 1; font-weight: 600; opacity: .95; }
 .pcard.sm { width: 30px; height: 42px; font-size: 15px; border-radius: 7px; }
 .pcard.sel { transform: translateY(-9px); box-shadow: 0 0 0 2px var(--accent), 0 10px 18px -8px rgba(43,37,33,.35); }
 .pcard.static, .pcard:disabled { cursor: default; }
@@ -232,6 +234,10 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* fanned hand: one overlapping arched row */
 .hand { display: flex; flex-wrap: nowrap; gap: 0; justify-content: center; align-items: flex-start;
   padding: 28px 4px 16px; touch-action: none; position: relative; }
+/* simple row view: no overlap, no tilt — every number fully visible */
+.hand.flat { flex-wrap: wrap; gap: 8px; padding: 14px 4px 12px; }
+.viewtoggle { font-size: 15px; }
+.linkbtn.micro.on { opacity: 1; color: var(--accent); }
 .pcard { touch-action: none; }
 .pcard.dragging { transition: none !important; z-index: 999 !important; pointer-events: none;
   box-shadow: 0 18px 30px -8px rgba(43,37,33,.5) !important; }

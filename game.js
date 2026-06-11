@@ -212,7 +212,8 @@ function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, on
   return html`<button data-cid=${cid} data-tf=${f.tf || ""}
     class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${dragging ? "dragging" : ""} ${interactive ? "" : "static"}`}
     style=${`background:${bg};color:${color};${f.css || ""}`} onClick=${onClick} disabled=${!interactive}
-    onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp} onPointerCancel=${onPointerCancel}>${face}</button>`;
+    onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp} onPointerCancel=${onPointerCancel}>
+    ${!small && html`<span class="pcorner">${face}</span>`}${face}</button>`;
 }
 
 // Fan layout: one overlapping arched row, like cards held in a hand.
@@ -238,7 +239,7 @@ function fanOf(i, n, sel) {
 //   the order can't oscillate the way hit-testing overlapped cards did
 // - siblings slide aside via the CSS transition; on release the card settles
 //   into its slot with the same spring
-function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard }) {
+function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard }) {
   const drag = useRef(null);
 
   const glue = (d) => {
@@ -286,13 +287,18 @@ function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMe
       return;
     }
     if (d.hoverEl) { d.hoverEl.classList.remove("hit", "droptgt"); d.hoverEl = null; }
-    // geometric insertion: count how many sibling slot midpoints the finger passed
+    // geometric insertion: count siblings whose slot the finger has passed, in
+    // reading order (row-aware so the flat wrapped view reorders correctly).
+    // Layout offsets ignore transforms, so mid-animation slides can't jitter it.
+    const p = d.el.parentElement.getBoundingClientRect();
     const sibs = [...d.el.parentElement.querySelectorAll(".pcard")].filter((el) => el !== d.el);
-    const centers = sibs.map((el) => {
-      const p = d.el.parentElement.getBoundingClientRect();
-      return p.left + el.offsetLeft + el.offsetWidth / 2;   // layout position: immune to mid-animation
-    });
-    const to = centers.filter((cx) => d.cx > cx).length;
+    const to = sibs.reduce((acc, el) => {
+      const cX = p.left + el.offsetLeft + el.offsetWidth / 2;
+      const cY = p.top + el.offsetTop + el.offsetHeight / 2;
+      const half = el.offsetHeight / 2 + 4;
+      const before = (d.cy - cY > half) || (Math.abs(d.cy - cY) <= half && d.cx > cX);
+      return acc + (before ? 1 : 0);
+    }, 0);
     const cur = cards.findIndex((c) => c.id === d.id);
     if (to !== cur && cur >= 0) {
       const ids = cards.map((c) => c.id).filter((x) => x !== d.id);
@@ -317,10 +323,10 @@ function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMe
     reset(d);
     if (wasTap && interactive) onSelect(id);      // simple tap → select
   };
-  return html`<div class="hand">
+  return html`<div class=${`hand ${flat ? "flat" : ""}`}>
     ${cards.map((c, i) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id}
       dragging=${!!(drag.current && drag.current.id === c.id && drag.current.moved)}
-      fan=${fanOf(i, cards.length, selectedId === c.id)}
+      fan=${flat ? null : fanOf(i, cards.length, selectedId === c.id)}
       onPointerDown=${(e) => down(e, c.id)} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up} />`)}
   </div>`;
 }
@@ -345,6 +351,10 @@ function Board(props) {
   const [mode, setMode] = useState("normal"); // normal | laying
   const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
   useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
+
+  // Hand view: fan (default) or simple row layout. Per-device preference.
+  const [flatHand, setFlatHand] = useState(() => localStorage.getItem("pp.flatHand") === "1");
+  const toggleFlat = () => setFlatHand((v) => { const n = !v; try { localStorage.setItem("pp.flatHand", n ? "1" : "0"); } catch {} return n; });
 
   // Live turn change: when it becomes my turn while I'm watching, buzz the
   // phone (where supported) — the GO badge pop animation covers the eyes.
@@ -465,7 +475,7 @@ function Board(props) {
         </div>`}
 
         ${mode === "laying"
-          ? html`<${LayDown} state=${s} meId=${meId} hand=${myHand} commit=${commit} cancel=${() => setMode("normal")} />`
+          ? html`<${LayDown} state=${s} meId=${meId} hand=${myHand} flat=${flatHand} commit=${commit} cancel=${() => setMode("normal")} />`
           : html`
           ${myTurn && s.turnPhase === "play" && html`
             ${pickedCard
@@ -474,16 +484,15 @@ function Board(props) {
                 ? html`<button class="bigpill" onClick=${() => setMode("laying")}>Phase ${s.phaseOf[meId]} · ${E.phaseText(s.phaseOf[meId])}</button>`
                 : null}
           `}
-          <${Hand} cards=${myHand} interactive=${myTurn && s.turnPhase === "play"}
+          <${Hand} cards=${myHand} flat=${flatHand} interactive=${myTurn && s.turnPhase === "play"}
             selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
             canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld}
             canDropOnDiscard=${canDropOnDiscard} onDropOnDiscard=${onDropOnDiscard} />
           <div class="pname me">
-            <button class="linkbtn micro" onClick=${() => setOrderSaved(E.shuffle(handCards).map((c) => c.id))}>🔀</button>
             <span class="nm">${me_.emoji} ${me_.name}</span>
             ${myTurn && html`<span class="gobadge">GO</span>`}
             ${s.skipInfo?.victim === meId && html`<span class="gobadge skipd">⊘ SKIPPED</span>`}
-            <button class="linkbtn micro" onClick=${() => setOrderSaved(E.sortHand(handCards).map((c) => c.id))}>⇅</button>
+            <button class=${`linkbtn micro viewtoggle ${flatHand ? "on" : ""}`} title="Fan / row view" onClick=${toggleFlat}>▦</button>
           </div>
           <div class="microstat">P${s.phaseOf[meId]} · ${s.scores[meId]}${s.laidDown[meId] ? " · down ✓" : ""}</div>
         `}
@@ -494,7 +503,7 @@ function Board(props) {
 /* ----------------------------------------------------------- LayDown ------ */
 // Build your phase by tapping cards into slots. Tap a card already in a slot to
 // pull it back (so you can freely re-place wilds). Slots auto-advance.
-function LayDown({ state, meId, hand, commit, cancel }) {
+function LayDown({ state, meId, hand, flat, commit, cancel }) {
   const phase = state.phaseOf[meId];
   const groups = E.phaseGroups(phase);
   const [assign, setAssign] = useState(groups.map(() => []));   // card ids per slot
@@ -532,9 +541,9 @@ function LayDown({ state, meId, hand, commit, cancel }) {
         </div>
       </div>`)}
     </div>
-    <div class="hand">
+    <div class=${`hand ${flat ? "flat" : ""}`}>
       ${hand.map((c, i) => html`<${Card} key=${c.id} card=${c} sel=${usedAll.has(c.id)}
-        fan=${fanOf(i, hand.length, usedAll.has(c.id))} onClick=${() => tapHandCard(c.id)} />`)}
+        fan=${flat ? null : fanOf(i, hand.length, usedAll.has(c.id))} onClick=${() => tapHandCard(c.id)} />`)}
     </div>
     <button class="btn good block mt" disabled=${!ok}
       onClick=${() => { commit(E.layDown(state, meId, assign)); cancel(); }}>
