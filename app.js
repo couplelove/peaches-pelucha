@@ -5,6 +5,7 @@ import {
 import htm from "https://esm.sh/htm@3.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PlayTab } from "./game.js";
+import { DateRoulette } from "./roulette.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 
 const html = htm.bind(h);
@@ -368,6 +369,7 @@ function ScoreTab(ctx) {
   return html`<${Fragment}>
     <${PlayTab} ...${ctx} />
     <${LifetimeCard} ...${ctx} />
+    <${DateRoulette} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
   <//>`;
 }
 

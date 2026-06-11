@@ -33,6 +33,13 @@ function seed() {
     bets: [],
     matches: [],
     push_subscriptions: [],
+    date_ideas: [
+      { id: uid(), label: "Sushi night", emoji: "🍣", category: "food", active: true, added_by: peaches, created_at: nowISO() },
+      { id: uid(), label: "Taco crawl", emoji: "🌮", category: "food", active: true, added_by: pelucha, created_at: nowISO() },
+      { id: uid(), label: "Mini golf", emoji: "⛳", category: "activity", active: true, added_by: peaches, created_at: nowISO() },
+      { id: uid(), label: "Museum date", emoji: "🖼️", category: "activity", active: true, added_by: pelucha, created_at: nowISO() },
+    ],
+    date_spins: [],
   };
   // a sample active game with one round so the scoreboard isn't empty
   const g = { id: uid(), name: "Cozy night", status: "active", winner_id: null, created_at: nowISO(), finished_at: null };
@@ -60,6 +67,8 @@ const DEFAULTS = {
   rewards: { cost: 50, emoji: "🎁", active: true, sort: 0 },
   bets: { stake: 10, status: "open", winner_id: null, settled_at: null },
   matches: { status: "playing", version: 0 },
+  date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
+  date_spins: { emoji: "✨", category: "food", spun_by: null },
 };
 
 function matches(row, filters) {
