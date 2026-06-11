@@ -48,6 +48,29 @@ export async function enablePush(client, playerId) {
   if (error) throw new Error(error.message);
 }
 
+// Self-heal: iOS (especially) silently expires web-push subscriptions. Called
+// on every app open — if permission is granted but the subscription vanished,
+// quietly re-subscribe; either way refresh the row so the binding stays fresh.
+export async function ensurePush(client, playerId) {
+  try {
+    if (!pushSupported() || Notification.permission !== "granted") return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyBytes(VAPID_PUBLIC_KEY),
+      });
+    }
+    const j = sub.toJSON();
+    await client.from("push_subscriptions").upsert(
+      { player_id: playerId, endpoint: sub.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth },
+      { onConflict: "endpoint" }
+    );
+  } catch {}
+}
+
 export async function disablePush(client) {
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = reg && (await reg.pushManager.getSubscription());

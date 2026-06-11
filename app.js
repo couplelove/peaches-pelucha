@@ -5,7 +5,7 @@ import {
 import htm from "https://esm.sh/htm@3.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PlayTab } from "./game.js";
-import { pushStatus, enablePush, disablePush } from "./push.js";
+import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 
 const html = htm.bind(h);
 
@@ -188,6 +188,10 @@ function App({ client, onResetCreds }) {
   }, [client, loadAll]);
 
   const me = players.find((p) => p.id === meId) || null;
+
+  // Keep push alive: iOS quietly expires web-push subscriptions, so re-verify
+  // (and silently re-subscribe) on every app open once a player is chosen.
+  useEffect(() => { if (me) ensurePush(client, me.id); }, [client, me?.id]);
   const pickMe = (id) => { localStorage.setItem(LS.me, id); setMeId(id); };
 
   // balances from transactions
