@@ -236,3 +236,26 @@ select * from (values
   ('Sunset walk + ice cream','🌅', 'activity')
 ) as v(label, emoji, category)
 where not exists (select 1 from date_ideas);
+
+-- ---- Love Bug Calendar 📅 ---------------------------------------------------
+-- (Also migrations/004_lovebug_calendar.sql; the cron digest needs pg_cron+pg_net.)
+create table if not exists events (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null,
+  emoji      text not null default '💗',
+  starts_on  date not null,
+  starts_at  time,
+  notes      text,
+  kind       text not null default 'invite',     -- 'invite' | 'fyi'
+  created_by uuid references players(id) on delete set null,
+  rsvp       text not null default 'pending',    -- 'pending'|'in'|'cant'
+  created_at timestamptz not null default now()
+);
+alter table events enable row level security;
+drop policy if exists anon_all on events;
+create policy anon_all on events
+  for all to anon, authenticated using (true) with check (true);
+do $$ begin
+  alter publication supabase_realtime add table events;
+exception when duplicate_object then null;
+end $$;

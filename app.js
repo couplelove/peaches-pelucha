@@ -6,6 +6,7 @@ import htm from "https://esm.sh/htm@3.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PlayTab } from "./game.js";
 import { DateRoulette } from "./roulette.js";
+import { PlansTab } from "./events.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 
 const html = htm.bind(h);
@@ -224,7 +225,7 @@ function App({ client, onResetCreds }) {
       modal=${modal} setModal=${setModal} api=${api} />`;
   }
 
-  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash };
+  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
 
   return html`
     <div class="app-shell">
@@ -239,13 +240,14 @@ function App({ client, onResetCreds }) {
       ${err && html`<div class="banner" style="background:#ffeef1;color:#b00020">⚠️ ${err}</div>`}
 
       ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
+      ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
       ${tab === "wallet" && html`<${WalletTab} ...${ctx} />`}
       ${tab === "bets" && html`<${BetsTab} ...${ctx} />`}
       ${tab === "shop" && html`<${ShopTab} ...${ctx} />`}
       ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
 
       <nav class="nav">
-        ${[["score", "🏆", "Score"], ["wallet", "💗", "Wallet"], ["bets", "🎲", "Bets"], ["shop", "🎁", "Shop"], ["more", "⚙️", "More"]].map(
+        ${[["score", "🏆", "Score"], ["plans", "📅", "Plans"], ["wallet", "💗", "Wallet"], ["bets", "🎲", "Bets"], ["shop", "🎁", "Shop"], ["more", "⚙️", "More"]].map(
           ([k, ic, label]) => html`
           <button class=${tab === k ? "active" : ""} onClick=${() => setTab(k)}>
             <span class="ic">${ic}</span>${label}
@@ -369,7 +371,8 @@ function ScoreTab(ctx) {
   return html`<${Fragment}>
     <${PlayTab} ...${ctx} />
     <${LifetimeCard} ...${ctx} />
-    <${DateRoulette} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
+    <${DateRoulette} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash}
+      onPlan=${(pick) => { window.__ppPlanPrefill = pick; ctx.setTab("plans"); }} />
   <//>`;
 }
 

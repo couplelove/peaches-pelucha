@@ -204,6 +204,13 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .banner { background: var(--accent-soft); color: var(--accent-press); border-radius: var(--r-sm); padding: 12px 14px; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
 .danger { color: var(--bad); }
 
+/* ===================== Love Bug Calendar ===================== */
+.dhead { font-family: var(--serif); font-weight: 500; font-size: 15px; color: var(--ink);
+  margin: 16px 0 2px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.dhead:first-of-type { margin-top: 8px; }
+.evrow.ask { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px; margin: 6px 0; border-bottom: none; }
+.evrow .btn.sm { white-space: nowrap; }
+
 /* ===================== Date Night Roulette ===================== */
 .rdisplay {
   min-height: 72px; display: grid; place-content: center; text-align: center;

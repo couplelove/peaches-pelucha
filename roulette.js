@@ -7,7 +7,7 @@ const html = htm.bind(h);
 /* Date Night Roulette 🎰 — spins a pick from the couple's shared idea pool.
    The result is written to `date_spins`, so both phones land on the same plan
    (the partner's phone gets it live via realtime). Ideas are managed inline. */
-export function DateRoulette({ client, me, players, flash }) {
+export function DateRoulette({ client, me, players, flash, onPlan }) {
   const [ideas, setIdeas] = useState(null);    // null = loading
   const [spin, setSpin] = useState(null);      // latest spin row = tonight's pick
   const [filter, setFilter] = useState("any");
@@ -117,7 +117,9 @@ export function DateRoulette({ client, me, players, flash }) {
         : ideas === null ? "…" : "Spin for tonight’s plan"}
     </div>
     ${spin && !spinning && html`<div class="tiny muted center" style="margin-top:-6px">
-      spun by ${pinfo(spin.spun_by).emoji} ${pinfo(spin.spun_by).name}</div>`}
+      spun by ${pinfo(spin.spun_by).emoji} ${pinfo(spin.spun_by).name}
+      ${onPlan && html` · <button class="linkbtn" style="padding:0;font-size:12px"
+        onClick=${() => onPlan({ emoji: spin.emoji, title: spin.label })}>add to calendar →</button>`}</div>`}
 
     <button class="btn block mt" disabled=${spinning || pool.length === 0} onClick=${doSpin}>
       ${pool.length === 0 ? "Add some ideas first" : spinning ? "…" : "Spin 🎰"}

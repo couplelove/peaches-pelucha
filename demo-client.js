@@ -40,6 +40,10 @@ function seed() {
       { id: uid(), label: "Museum date", emoji: "🖼️", category: "activity", active: true, added_by: pelucha, created_at: nowISO() },
     ],
     date_spins: [],
+    events: [
+      { id: uid(), title: "Dinner at Nonna's", emoji: "🍝", starts_on: new Date().toISOString().slice(0, 10),
+        starts_at: "19:00", notes: null, kind: "invite", created_by: peaches, rsvp: "pending", created_at: nowISO() },
+    ],
   };
   // a sample active game with one round so the scoreboard isn't empty
   const g = { id: uid(), name: "Cozy night", status: "active", winner_id: null, created_at: nowISO(), finished_at: null };
@@ -69,19 +73,21 @@ const DEFAULTS = {
   matches: { status: "playing", version: 0 },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
+  events: { emoji: "💗", starts_at: null, notes: null, kind: "invite", created_by: null, rsvp: "pending" },
 };
 
 function matches(row, filters) {
-  return filters.every((f) => row[f.col] === f.val);
+  return filters.every((f) => (f.op === "gte" ? row[f.col] >= f.val : row[f.col] === f.val));
 }
 
 // Minimal thenable query builder mirroring the bits of supabase-js the app uses.
 function query(db, table) {
-  const state = { selectStr: "*", filters: [], order: null, limitN: null, single: false, op: "select", payload: null };
+  const state = { selectStr: "*", filters: [], orders: [], limitN: null, single: false, op: "select", payload: null };
   const builder = {
     select(str) { state.selectStr = str || "*"; if (state.op !== "select") state._returnRows = true; return builder; },
     eq(col, val) { state.filters.push({ col, val }); return builder; },
-    order(col, opts) { state.order = { col, asc: !opts || opts.ascending !== false }; return builder; },
+    gte(col, val) { state.filters.push({ col, val, op: "gte" }); return builder; },
+    order(col, opts) { state.orders.push({ col, asc: !opts || opts.ascending !== false }); return builder; },
     limit(n) { state.limitN = n; return builder; },
     single() { state.single = true; return builder; },
     insert(payload) { state.op = "insert"; state.payload = payload; return builder; },
@@ -119,10 +125,10 @@ function run(db, table, s) {
     }
     // select
     let out = rows.filter((row) => matches(row, s.filters)).map((r) => ({ ...r }));
-    if (s.order) out.sort((a, b) => {
-      const av = a[s.order.col], bv = b[s.order.col];
+    for (const o of [...s.orders].reverse()) out.sort((a, b) => {   // stable multi-key
+      const av = a[o.col], bv = b[o.col];
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return s.order.asc ? cmp : -cmp;
+      return o.asc ? cmp : -cmp;
     });
     // nested embed: "..., round_entries(*)"
     if (/round_entries\(\*\)/.test(s.selectStr) && table === "rounds") {
