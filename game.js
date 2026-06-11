@@ -66,6 +66,11 @@ export function PlayTab(ctx) {
         (newState.turn !== prevTurn || prevStatus !== "playing")) {
       notifyTurn(client, newState.turn, "Your turn! 🎴", `${me.emoji} ${me.name} played — hand ${newState.handNumber} is waiting.`);
     }
+    // I skipped my partner → tell them why it's not their turn.
+    if (newState.skipInfo && newState.skipInfo.by === me.id &&
+        newState.skipInfo.seq !== (match.state.skipInfo?.seq || 0)) {
+      notifyTurn(client, newState.skipInfo.victim, "Skipped ⊘", `${me.emoji} ${me.name} played a Skip — they go again.`);
+    }
   }, [match, client, api, flash, reload, setMatch, me]);
 
   if (match === undefined) {
@@ -275,6 +280,17 @@ function Board(props) {
   const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
   useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
 
+  // Skip awareness: a SKIPPED badge shows for the whole bonus turn (from
+  // s.skipInfo), and the victim gets a toast the moment it lands.
+  const skipSeq = s.skipInfo?.seq || 0;
+  const seenSkip = useRef(skipSeq);
+  useEffect(() => {
+    if (skipSeq !== seenSkip.current) {
+      seenSkip.current = skipSeq;
+      if (s.skipInfo?.victim === meId) props.flash(`⊘ ${pinfo(s.skipInfo.by).emoji} ${pinfo(s.skipInfo.by).name} skipped you — they go again`);
+    }
+  }, [skipSeq]);
+
   // The player's own hand arrangement (persisted per device). Cards are NOT
   // auto-sorted: a freshly dealt hand starts tidy, then keeps whatever order the
   // player drags it into; newly drawn cards append to the end.
@@ -341,7 +357,7 @@ function Board(props) {
         <div class="pname">
           <span class="nm">${opp_.emoji} ${opp_.name}</span>
           ${s.turn === oppId && s.status === "playing" && html`<span class="gobadge">GO</span>`}
-          ${!!s.skipped[oppId] && html`<span class="gobadge skip">⊘</span>`}
+          ${s.skipInfo?.victim === oppId && html`<span class="gobadge skipd">⊘ SKIPPED</span>`}
         </div>
         <div class="microstat">P${s.phaseOf[oppId]} · ${s.scores[oppId]} · ${(s.hands[oppId] || []).length} cards</div>
         ${(s.table[oppId] || []).length > 0 && html`<div class="melds">
@@ -392,7 +408,7 @@ function Board(props) {
             <button class="linkbtn micro" onClick=${() => setOrderSaved(E.shuffle(handCards).map((c) => c.id))}>🔀</button>
             <span class="nm">${me_.emoji} ${me_.name}</span>
             ${myTurn && html`<span class="gobadge">GO</span>`}
-            ${!!s.skipped[meId] && html`<span class="gobadge skip">⊘</span>`}
+            ${s.skipInfo?.victim === meId && html`<span class="gobadge skipd">⊘ SKIPPED</span>`}
             <button class="linkbtn micro" onClick=${() => setOrderSaved(E.sortHand(handCards).map((c) => c.id))}>⇅</button>
           </div>
           <div class="microstat">P${s.phaseOf[meId]} · ${s.scores[meId]}${s.laidDown[meId] ? " · down ✓" : ""}</div>

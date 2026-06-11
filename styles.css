@@ -271,6 +271,8 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .gobadge { background: var(--ink); color: var(--paper); font-weight: 800; font-size: 10px; letter-spacing: .08em;
   padding: 4px 8px; border-radius: 999px; }
 .gobadge.skip { background: var(--paper-2); color: var(--ink-3); }
+.gobadge.skipd { background: var(--bad); color: #fff6f4; animation: skippulse 1.2s ease-in-out 3; }
+@keyframes skippulse { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.12);} }
 .linkbtn.micro { font-size: 14px; padding: 4px; opacity: .55; }
 
 .bigpill { width: 100%; border: 1px solid var(--line); background: var(--paper-2); color: var(--ink);

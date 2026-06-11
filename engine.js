@@ -149,6 +149,7 @@ export function startHand(prev, rnd = Math.random) {
 
   let deck = shuffle(makeDeck(), rnd);
   s.hands = {}; s.table = {}; s.laidDown = {}; s.skipped = {};
+  delete s.skipInfo;
   s.players.forEach((p) => { s.hands[p] = []; s.table[p] = []; s.laidDown[p] = false; });
   for (let i = 0; i < 10; i++) for (const p of s.players) s.hands[p].push(deck.pop());
 
@@ -233,9 +234,16 @@ export function discard(state, pid, cardId) {
   s.hands[pid] = s.hands[pid].filter((c) => c.id !== cardId);
   s.discard.push(card);
 
-  // Discarding a Skip costs the opponent their next turn.
-  if (isSkip(card)) { s.skipped[other(s, pid)] = true; s.log.push(`played a Skip!`); }
-  else s.log.push(`discarded`);
+  // Discarding a Skip costs the opponent their next turn. `skipInfo` is the
+  // visible record of it — it persists through the skipper's bonus turn (the
+  // UI shows a SKIPPED badge from it) and clears on the next discard.
+  delete s.skipInfo;
+  if (isSkip(card)) {
+    const victim = other(s, pid);
+    s.skipped[victim] = true;
+    s.skipInfo = { by: pid, victim, seq: (state.skipInfo?.seq || 0) + 1 };
+    s.log.push(`played a Skip!`);
+  } else s.log.push(`discarded`);
 
   if (s.hands[pid].length === 0) return endHand(s, pid);   // went out
   return endTurn(s, pid);
