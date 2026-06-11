@@ -69,7 +69,7 @@ export function PlayTab(ctx) {
     // I skipped my partner → tell them why it's not their turn.
     if (newState.skipInfo && newState.skipInfo.by === me.id &&
         newState.skipInfo.seq !== (match.state.skipInfo?.seq || 0)) {
-      notifyTurn(client, newState.skipInfo.victim, "Skipped ⊘", `${me.emoji} ${me.name} played a Skip — they go again.`);
+      notifyTurn(client, newState.skipInfo.victim, "You got Skipped! ⊘", `${me.emoji} ${me.name} played a Skip on you — they go again 😈`);
     }
   }, [match, client, api, flash, reload, setMatch, me]);
 
