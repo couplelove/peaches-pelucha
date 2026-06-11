@@ -169,13 +169,22 @@ function App({ client, onResetCreds }) {
     }
   }, [client]);
 
-  // initial load + realtime sync
+  // initial load + realtime sync + catch-up when the phone wakes/reconnects
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => {
     const ch = client.channel("pp-sync")
       .on("postgres_changes", { event: "*", schema: "public" }, () => loadAll())
       .subscribe();
-    return () => { client.removeChannel(ch); };
+    const wake = () => { if (document.visibilityState === "visible") loadAll(); };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    return () => {
+      client.removeChannel(ch);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("online", wake);
+    };
   }, [client, loadAll]);
 
   const me = players.find((p) => p.id === meId) || null;

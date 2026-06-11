@@ -10,24 +10,62 @@ const html = htm.bind(h);
 const CARD_BG = { red: "#bf4a3c", blue: "#356b8c", green: "#3e7a58", yellow: "#b0822c" };
 
 /* ----------------------------------------------------------- match hook --- */
+// Live sync with belt-and-braces: realtime websocket for instant updates,
+// reload on wake/focus/reconnect (phones kill the socket when locked), a
+// gentle heartbeat while visible, and auto-resubscribe if the channel drops.
 function useMatch(client) {
   const [match, setMatch] = useState(undefined); // undefined=loading, null=none
+  const matchRef = useRef(undefined);
+  useEffect(() => { matchRef.current = match; }, [match]);
+
   const load = useCallback(async () => {
+    if (window.__ppDragging) return;             // never yank cards mid-drag
     const { data } = await client.from("matches").select("*")
       .eq("status", "playing").order("created_at", { ascending: false }).limit(1);
-    setMatch((data && data[0]) || null);
+    const row = (data && data[0]) || null;
+    const cur = matchRef.current;
+    if (row && cur && row.id === cur.id && row.version === cur.version) return; // unchanged
+    setMatch(row);
   }, [client]);
+
   useEffect(() => { load(); }, [load]);
+
   useEffect(() => {
-    const ch = client.channel("pp-match")
-      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (p) => {
-        if (p.eventType === "DELETE") { load(); return; }
-        const row = p.new;
-        if (row.status === "playing") setMatch(row);
-        else load();
-      }).subscribe();
-    return () => { client.removeChannel(ch); };
+    let alive = true, ch = null;
+    const subscribe = () => {
+      ch = client.channel("pp-match-" + Math.random().toString(36).slice(2, 7))
+        .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (p) => {
+          if (p.eventType === "DELETE") { load(); return; }
+          const row = p.new;
+          if (window.__ppDragging) return;
+          if (row.status === "playing") setMatch(row);
+          else load();
+        })
+        .subscribe((status) => {
+          // websocket died → make a fresh channel, then catch up on missed moves
+          if (alive && (status === "CHANNEL_ERROR" || status === "TIMED_OUT")) {
+            setTimeout(() => { if (alive) { try { client.removeChannel(ch); } catch {} subscribe(); load(); } }, 1500);
+          }
+        });
+    };
+    subscribe();
+
+    const wake = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    const beat = setInterval(wake, 20000);       // fallback poll while visible
+
+    return () => {
+      alive = false;
+      clearInterval(beat);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("online", wake);
+      try { client.removeChannel(ch); } catch {}
+    };
   }, [client, load]);
+
   return [match, setMatch, load];
 }
 
@@ -197,9 +235,11 @@ function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMe
     if (d && d.el) { d.el.classList.remove("dragging"); d.el.style.pointerEvents = ""; d.el.style.transform = d.el.dataset.tf || ""; }
     if (d && d.hoverEl) d.hoverEl.classList.remove("hit", "droptgt");
     drag.current = null;
+    window.__ppDragging = false;                  // sync reloads may resume
   };
   const down = (e, id) => {
     drag.current = { id, x: e.clientX, y: e.clientY, el: e.currentTarget, moved: false, reordered: false, hoverEl: null };
+    window.__ppDragging = true;                   // pause sync reloads mid-gesture
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
   };
   const move = (e) => {
@@ -279,6 +319,14 @@ function Board(props) {
   const [mode, setMode] = useState("normal"); // normal | laying
   const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
   useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
+
+  // Live turn change: when it becomes my turn while I'm watching, buzz the
+  // phone (where supported) — the GO badge pop animation covers the eyes.
+  const wasMyTurn = useRef(myTurn);
+  useEffect(() => {
+    if (myTurn && !wasMyTurn.current) { try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch {} }
+    wasMyTurn.current = myTurn;
+  }, [myTurn]);
 
   // Skip awareness: a SKIPPED badge shows for the whole bonus turn (from
   // s.skipInfo), and the victim gets a toast the moment it lands.
