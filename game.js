@@ -139,33 +139,68 @@ function StartMatch({ players, client, onStarted, flash }) {
 }
 
 /* ----------------------------------------------------------- Card --------- */
-function Card({ card, sel, onClick, small, cid, onPointerDown, onPointerMove, onPointerUp }) {
+function Card({ card, sel, onClick, small, cid, fan, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   let face, bg = "#fff", color = "#fff8f3";
   if (E.isNumber(card)) { bg = CARD_BG[card.color]; face = card.num; }
   else if (E.isWild(card)) { bg = "#2b2521"; color = "#e7c98a"; face = "★"; }      // ink card, gold star
   else { bg = "#8c8077"; color = "#fff8f3"; face = "⊘"; }                          // warm grey skip
   const interactive = !!(onClick || onPointerDown);
-  return html`<button data-cid=${cid}
+  const f = fan || {};
+  return html`<button data-cid=${cid} data-tf=${f.tf || ""}
     class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${interactive ? "" : "static"}`}
-    style=${`background:${bg};color:${color}`} onClick=${onClick} disabled=${!interactive}
-    onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp}>${face}</button>`;
+    style=${`background:${bg};color:${color};${f.css || ""}`} onClick=${onClick} disabled=${!interactive}
+    onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp} onPointerCancel=${onPointerCancel}>${face}</button>`;
 }
 
-// Draggable hand: tap a card to select it, drag it to rearrange. Order is the
-// player's own (never force-sorted); Shuffle / Sort are opt-in.
-function Hand({ cards, interactive, selectedId, onSelect, onReorder }) {
-  const drag = useRef({ id: null, x: 0, y: 0, moved: false, reordered: false });
+// Fan layout: one overlapping arched row, like cards held in a hand.
+function fanOf(i, n, sel) {
+  if (n <= 1) return { tf: "", css: "" };
+  const c = i - (n - 1) / 2;
+  const rot = c * Math.min(4.5, 34 / n);
+  const arc = c * c * (n > 8 ? 0.55 : 1.1);
+  const lift = sel ? -16 : 0;
+  const overlap = n <= 7 ? -8 : n <= 9 ? -14 : n <= 11 ? -19 : -23;
+  const tf = `rotate(${rot.toFixed(2)}deg) translateY(${(arc + lift).toFixed(1)}px)`;
+  return { tf, css: `margin-left:${i === 0 ? 0 : overlap}px; z-index:${sel ? 99 : i + 1}; transform:${tf};` };
+}
+
+// Draggable fanned hand. Tap a card to select it; drag to rearrange; drag onto
+// a glowing pile to play it there. Order is the player's own (never re-sorted).
+function Hand({ cards, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld }) {
+  const drag = useRef(null);
+  const reset = (d) => {
+    if (d && d.el) { d.el.classList.remove("dragging"); d.el.style.pointerEvents = ""; d.el.style.transform = d.el.dataset.tf || ""; }
+    if (d && d.hoverEl) d.hoverEl.classList.remove("hit");
+    drag.current = null;
+  };
   const down = (e, id) => {
-    drag.current = { id, x: e.clientX, y: e.clientY, moved: false, reordered: false };
+    drag.current = { id, x: e.clientX, y: e.clientY, el: e.currentTarget, moved: false, reordered: false, hoverEl: null };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
   };
   const move = (e) => {
     const d = drag.current;
-    if (!d.id) return;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) d.moved = true;
+    if (!d) return;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) {
+      d.moved = true;
+      d.el.classList.add("dragging");
+      d.el.style.pointerEvents = "none";        // so elementFromPoint sees what's underneath
+    }
     if (!d.moved) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const t = el && el.closest ? el.closest("[data-cid]") : null;
+    // the card follows the finger (composed on top of its fan transform)
+    d.el.style.transform = `translate(${e.clientX - d.x}px, ${e.clientY - d.y}px) ${d.el.dataset.tf || ""}`;
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    // over a pile? highlight it if this card can legally join
+    const meldEl = under && under.closest ? under.closest("[data-meld]") : null;
+    if (meldEl) {
+      const ok = canDropOnMeld && canDropOnMeld(d.id, meldEl.getAttribute("data-owner"), +meldEl.getAttribute("data-idx"));
+      if (d.hoverEl && d.hoverEl !== meldEl) d.hoverEl.classList.remove("hit");
+      d.hoverEl = ok ? meldEl : null;
+      if (ok) meldEl.classList.add("hit");
+      return;
+    }
+    if (d.hoverEl) { d.hoverEl.classList.remove("hit"); d.hoverEl = null; }
+    // over another hand card? live-reorder
+    const t = under && under.closest ? under.closest("[data-cid]") : null;
     const tid = t && t.getAttribute("data-cid");
     if (tid && tid !== d.id) {
       const ids = cards.map((c) => c.id);
@@ -175,18 +210,28 @@ function Hand({ cards, interactive, selectedId, onSelect, onReorder }) {
   };
   const up = () => {
     const d = drag.current;
-    // A gesture that never reordered another card counts as a tap → select it.
-    if (d.id && !d.reordered && interactive) onSelect(d.id);
-    drag.current = { id: null, x: 0, y: 0, moved: false, reordered: false };
+    if (!d) return;
+    if (d.hoverEl) {                              // released over a valid pile → play it
+      const owner = d.hoverEl.getAttribute("data-owner"), idx = +d.hoverEl.getAttribute("data-idx");
+      reset(d);
+      onDropOnMeld && onDropOnMeld(d.id, owner, idx);
+      return;
+    }
+    const wasTap = !d.reordered;
+    const id = d.id;
+    reset(d);
+    if (wasTap && interactive) onSelect(id);      // simple tap → select
   };
   return html`<div class="hand">
-    ${cards.map((c) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id}
-      onPointerDown=${(e) => down(e, c.id)} onPointerMove=${move} onPointerUp=${up} />`)}
+    ${cards.map((c, i) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id}
+      fan=${fanOf(i, cards.length, selectedId === c.id)}
+      onPointerDown=${(e) => down(e, c.id)} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up} />`)}
   </div>`;
 }
 
-function Meld({ meld, hittable, onHit }) {
-  return html`<div class=${`meld ${hittable ? "hit" : ""}`} onClick=${hittable ? onHit : null}>
+function Meld({ meld, hittable, onHit, owner, idx }) {
+  return html`<div class=${`meld ${hittable ? "hit" : ""}`} onClick=${hittable ? onHit : null}
+    data-meld="1" data-owner=${owner} data-idx=${idx}>
     ${meld.cards.map((c) => html`<${Card} key=${c.id} card=${c} small=${true} />`)}
     ${hittable && html`<span class="hitplus">＋</span>`}
   </div>`;
@@ -231,6 +276,20 @@ function Board(props) {
   const doDiscard = () => { if (pick) commit(E.discard(s, meId, pick)); };
   const doHit = (ownerId, idx) => { if (pick) { commit(E.hit(s, meId, pick, ownerId, idx)); setPick(null); } };
 
+  // Drag-a-card-onto-a-pile: legal only on your play step, after laying down,
+  // and when the engine says the card fits that pile (wilds just work).
+  const canDropOnMeld = (cardId, owner, idx) => {
+    if (!(myTurn && s.turnPhase === "play" && s.laidDown[meId])) return false;
+    const card = (s.hands[meId] || []).find((c) => c.id === cardId);
+    const meld = (s.table[owner] || [])[idx];
+    return !!(card && meld && E.canHit(meld, card));
+  };
+  const onDropOnMeld = (cardId, owner, idx) => {
+    if (!canDropOnMeld(cardId, owner, idx)) return;
+    setPick(null);
+    commit(E.hit(s, meId, cardId, owner, idx));
+  };
+
   const topDiscard = s.discard[s.discard.length - 1];
   const discardIsSkip = topDiscard && E.isSkip(topDiscard);
 
@@ -247,7 +306,7 @@ function Board(props) {
       <${PlayerStrip} info=${opp_} phase=${s.phaseOf[oppId]} score=${s.scores[oppId]}
         handCount=${(s.hands[oppId] || []).length} laid=${s.laidDown[oppId]} skip=${!!s.skipped[oppId]} mine=${false} />
       ${(s.table[oppId] || []).length > 0 && html`<div class="melds">
-        ${s.table[oppId].map((m, i) => html`<${Meld} key=${i} meld=${m}
+        ${s.table[oppId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${oppId} idx=${i}
           hittable=${mode === "hitting" && !!pick && E.canHit(m, myHand.find((c) => c.id === pick))}
           onHit=${() => doHit(oppId, i)} />`)}
       </div>`}
@@ -267,7 +326,7 @@ function Board(props) {
 
       <!-- my melds -->
       ${(s.table[meId] || []).length > 0 && html`<div class="melds mine">
-        ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m}
+        ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${meId} idx=${i}
           hittable=${mode === "hitting" && !!pick && E.canHit(m, myHand.find((c) => c.id === pick))}
           onHit=${() => doHit(meId, i)} />`)}
       </div>`}
@@ -288,7 +347,8 @@ function Board(props) {
           </div>
         </div>
         <${Hand} cards=${myHand} interactive=${myTurn && s.turnPhase === "play"}
-          selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved} />
+          selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
+          canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld} />
 
         ${!myTurn && html`<div class="waitbar">⏳ Waiting for ${opp_.emoji} ${opp_.name}…</div>`}
         ${myTurn && s.turnPhase === "draw" && html`<div class="waitbar">👆 Your turn — tap the deck or the discard pile to draw</div>`}
@@ -310,7 +370,7 @@ function Board(props) {
             : html`
               <button class="btn block discardbtn ${pick ? "" : "wait"}" disabled=${!pick} onClick=${doDiscard}>${discardLabel}</button>
               <div class="hint">${s.laidDown[meId]
-                ? "You’ve laid down. Discard a card to end your turn."
+                ? "Drag a card onto any glowing pile to add it — or discard to end your turn."
                 : "Optional: lay down your phase. To finish, tap a card and discard."}</div>
             `}`;
         })()}
@@ -379,7 +439,8 @@ function LayDown({ state, meId, hand, commit, cancel }) {
       </div>`)}
     </div>
     <div class="hand">
-      ${hand.map((c) => html`<${Card} key=${c.id} card=${c} sel=${usedAll.has(c.id)} onClick=${() => tapHandCard(c.id)} />`)}
+      ${hand.map((c, i) => html`<${Card} key=${c.id} card=${c} sel=${usedAll.has(c.id)}
+        fan=${fanOf(i, hand.length, usedAll.has(c.id))} onClick=${() => tapHandCard(c.id)} />`)}
     </div>
     <div class="row between mt">
       <button class="linkbtn" disabled=${!usedAll.size} onClick=${() => { setAssign(groups.map(() => [])); setActive(0); }}>Clear slots</button>

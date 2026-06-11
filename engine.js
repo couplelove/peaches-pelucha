@@ -221,6 +221,7 @@ export function hit(state, pid, cardId, ownerId, meldIndex) {
   s.hands[pid] = s.hands[pid].filter((c) => c.id !== cardId);
   s.table[ownerId][meldIndex].cards.push(card);
   s.log.push(`hit a meld`);
+  if (s.hands[pid].length === 0) return endHand(s, pid);   // played last card → go out
   return s;
 }
 
