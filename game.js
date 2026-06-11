@@ -356,6 +356,25 @@ function Board(props) {
   const [flatHand, setFlatHand] = useState(() => localStorage.getItem("pp.flatHand") === "1");
   const toggleFlat = () => setFlatHand((v) => { const n = !v; try { localStorage.setItem("pp.flatHand", n ? "1" : "0"); } catch {} return n; });
 
+  // POW 💥 — when anyone lays down their phase, slam the melds onto the table:
+  // screenshake + aggressive card landing + dust. Fires on whichever phone is
+  // watching when the state lands (the slammer immediately, the partner via
+  // realtime). Only on the false→true transition, never on mount.
+  const [slam, setSlam] = useState(null);
+  const prevLaid = useRef({});
+  useEffect(() => {
+    let t;
+    for (const pid of s.players) {
+      if (s.laidDown[pid] && prevLaid.current[pid] === false) {
+        setSlam(pid);
+        try { navigator.vibrate && navigator.vibrate([90, 40, 130]); } catch {}
+        t = setTimeout(() => setSlam(null), 950);
+      }
+    }
+    prevLaid.current = { ...s.laidDown };
+    return () => clearTimeout(t);
+  }, [s.laidDown[s.players[0]], s.laidDown[s.players[1]]]);
+
   // Live turn change: when it becomes my turn while I'm watching, buzz the
   // phone (where supported) — the GO badge pop animation covers the eyes.
   const wasMyTurn = useRef(myTurn);
@@ -435,7 +454,7 @@ function Board(props) {
     : null;
 
   return html`
-    <div class="board">
+    <div class=${`board ${slam ? "quake" : ""}`}>
       <!-- opponent zone -->
       <div class="zone opp">
         <div class="pname">
@@ -444,7 +463,7 @@ function Board(props) {
           ${s.skipInfo?.victim === oppId && html`<span class="gobadge skipd">⊘ SKIPPED</span>`}
         </div>
         <div class="microstat">P${s.phaseOf[oppId]} · ${s.scores[oppId]} · ${(s.hands[oppId] || []).length} cards</div>
-        ${(s.table[oppId] || []).length > 0 && html`<div class="melds">
+        ${(s.table[oppId] || []).length > 0 && html`<div class=${`melds ${slam === oppId ? "slam" : ""}`}>
           ${s.table[oppId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${oppId} idx=${i}
             hittable=${tapHittable(m)} onHit=${() => doHit(oppId, i)} />`)}
         </div>`}
@@ -469,7 +488,7 @@ function Board(props) {
 
       <!-- my zone -->
       <div class="zone mine">
-        ${(s.table[meId] || []).length > 0 && html`<div class="melds">
+        ${(s.table[meId] || []).length > 0 && html`<div class=${`melds ${slam === meId ? "slam" : ""}`}>
           ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${meId} idx=${i}
             hittable=${tapHittable(m)} onHit=${() => doHit(meId, i)} />`)}
         </div>`}
