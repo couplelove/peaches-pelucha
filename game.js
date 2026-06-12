@@ -562,9 +562,21 @@ function LayDown({ state, meId, hand, flat, commit, cancel }) {
 
   const addCard = (id) => setAssign((a) => {
     if (a.flat().includes(id)) return a;
+    const card = cardById[id];
     let ai = active;
-    if (a[ai].length >= groups[ai].count) ai = groups.findIndex((g, k) => a[k].length < g.count);
-    if (ai < 0) return a;                       // every slot full
+    if (a[ai].length >= groups[ai].count) {
+      // Active slot already meets its minimum. If this card legally EXTENDS it
+      // (a 4th five on a set of 5s, the next card of a run, a wild), keep it
+      // here — you may lay down more than the phase requires. Otherwise move
+      // on to the next unfilled slot.
+      const cur = a[ai].map((x) => cardById[x]).filter(Boolean);
+      const extends_ = E.validGroup(groups[ai], cur) &&
+        E.validGroup({ ...groups[ai], count: cur.length + 1 }, [...cur, card]);
+      if (!extends_) {
+        const next = groups.findIndex((g, k) => a[k].length < g.count);
+        if (next >= 0) ai = next;               // fill remaining minimums first
+      }
+    }
     if (ai !== active) setActive(ai);
     return a.map((g, i) => (i === ai ? [...g, id] : g));
   });

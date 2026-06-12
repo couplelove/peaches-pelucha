@@ -73,7 +73,7 @@ export function sortHand(hand) {
 // Each returns true if `cards` legally forms the given group of size `count`.
 
 export function validSet(cards, count) {
-  if (cards.length !== count) return false;
+  if (cards.length < count) return false;           // may lay down MORE than required
   if (cards.some(isSkip)) return false;
   const nat = cards.filter(isNumber);
   if (nat.length === 0) return false;               // can't be all wild
@@ -81,7 +81,7 @@ export function validSet(cards, count) {
 }
 
 export function validColor(cards, count) {
-  if (cards.length !== count) return false;
+  if (cards.length < count) return false;           // extras welcome
   if (cards.some(isSkip)) return false;
   const nat = cards.filter(isNumber);
   if (nat.length === 0) return false;
@@ -89,15 +89,16 @@ export function validColor(cards, count) {
 }
 
 export function validRun(cards, count) {
-  if (cards.length !== count) return false;
+  if (cards.length < count) return false;           // a longer run is fine
   if (cards.some(isSkip)) return false;
   const nums = cards.filter(isNumber).map((c) => c.num);
   if (nums.length === 0) return false;              // can't be all wild
   const uniq = new Set(nums);
   if (uniq.size !== nums.length) return false;      // no duplicate numbers in a run
   const span = Math.max(...nums) - Math.min(...nums);
-  if (span > count - 1) return false;               // naturals too spread for the length
+  if (span > cards.length - 1) return false;        // naturals must fit the laid length
   if (Math.min(...nums) < 1 || Math.max(...nums) > 12) return false;
+  if (cards.length > 12) return false;              // a run can't exceed 1..12
   return true;                                       // remaining slots filled by wilds
 }
 
@@ -209,6 +210,7 @@ export function layDown(state, pid, groupsCardIds) {
   }));
   s.laidDown[pid] = true;
   s.log.push(`laid down phase ${s.phaseOf[pid]}`);
+  if (s.hands[pid].length === 0) return endHand(s, pid);   // laid down every card → go out
   return s;
 }
 
