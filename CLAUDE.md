@@ -57,7 +57,9 @@ balances are `SUM(transactions.amount)` — never denormalize.
 - **Deploy ritual:** bump `pp-vN` in `sw.js` for ANY user-facing change →
   commit → push → wait for the Actions run → verify
   `curl https://couplelove.github.io/peaches-pelucha/sw.js | grep pp-v`.
-  Users must force-close + reopen the PWA to pick up the new version.
+  The bump is REQUIRED: clients poll sw.js for the `pp-vN` beacon (on wake +
+  every 5 min) and **self-update** — silent reload at the wake moment, or an
+  "✨ Update ready" banner mid-session. No more force-closing.
 - **Verify before shipping:** run `tools/devserver.py`, open
   `http://localhost:4174/?demo=1`, exercise the change, check the console for
   errors. The demo client (`window.__ppDemo`) lets tests craft game states.

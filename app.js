@@ -196,6 +196,38 @@ function App({ client, onResetCreds }) {
   useEffect(() => { if (me) ensurePush(client, me.id); }, [client, me?.id]);
   const pickMe = (id) => { localStorage.setItem(LS.me, id); setMeId(id); };
 
+  // Self-updating app: the deployed sw.js carries the version beacon (pp-vN).
+  // We remember the version we booted with, re-check it on every wake and every
+  // 5 minutes, and when it changes: reload instantly at the wake moment (the
+  // natural "opening the app" beat), or show a one-tap banner mid-session.
+  // Nobody ever has to force-close the PWA to get updates again.
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => {
+    let bootVer = null, applied = false;
+    const ver = async () => {
+      try {
+        const txt = await fetch("sw.js", { cache: "no-store" }).then((r) => (r.ok ? r.text() : ""));
+        return (txt.match(/pp-v(\d+)/) || [])[1] || null;
+      } catch { return null; }
+    };
+    const check = async (atWake) => {
+      const v = await ver();
+      if (!v) return;
+      if (bootVer === null) { bootVer = v; return; }
+      if (v === bootVer || applied) return;
+      applied = true;
+      try { (await navigator.serviceWorker?.getRegistration())?.update(); } catch {}
+      if (atWake && !window.__ppDragging) location.reload();
+      else setUpdateReady(true);
+    };
+    check();                                     // record the booted version
+    window.__ppCheckUpdate = check;              // debug/test hook
+    const wake = () => { if (document.visibilityState === "visible") check(true); };
+    document.addEventListener("visibilitychange", wake);
+    const iv = setInterval(() => { if (document.visibilityState === "visible") check(false); }, 5 * 60 * 1000);
+    return () => { document.removeEventListener("visibilitychange", wake); clearInterval(iv); };
+  }, []);
+
   // balances from transactions
   const balances = useMemo(() => {
     const b = {};
@@ -256,6 +288,7 @@ function App({ client, onResetCreds }) {
 
       ${modal && html`<${Modal} modal=${modal} close=${() => setModal(null)} ...${ctx} pickMe=${pickMe} onResetCreds=${onResetCreds} />`}
       ${toast && html`<div class="toast">${toast}</div>`}
+      ${updateReady && html`<button class="updbar" onClick=${() => location.reload()}>✨ Update ready — tap to refresh</button>`}
     </div>`;
 }
 
