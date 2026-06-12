@@ -285,6 +285,9 @@ create table if not exists memories (
   path        text not null unique,
   kind        text not null default 'photo',   -- 'photo' | 'video'
   taken_on    date not null,
+  place       text,
+  lat         double precision,
+  lng         double precision,
   uploaded_by uuid references players(id) on delete set null,
   created_at  timestamptz not null default now()
 );

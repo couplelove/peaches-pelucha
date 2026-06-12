@@ -40,6 +40,87 @@ async function shrinkPhoto(file) {
   return blob;
 }
 
+/* ---- capture metadata: the photo knows when and where it was taken -------
+   EXIF lives as a TIFF block after an "Exif\0\0" marker — in JPEGs and HEICs
+   alike — so one byte-scan covers both. Videos carry a creation time in the
+   MP4 'mvhd' box. file.lastModified is the LAST resort (phones often stamp it
+   with the pick time, which was the whole bug). */
+async function exifMeta(file) {
+  try {
+    const buf = new Uint8Array(await file.slice(0, 4 * 1024 * 1024).arrayBuffer());
+    let i = -1;
+    for (let k = 0; k < buf.length - 6; k++) {
+      if (buf[k] === 0x45 && buf[k+1] === 0x78 && buf[k+2] === 0x69 && buf[k+3] === 0x66 && buf[k+4] === 0 && buf[k+5] === 0) { i = k + 6; break; }
+    }
+    if (i < 0) return {};
+    const dv = new DataView(buf.buffer, i);
+    const big = dv.getUint16(0) === 0x4d4d;
+    const u16 = (o) => dv.getUint16(o, !big);
+    const u32 = (o) => dv.getUint32(o, !big);
+    const found = {};
+    const readIFD = (off, tags) => {
+      let n; try { n = u16(off); } catch { return; }
+      for (let k = 0; k < n; k++) {
+        const e = off + 2 + k * 12;
+        const tag = u16(e);
+        if (tags[tag]) found[tags[tag]] = { type: u16(e + 2), count: u32(e + 4), value: u32(e + 8), entry: e };
+      }
+    };
+    readIFD(u32(4), { 0x8769: "exifPtr", 0x8825: "gpsPtr", 0x0132: "dt" });
+    if (found.exifPtr) readIFD(found.exifPtr.value, { 0x9003: "dto" });
+    if (found.gpsPtr) readIFD(found.gpsPtr.value, { 1: "latRef", 2: "lat", 3: "lngRef", 4: "lng" });
+    const out = {};
+    // TIFF rule: values that fit in 4 bytes live INLINE in the entry; bigger
+    // ones live behind a pointer. GPS refs ("N"/"W", 2 bytes) are inline.
+    const dataAt = (f, byteLen) => (byteLen <= 4 ? f.entry + 8 : f.value);
+    const ascii = (f) => { const off = dataAt(f, f.count); let s = ""; for (let k = 0; k < f.count - 1; k++) s += String.fromCharCode(dv.getUint8(off + k)); return s; };
+    const dtf = found.dto || found.dt;
+    if (dtf) {
+      const m = ascii(dtf).match(/(\d{4}):(\d{2}):(\d{2})/);
+      if (m) out.taken_on = `${m[1]}-${m[2]}-${m[3]}`;
+    }
+    const rat3 = (f) => { const v = []; for (let k = 0; k < 3; k++) v.push(u32(f.value + k * 8) / (u32(f.value + k * 8 + 4) || 1)); return v[0] + v[1] / 60 + v[2] / 3600; };
+    if (found.lat && found.lng) {
+      let lat = rat3(found.lat), lng = rat3(found.lng);
+      if (found.latRef && ascii(found.latRef) === "S") lat = -lat;
+      if (found.lngRef && ascii(found.lngRef) === "W") lng = -lng;
+      if (isFinite(lat) && isFinite(lng) && (lat || lng)) { out.lat = +lat.toFixed(5); out.lng = +lng.toFixed(5); }
+    }
+    return out;
+  } catch { return {}; }
+}
+
+async function mp4Date(file) {
+  try {
+    const buf = new Uint8Array(await file.slice(0, 2 * 1024 * 1024).arrayBuffer());
+    for (let k = 0; k < buf.length - 24; k++) {
+      if (buf[k] === 0x6d && buf[k+1] === 0x76 && buf[k+2] === 0x68 && buf[k+3] === 0x64) { // 'mvhd'
+        const dv = new DataView(buf.buffer, k + 4);
+        const version = dv.getUint8(0);
+        const secs = version === 1 ? Number(dv.getBigUint64(4)) : dv.getUint32(4);
+        const ms = (secs - 2082844800) * 1000;            // 1904 epoch → unix
+        if (ms > 631152000000 && ms < Date.now() + 86400000) {  // sanity: after 1990
+          const d = new Date(ms);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// free, key-less reverse geocode (BigDataCloud client API) — best effort
+async function placeFor(lat, lng) {
+  try {
+    const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+    const j = await r.json();
+    const town = j.city || j.locality || j.principalSubdivision;
+    if (!town) return null;
+    const region = (j.principalSubdivisionCode || "").split("-")[1] || j.countryCode;
+    return region && region !== town ? `${town}, ${region}` : town;
+  } catch { return null; }
+}
+
 // upload with retries — mobile networks drop large bodies routinely
 async function uploadWithRetry(client, path, blob, contentType) {
   let lastErr = null;
@@ -104,11 +185,18 @@ export function MemoriesTab({ client, me, flash }) {
         if (isVideo) { blob = f; ext = f.name.toLowerCase().endsWith(".mov") ? "mov" : "mp4"; ct = f.type || "video/mp4"; }
         else { blob = await shrinkPhoto(f); ext = "jpg"; ct = "image/jpeg"; }
         const path = `u${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        // real capture metadata from the ORIGINAL file bytes (before shrink)
+        const meta = isVideo ? { taken_on: await mp4Date(f) } : await exifMeta(f);
         await uploadWithRetry(client, path, blob, ct);
-        const taken = new Date(f.lastModified || Date.now());
-        const taken_on = `${taken.getFullYear()}-${String(taken.getMonth() + 1).padStart(2, "0")}-${String(taken.getDate()).padStart(2, "0")}`;
+        let taken_on = meta.taken_on;
+        if (!taken_on) {
+          const taken = new Date(f.lastModified || Date.now());
+          taken_on = `${taken.getFullYear()}-${String(taken.getMonth() + 1).padStart(2, "0")}-${String(taken.getDate()).padStart(2, "0")}`;
+        }
+        const place = meta.lat != null ? await placeFor(meta.lat, meta.lng) : null;
         const { error: rowErr } = await client.from("memories")
-          .insert({ path, kind: isVideo ? "video" : "photo", taken_on, uploaded_by: me.id });
+          .insert({ path, kind: isVideo ? "video" : "photo", taken_on, uploaded_by: me.id,
+                    place, lat: meta.lat ?? null, lng: meta.lng ?? null });
         if (rowErr) throw rowErr;
         j.status = "done";
       } catch (err) {
@@ -234,7 +322,7 @@ export function MemoriesTab({ client, me, flash }) {
           ${sheet.kind === "video"
             ? html`<video src=${pubUrl(sheet.path) + "#t=0.1"} preload="metadata" muted playsinline></video>`
             : html`<img src=${pubUrl(sheet.path)} alt="" />`}
-          <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}</div>
+          <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}${sheet.place ? " · 📍 " + sheet.place : ""}</div>
         </div>
         <button class="btn ghost block mt" onClick=${() => saveItem(sheet)}>📥 Save to device</button>
         <button class="btn ghost block mt" style="color:var(--bad);border-color:var(--bad)" onClick=${() => deleteItem(sheet)}>🗑 Delete for both</button>
@@ -276,7 +364,7 @@ function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions }) {
         ? html`<video key=${it.id} src=${pubUrl(it.path)} controls autoplay playsinline></video>`
         : html`<img key=${it.id} src=${pubUrl(it.path)} alt="" />`}
     </div>
-    <div class="lb-meta">${dayHead(it.taken_on)} · ${index + 1} / ${items.length}</div>
+    <div class="lb-meta">${dayHead(it.taken_on)}${it.place ? " · 📍 " + it.place : ""} · ${index + 1} / ${items.length}</div>
   </div>`;
 }
 

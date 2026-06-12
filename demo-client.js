@@ -75,7 +75,7 @@ const DEFAULTS = {
   bets: { stake: 10, status: "open", winner_id: null, settled_at: null },
   matches: { status: "playing", version: 0 },
   trash_talk: { player_id: null },
-  memories: { kind: "photo", uploaded_by: null },
+  memories: { kind: "photo", uploaded_by: null, place: null, lat: null, lng: null },
   todos: { due_on: null, done: false, done_at: null, created_by: null },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
