@@ -246,6 +246,7 @@ create table if not exists events (
   starts_on  date not null,
   starts_at  time,
   notes      text,
+  location   text,                               -- optional 📍 where
   kind       text not null default 'invite',     -- 'invite' | 'fyi'
   created_by uuid references players(id) on delete set null,
   rsvp       text not null default 'pending',    -- 'pending'|'in'|'cant'

@@ -73,7 +73,7 @@ const DEFAULTS = {
   matches: { status: "playing", version: 0 },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
-  events: { emoji: "💗", starts_at: null, notes: null, kind: "invite", created_by: null, rsvp: "pending" },
+  events: { emoji: "💗", starts_at: null, notes: null, location: null, kind: "invite", created_by: null, rsvp: "pending" },
 };
 
 function matches(row, filters) {
