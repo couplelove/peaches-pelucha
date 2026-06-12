@@ -88,6 +88,12 @@ open. A pg_cron job (`lovebug-daily-digest`, 13:00 UTC ≈ 9am ET) pushes a
 - **pg_cron is UTC-fixed** (no DST): the digest drifts to 8am ET in winter.
 - Engine quirk fixed but worth knowing: going out by *hitting* the last card
   (not discarding) ends the hand — `engine.js hit()` handles it.
+- **Touch drags must assume the release event may never arrive** (iOS kills
+  gestures for notifications/system swipes). game.js uses a GHOST clone (the
+  real card never gets inline transforms), window-level listeners, a 1.6s
+  event-silence watchdog, and a self-expiring `__ppDragging` sync guard. Never
+  gate sync on a flag that only a pointerup can clear — that deadlocked the
+  whole board until refresh.
 - **Never nest a card (or any element) as a button inside another control.**
   A disabled inner button swallows the tap on iOS/Android — this broke picking
   up from the discard pile. Static card faces must be inert divs, and
