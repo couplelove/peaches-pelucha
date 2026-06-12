@@ -146,39 +146,85 @@ export function PlayTab(ctx) {
   const [talk, setTalk] = useState([]);
   const [talkOpen, setTalkOpen] = useState(false);
   const [talkText, setTalkText] = useState("");
+  const talkInput = useRef(null);
   const matchId = match ? match.id : null;
   const handNo = match && match.state ? match.state.handNumber : null;
   const loadTalk = useCallback(async () => {
     if (!matchId || !handNo) { setTalk([]); return; }
-    const { data } = await client.from("trash_talk").select("*")
+    const { data, error } = await client.from("trash_talk").select("*")
       .eq("match_id", matchId).eq("hand_number", handNo).order("created_at");
-    if (data) setTalk(data);
+    // never clobber optimistic in-flight bubbles with a stale read
+    if (!error && data) setTalk((t) => {
+      const pending = t.filter((x) => x.pending && !data.some((d) => d.text === x.text && d.player_id === x.player_id));
+      return [...data, ...pending];
+    });
     // purge older hands' smack opportunistically (fire & forget)
     client.from("trash_talk").delete().eq("match_id", matchId).lt("hand_number", handNo).then(() => {});
   }, [client, matchId, handNo]);
   useEffect(() => { loadTalk(); }, [loadTalk]);
   useEffect(() => {
     if (demoMode || !matchId) return;
-    const ch = client.channel("pp-talk")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "trash_talk" }, (p) => {
-        const r = p.new;
-        if (r.match_id === matchId && r.hand_number === handNo) {
-          setTalk((t) => (t.some((x) => x.id === r.id) ? t : [...t, r]));
-          if (r.player_id !== me.id) { try { navigator.vibrate && navigator.vibrate(15); } catch {} }
-        }
-      }).subscribe();
-    return () => { try { client.removeChannel(ch); } catch {} };
-  }, [client, matchId, handNo, demoMode]);
+    let alive = true, ch = null;
+    const sub = () => {
+      ch = client.channel("pp-talk-" + Math.random().toString(36).slice(2, 7))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "trash_talk" }, (p) => {
+          const r = p.new;
+          if (r.match_id === matchId && r.hand_number === handNo) {
+            setTalk((t) => (t.some((x) => x.id === r.id) ? t : [...t, r]));
+            if (r.player_id !== me.id) { try { navigator.vibrate && navigator.vibrate(15); } catch {} }
+          }
+        })
+        .subscribe((status) => {
+          // dropped websocket → fresh channel + catch up on missed smack
+          if (alive && (status === "CHANNEL_ERROR" || status === "TIMED_OUT")) {
+            setTimeout(() => { if (alive) { try { client.removeChannel(ch); } catch {} sub(); loadTalk(); } }, 1500);
+          }
+        });
+    };
+    sub();
+    const wake = () => { if (document.visibilityState === "visible") loadTalk(); };
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", wake);
+      try { client.removeChannel(ch); } catch {}
+    };
+  }, [client, matchId, handNo, demoMode, loadTalk]);
   const sendTalk = async () => {
     const text = talkText.trim().slice(0, 140);
     if (!text || !matchId) return;
     setTalkText("");
-    const optimistic = { id: "t" + Math.random().toString(36).slice(2), match_id: matchId, hand_number: handNo, player_id: me.id, text, created_at: new Date().toISOString() };
+    try { talkInput.current && talkInput.current.focus(); } catch {}   // rapid banter
+    const tmpId = "tmp-" + Math.random().toString(36).slice(2);
+    const optimistic = { id: tmpId, pending: true, match_id: matchId, hand_number: handNo, player_id: me.id, text, created_at: new Date().toISOString() };
     setTalk((t) => [...t, optimistic]);
-    const { data } = await client.from("trash_talk")
+    const { data, error } = await client.from("trash_talk")
       .insert({ match_id: matchId, hand_number: handNo, player_id: me.id, text }).select().single();
-    if (data) setTalk((t) => t.map((x) => (x.id === optimistic.id ? data : x)));
+    if (error || !data) {
+      // honest failure: remove the ghost bubble, give their words back
+      setTalk((t) => t.filter((x) => x.id !== tmpId));
+      setTalkText(text);
+      flash("⚠️ message didn’t send");
+      return;
+    }
+    // the realtime echo may already have delivered the real row — dedupe
+    setTalk((t) => {
+      const cleaned = t.filter((x) => x.id !== tmpId);
+      return cleaned.some((x) => x.id === data.id) ? cleaned : [...cleaned, data];
+    });
   };
+  // keep the composer above the iOS keyboard (visual viewport tracking)
+  const [kbLift, setKbLift] = useState(0);
+  useEffect(() => {
+    if (!talkOpen || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const onVV = () => setKbLift(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    onVV();
+    vv.addEventListener("resize", onVV);
+    vv.addEventListener("scroll", onVV);
+    return () => { vv.removeEventListener("resize", onVV); vv.removeEventListener("scroll", onVV); setKbLift(0); };
+  }, [talkOpen]);
+  useEffect(() => { if (talkOpen) { try { talkInput.current && talkInput.current.focus(); } catch {} } }, [talkOpen]);
   const canReact = !!match && reactedVer !== match.version;
   const sendReact = (emoji) => {
     if (!canReact) return;
@@ -229,10 +275,10 @@ export function PlayTab(ctx) {
       </div>
 
       <button class=${`talkfab ${talkOpen ? "on" : ""}`} title="Talk your shit" onClick=${() => setTalkOpen(!talkOpen)}>💩</button>
-      ${talkOpen && html`<div class="talkbar">
-        <input placeholder="talk your shit…" maxlength="140" value=${talkText} autoFocus
+      ${talkOpen && html`<div class="talkbar" style=${kbLift ? `bottom:${kbLift + 12}px` : ""}>
+        <input ref=${talkInput} placeholder="talk your shit…" maxlength="140" value=${talkText}
           onInput=${(e) => setTalkText(e.target.value)}
-          onKeyDown=${(e) => { if (e.key === "Enter") sendTalk(); }} />
+          onKeyDown=${(e) => { if (e.key === "Enter") sendTalk(); if (e.key === "Escape") setTalkOpen(false); }} />
         <button class="btn sm" disabled=${!talkText.trim()} onClick=${sendTalk}>💩 Send</button>
       </div>`}
 
@@ -519,10 +565,17 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
 // hand; scrolls smoothly, auto-follows the newest message.
 function TalkStrip({ talk, meId, pinfo }) {
   const ref = useRef(null);
-  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [talk.length]);
+  const first = useRef(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // jump on first paint, glide on every message after
+    el.scrollTo({ top: el.scrollHeight, behavior: first.current ? "auto" : "smooth" });
+    first.current = false;
+  }, [talk.length]);
   if (!talk.length) return null;
   return html`<div class="talkstrip" ref=${ref}>
-    ${talk.map((m) => html`<div class=${`tbub ${m.player_id === meId ? "mine" : ""}`} key=${m.id}>
+    ${talk.map((m) => html`<div class=${`tbub ${m.player_id === meId ? "mine" : ""} ${m.pending ? "pending" : ""}`} key=${m.id}>
       ${m.player_id !== meId && html`<span class="tb-who">${pinfo(m.player_id).emoji}</span>`}
       <span class="tb-txt">${m.text}</span>
     </div>`)}

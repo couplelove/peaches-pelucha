@@ -274,13 +274,15 @@ function App({ client, onResetCreds }) {
 
       ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
       ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
-      ${tab === "wallet" && html`<${WalletTab} ...${ctx} />`}
-      ${tab === "bets" && html`<${BetsTab} ...${ctx} />`}
-      ${tab === "shop" && html`<${ShopTab} ...${ctx} />`}
+      ${tab === "schmoney" && html`<${Fragment}>
+        <${WalletTab} ...${ctx} />
+        <${BetsTab} ...${ctx} />
+        <${ShopTab} ...${ctx} />
+      <//>`}
       ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
 
       <nav class="nav">
-        ${[["score", "🏆", "Score"], ["plans", "📅", "Plans"], ["wallet", "💗", "Wallet"], ["bets", "🎲", "Bets"], ["shop", "🎁", "Shop"], ["more", "⚙️", "More"]].map(
+        ${[["score", "🏆", "Score"], ["plans", "📅", "Plans"], ["schmoney", "💸", "Schmoney"], ["more", "⚙️", "More"]].map(
           ([k, ic, label]) => html`
           <button class=${tab === k ? "active" : ""} onClick=${() => setTab(k)}>
             <span class="ic">${ic}</span>${label}
