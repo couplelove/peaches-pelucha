@@ -227,12 +227,17 @@ export function MemoriesTab({ client, me, flash }) {
   const holdStart = (it) => (e) => {
     press.current = { t: setTimeout(() => { press.current = { fired: true }; try { navigator.vibrate && navigator.vibrate(30); } catch {} setSheet(it); }, 480), fired: false };
   };
-  const holdEnd = (it) => () => {
+  const origin = useRef(null);                       // where the tap landed → lightbox zooms from there
+  const holdEnd = (it) => (e) => {
     const p = press.current;
     if (p && p.t) clearTimeout(p.t);
     const fired = p && p.fired;
     press.current = null;
-    if (!fired) setLightbox(flat.indexOf(it));       // normal tap → lightbox
+    if (!fired) {                                    // normal tap → lightbox
+      const r = e.currentTarget && e.currentTarget.getBoundingClientRect ? e.currentTarget.getBoundingClientRect() : null;
+      origin.current = r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
+      setLightbox(flat.indexOf(it));
+    }
   };
   const holdCancel = () => { const p = press.current; if (p && p.t) clearTimeout(p.t); press.current = null; };
 
@@ -303,8 +308,12 @@ export function MemoriesTab({ client, me, flash }) {
             onPointerMove=${holdCancel} onPointerCancel=${holdCancel}
             onContextMenu=${(e) => e.preventDefault()}>
             ${it.kind === "video"
-              ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline></video><span class="memplay">▶</span>`
-              : html`<img src=${pubUrl(it.path)} loading="lazy" alt="" />`}
+              ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline
+                  onLoadedData=${(e) => e.target.classList.add("ld")}
+                  ref=${(el) => { if (el && el.readyState >= 2) el.classList.add("ld"); }}></video><span class="memplay">▶</span>`
+              : html`<img src=${pubUrl(it.path)} loading="lazy" alt=""
+                  onLoad=${(e) => e.target.classList.add("ld")}
+                  ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
           </button>`)}
         </div>
       </div>`)}
@@ -312,7 +321,7 @@ export function MemoriesTab({ client, me, flash }) {
       ${view === "game" && items !== null && html`<${MatchGame} items=${items} pubUrl=${pubUrl} />`}
     </div>
 
-    ${lightbox !== null && html`<${Lightbox} items=${flat} index=${lightbox} pubUrl=${pubUrl}
+    ${lightbox !== null && html`<${Lightbox} items=${flat} index=${lightbox} pubUrl=${pubUrl} origin=${origin.current}
       onClose=${() => setLightbox(null)} onNav=${(i) => setLightbox(i)} onOptions=${(it) => setSheet(it)} />`}
 
     ${sheet && html`<div class="modal-bg asheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setSheet(null); }}>
@@ -332,37 +341,116 @@ export function MemoriesTab({ client, me, flash }) {
   </div>`;
 }
 
-/* ---- fullscreen lightbox: swipe between memories, videos play inline ---- */
-function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions }) {
+/* ---- fullscreen lightbox, native-feel ------------------------------------
+   - opens by ZOOMING from the tapped thumbnail (transform-origin at the cell)
+   - horizontal swipes are finger-attached: prev/current/next ride a track
+     that follows the drag, with rubber-band resistance at the ends and a
+     spring release that commits or snaps back
+   - dragging DOWN scales the media and fades the backdrop under your finger
+     (release past the threshold dismisses, otherwise it springs home)      */
+function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions, origin }) {
   const it = items[index];
-  const start = useRef(null);
-  const down = (e) => { start.current = { x: e.clientX, y: e.clientY }; };
-  const up = (e) => {
-    const s = start.current; start.current = null;
-    if (!s) return;
-    const dx = e.clientX - s.x, dy = e.clientY - s.y;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
-      const n = index + (dx < 0 ? 1 : -1);
-      if (n >= 0 && n < items.length) onNav(n);
-    } else if (Math.abs(dy) > 80 && dy > 0) onClose();   // swipe down to dismiss
+  const track = useRef(null);
+  const bg = useRef(null);
+  const root = useRef(null);
+  const drag = useRef(null);
+  const [closing, setClosing] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const W = () => window.innerWidth;
+
+  useEffect(() => { requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true))); }, []);
+
+  const dismiss = useCallback(() => {
+    setClosing(true);
+    setTimeout(onClose, 230);
+  }, [onClose]);
+
+  // reset the track instantly (no transition) whenever the index settles
+  useEffect(() => {
+    const t = track.current;
+    if (!t) return;
+    t.style.transition = "none";
+    t.style.transform = `translateX(${-W()}px)`;
+  }, [index]);
+
+  const down = (e) => {
+    if (e.target.tagName === "VIDEO") return;            // let native controls work
+    drag.current = { x: e.clientX, y: e.clientY, t: performance.now(), axis: null, dx: 0, dy: 0 };
   };
+  const move = (e) => {
+    const d = drag.current;
+    if (!d) return;
+    d.dx = e.clientX - d.x; d.dy = e.clientY - d.y;
+    if (!d.axis) {
+      if (Math.hypot(d.dx, d.dy) < 8) return;
+      d.axis = Math.abs(d.dx) > Math.abs(d.dy) ? "x" : "y";
+    }
+    if (d.axis === "x") {
+      const atStart = index === 0 && d.dx > 0, atEnd = index === items.length - 1 && d.dx < 0;
+      const dx = (atStart || atEnd) ? d.dx * 0.32 : d.dx;          // rubber-band at the ends
+      track.current.style.transition = "none";
+      track.current.style.transform = `translateX(${-W() + dx}px)`;
+    } else if (d.dy > 0) {                                          // pull-down to dismiss
+      const p = Math.min(1, d.dy / 320);
+      track.current.style.transition = "none";
+      track.current.style.transform = `translateX(${-W()}px) translateY(${d.dy * 0.82}px) scale(${1 - p * 0.18})`;
+      if (bg.current) bg.current.style.opacity = String(1 - p * 0.65);
+    }
+  };
+  const up = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || !d.axis) return;
+    const vel = Math.abs(d.dx) / Math.max(1, performance.now() - d.t);
+    const spring = "transform .26s cubic-bezier(.22,.9,.3,1.02)";
+    if (d.axis === "x") {
+      const go = (Math.abs(d.dx) > 72 || vel > 0.45) ? (d.dx < 0 ? 1 : -1) : 0;
+      const n = index + go;
+      if (go !== 0 && n >= 0 && n < items.length) {
+        track.current.style.transition = spring;
+        track.current.style.transform = `translateX(${-W() * (1 + go)}px)`;
+        setTimeout(() => onNav(n), 240);
+      } else {
+        track.current.style.transition = spring;
+        track.current.style.transform = `translateX(${-W()}px)`;
+      }
+    } else {
+      if (d.dy > 130) { dismiss(); return; }
+      track.current.style.transition = spring;
+      track.current.style.transform = `translateX(${-W()}px)`;
+      if (bg.current) { bg.current.style.transition = "opacity .25s ease"; bg.current.style.opacity = "1"; }
+    }
+  };
+
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") dismiss();
       if (e.key === "ArrowRight" && index + 1 < items.length) onNav(index + 1);
       if (e.key === "ArrowLeft" && index > 0) onNav(index - 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [index, items.length]);
+  }, [index, items.length, dismiss]);
+
   if (!it) return null;
-  return html`<div class="lightbox" onPointerDown=${down} onPointerUp=${up}>
-    <button class="lb-close" onClick=${onClose}>✕</button>
+  const pane = (item, current) => item ? html`<div class="lb-pane" key=${item.id}>
+    ${item.kind === "video"
+      ? html`<video src=${pubUrl(item.path)} controls playsinline autoplay=${current} muted=${!current}></video>`
+      : html`<img src=${pubUrl(item.path)} alt="" />`}
+  </div>` : html`<div class="lb-pane"></div>`;
+
+  const ox = origin ? origin.x : W() / 2;
+  const oy = origin ? origin.y : window.innerHeight / 2;
+  return html`<div ref=${root} class=${`lightbox lbx ${entered && !closing ? "in" : ""}`}
+    style=${`transform-origin:${ox}px ${oy}px`}
+    onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}>
+    <div ref=${bg} class="lb-bg"></div>
+    <button class="lb-close" onClick=${dismiss}>✕</button>
     <button class="lb-opts" onClick=${() => { onClose(); onOptions && onOptions(it); }}>⋯</button>
-    <div class="lb-stage">
-      ${it.kind === "video"
-        ? html`<video key=${it.id} src=${pubUrl(it.path)} controls autoplay playsinline></video>`
-        : html`<img key=${it.id} src=${pubUrl(it.path)} alt="" />`}
+    <div ref=${track} class="lb-track" style=${`transform:translateX(${-W()}px)`}>
+      ${pane(items[index - 1], false)}
+      ${pane(it, true)}
+      ${pane(items[index + 1], false)}
     </div>
     <div class="lb-meta">${dayHead(it.taken_on)}${it.place ? " · 📍 " + it.place : ""} · ${index + 1} / ${items.length}</div>
   </div>`;
