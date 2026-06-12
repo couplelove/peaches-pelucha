@@ -96,8 +96,9 @@ export function dailyVerse() {
 
 /* ---- components ---- */
 export function HoroscopeCard({ players }) {
-  const him = players.find((p) => p.name === "Peaches") || players[0] || { emoji: "🍑", name: "Peaches" };
-  const her = players.find((p) => p.name === "Pelucha") || players[1] || { emoji: "🧸", name: "Pelucha" };
+  // Pelucha 🧸 · July 10 (him) — Peaches 🍑 · July 11 (her)
+  const pelucha = players.find((p) => p.name === "Pelucha") || players[1] || { emoji: "🧸", name: "Pelucha" };
+  const peaches = players.find((p) => p.name === "Peaches") || players[0] || { emoji: "🍑", name: "Peaches" };
   const his = cancerDaily(0), hers = cancerDaily(1);
   const Reading = (who, date, r) => html`<div class="horo-half">
     <div class="eyebrow">${who.emoji} ${who.name} · ${date}</div>
@@ -106,8 +107,8 @@ export function HoroscopeCard({ players }) {
   return html`<div class="card">
     <div class="hsec-head"><span class="hsec-title">Cancer, today <span class="muted-glyph">♋</span></span><span class="hsec-rule"></span></div>
     <div class="horo">
-      ${Reading(him, "July 10", his)}
-      ${Reading(her, "July 11", hers)}
+      ${Reading(pelucha, "July 10", his)}
+      ${Reading(peaches, "July 11", hers)}
     </div>
   </div>`;
 }
