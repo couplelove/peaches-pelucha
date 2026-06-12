@@ -202,8 +202,22 @@ function StartMatch({ players, client, onStarted, flash }) {
 }
 
 /* ----------------------------------------------------------- Card --------- */
-// Centre art per colour, matched to the muted palette.
-const CARD_ART = { red: "🌹", blue: "🦋", green: "🍀", yellow: "🌻" };
+// Centre art per colour — four variants each, matched to the muted palette.
+// A card's variant is hashed from its id, so the SAME card always wears the
+// SAME art, on both phones, for the whole hand.
+const CARD_ART = {
+  red:    ["🌹", "🍎", "🍒", "🌶️"],
+  blue:   ["🦋", "🌊", "🐬", "🫐"],
+  green:  ["🍀", "🐸", "🌿", "🐢"],
+  yellow: ["🌻", "🍋", "🐝", "⭐"],
+};
+function artFor(card) {
+  const arts = CARD_ART[card.color];
+  if (!arts) return null;
+  let h = 0;
+  for (let i = 0; i < card.id.length; i++) h = (h * 31 + card.id.charCodeAt(i)) >>> 0;
+  return arts[h % arts.length];
+}
 
 function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   let face, bg = "#fff", color = "#fff8f3";
@@ -213,7 +227,7 @@ function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, on
   // Full-size cards show colour-matched emoji art in the centre; the number
   // lives in the corner. Small meld chips keep the number as the face — that's
   // how you read what's on a pile.
-  const art = !small && E.isNumber(card) ? CARD_ART[card.color] : null;
+  const art = !small && E.isNumber(card) ? artFor(card) : null;
   const interactive = !!(onClick || onPointerDown);
   const f = fan || {};
   // Interactive cards are buttons; static ones (pile faces, meld chips) are
