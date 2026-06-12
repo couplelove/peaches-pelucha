@@ -209,11 +209,16 @@ function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, on
   else { bg = "#8c8077"; color = "#fff8f3"; face = "⊘"; }                          // warm grey skip
   const interactive = !!(onClick || onPointerDown);
   const f = fan || {};
-  return html`<button data-cid=${cid} data-tf=${f.tf || ""}
+  // Interactive cards are buttons; static ones (pile faces, meld chips) are
+  // inert divs so taps PASS THROUGH to the pile/meld behind them. A disabled
+  // button here used to swallow the tap on iOS/Android — you couldn't pick up
+  // the discard because your finger always lands on the card art.
+  const Tag = interactive ? "button" : "div";
+  return html`<${Tag} data-cid=${cid} data-tf=${f.tf || ""}
     class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${dragging ? "dragging" : ""} ${interactive ? "" : "static"}`}
-    style=${`background:${bg};color:${color};${f.css || ""}`} onClick=${onClick} disabled=${!interactive}
+    style=${`background:${bg};color:${color};${f.css || ""}`} onClick=${onClick}
     onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp} onPointerCancel=${onPointerCancel}>
-    ${!small && html`<span class="pcorner">${face}</span>`}${face}</button>`;
+    ${!small && html`<span class="pcorner">${face}</span>`}${face}<//>`;
 }
 
 // Fan layout: one overlapping arched row, like cards held in a hand.
