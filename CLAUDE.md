@@ -88,6 +88,12 @@ open. A pg_cron job (`lovebug-daily-digest`, 13:00 UTC ≈ 9am ET) pushes a
 - **pg_cron is UTC-fixed** (no DST): the digest drifts to 8am ET in winter.
 - Engine quirk fixed but worth knowing: going out by *hitting* the last card
   (not discarding) ends the hand — `engine.js hit()` handles it.
+- **Never nest a card (or any element) as a button inside another control.**
+  A disabled inner button swallows the tap on iOS/Android — this broke picking
+  up from the discard pile. Static card faces must be inert divs, and
+  `.pile .pcard, .meld .pcard { pointer-events: none; }` keeps taps passing
+  through to the real control. Verify taps with elementFromPoint at the
+  element's visual center, not `.click()` on the outer node.
 
 ## Don'ts
 
