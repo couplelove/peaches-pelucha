@@ -316,8 +316,16 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .deckstack::after { transform: translate(4px, 3px) rotate(2deg); }
 .pile.droptgt .pcard, .pile.droptgt .pcardback { box-shadow: 0 0 0 3px var(--accent); }
 .pile.droptgt { transform: scale(1.06); }
-.phasereq { text-align: center; font-size: 13px; color: var(--ink-2); margin: 8px 0 2px; }
+.phasereq { text-align: center; font-size: 13px; color: var(--ink-2); margin: -6px 0 6px; }
 .phasereq b { color: var(--ink); font-weight: 600; }
+
+/* all-phases reference sheet */
+.phasesheet.modal-bg { z-index: 80; }            /* above the full-screen game (z 60) */
+.phn { width: 24px; height: 24px; border-radius: 8px; background: var(--paper-2); color: var(--ink-2);
+  display: inline-grid; place-content: center; font-weight: 700; font-size: 12px;
+  font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.line.dim { opacity: .4; }
+.line.dim .phn { background: transparent; }
 
 .melds { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; justify-content: center; }
 

@@ -352,6 +352,8 @@ function Board(props) {
   const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
   useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
 
+  const [showPhases, setShowPhases] = useState(false);  // 📋 all-phases sheet
+
   // Hand view: fan (default) or simple row layout. Per-device preference.
   const [flatHand, setFlatHand] = useState(() => localStorage.getItem("pp.flatHand") === "1");
   const toggleFlat = () => setFlatHand((v) => { const n = !v; try { localStorage.setItem("pp.flatHand", n ? "1" : "0"); } catch {} return n; });
@@ -507,7 +509,11 @@ function Board(props) {
             selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
             canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld}
             canDropOnDiscard=${canDropOnDiscard} onDropOnDiscard=${onDropOnDiscard} />
+          <div class="phasereq">${s.laidDown[meId]
+            ? html`${E.phaseText(s.phaseOf[meId])} <b>✓</b>`
+            : html`need: <b>${E.phaseText(s.phaseOf[meId])}</b>`}</div>
           <div class="pname me">
+            <button class="linkbtn micro" title="All 10 phases" onClick=${() => setShowPhases(true)}>📋</button>
             <span class="nm">${me_.emoji} ${me_.name}</span>
             ${myTurn && html`<span class="gobadge">GO</span>`}
             ${s.skipInfo?.victim === meId && html`<span class="gobadge skipd">⊘ SKIPPED</span>`}
@@ -516,6 +522,27 @@ function Board(props) {
           <div class="microstat">P${s.phaseOf[meId]} · ${s.scores[meId]}${s.laidDown[meId] ? " · down ✓" : ""}</div>
         `}
       </div>
+
+      ${showPhases && html`<div class="modal-bg phasesheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setShowPhases(false); }}>
+        <div class="modal">
+          <div class="handle"></div>
+          <h3>The 10 phases</h3>
+          <div class="list">
+            ${E.PHASES.map((p, i) => {
+              const n = i + 1;
+              const bothPast = s.players.every((pid) => s.phaseOf[pid] > n);
+              return html`<div class=${`line ${bothPast ? "dim" : ""}`} key=${n}>
+                <div class="l"><span class="phn">${n}</span><b>${p.text}</b></div>
+                <div class="row">
+                  ${s.players.map((pid) => s.phaseOf[pid] === n
+                    ? html`<span class=${`pill ${pid === meId ? "open" : ""}`}>${pinfo(pid).emoji}${s.laidDown[pid] ? " ✓" : ""}</span>`
+                    : null)}
+                </div>
+              </div>`;
+            })}
+          </div>
+        </div>
+      </div>`}
     </div>`;
 }
 
