@@ -380,6 +380,19 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   100% { transform: translateY(-64vh) scale(.95) rotate(10deg); opacity: 0; }
 }
 
+/* ---- ✅ to-dos & reminders ---- */
+.todolist { display: flex; flex-direction: column; }
+.todorow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line-2); }
+.todorow:last-child { border-bottom: none; }
+.tdcheck { width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%; border: 1.5px solid var(--ink-3);
+  background: transparent; color: #fff8f3; font-size: 13px; cursor: pointer; display: grid; place-content: center;
+  transition: background .15s ease, border-color .15s ease, transform .1s ease; }
+.tdcheck:active { transform: scale(.88); }
+.tdcheck.on { background: var(--good); border-color: var(--good); }
+.tdtext { flex: 1; min-width: 0; font-size: 14.5px; transition: color .2s ease; }
+.tdtext.done { text-decoration: line-through; color: var(--ink-3); }
+.todorow .pill { flex: 0 0 auto; }
+
 /* ---- 📸 memories: gallery, lightbox, match game ---- */
 .memday { font-family: var(--serif); font-weight: 500; font-size: 15px; color: var(--ink); margin: 16px 0 8px; }
 .memgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }

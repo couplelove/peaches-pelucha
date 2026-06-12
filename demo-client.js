@@ -34,6 +34,7 @@ function seed() {
     matches: [],
     trash_talk: [],
     memories: [],
+    todos: [],
     push_subscriptions: [],
     date_ideas: [
       { id: uid(), label: "Sushi night", emoji: "🍣", category: "food", active: true, added_by: peaches, created_at: nowISO() },
@@ -75,6 +76,7 @@ const DEFAULTS = {
   matches: { status: "playing", version: 0 },
   trash_talk: { player_id: null },
   memories: { kind: "photo", uploaded_by: null },
+  todos: { due_on: null, done: false, done_at: null, created_by: null },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
   events: { emoji: "💗", starts_at: null, notes: null, location: null, kind: "invite", created_by: null, rsvp: "pending" },

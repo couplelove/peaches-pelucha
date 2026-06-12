@@ -302,3 +302,22 @@ drop policy if exists memories_all on storage.objects;
 create policy memories_all on storage.objects
   for all to anon, authenticated
   using (bucket_id = 'memories') with check (bucket_id = 'memories');
+
+-- ---- ✅ Couple to-dos & reminders -------------------------------------------
+create table if not exists todos (
+  id         uuid primary key default gen_random_uuid(),
+  text       text not null,
+  due_on     date,                                -- null = plain to-do
+  done       boolean not null default false,
+  done_at    timestamptz,
+  created_by uuid references players(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table todos enable row level security;
+drop policy if exists anon_all on todos;
+create policy anon_all on todos
+  for all to anon, authenticated using (true) with check (true);
+do $$ begin
+  alter publication supabase_realtime add table todos;
+exception when duplicate_object then null;
+end $$;

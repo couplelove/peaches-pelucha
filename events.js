@@ -94,6 +94,92 @@ function summarize(upcoming) {
   return { title, body: s.join(" ") };
 }
 
+/* ✅ couple to-dos & reminders — a row with a date is a reminder (due chip,
+   overdue accent, joins the 9am digest); without one it's a plain checklist
+   item. Both check off with a satisfying strike. */
+function TodoCard({ client, me, players, flash }) {
+  const partner = players.find((p) => p.id !== me.id);
+  const pinfo = (id) => players.find((p) => p.id === id) || { emoji: "❔" };
+  const [todos, setTodos] = useState(null);
+  const [text, setText] = useState("");
+  const [due, setDue] = useState("");
+  const [withDate, setWithDate] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data, error } = await client.from("todos").select("*").order("created_at");
+    if (!error) setTodos(data || []);
+  }, [client]);
+  useEffect(() => {
+    load();
+    let ch = null;
+    try {
+      ch = client.channel("pp-todos-" + Math.random().toString(36).slice(2, 7))
+        .on("postgres_changes", { event: "*", schema: "public", table: "todos" }, () => load())
+        .subscribe();
+    } catch {}
+    const wake = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", wake);
+    return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
+  }, [client, load]);
+
+  const add = async () => {
+    const t = text.trim().slice(0, 120);
+    if (!t) return;
+    setText(""); setDue(""); setWithDate(false);
+    const { error } = await client.from("todos").insert({ text: t, due_on: (withDate && due) || null, created_by: me.id });
+    if (error) { flash("⚠️ " + error.message); setText(t); return; }
+    if (withDate && due && partner) notifyTurn(client, partner.id, `🔔 Reminder from ${me.name}`, `${t} — ${dayLabel(due)}`);
+    load();
+  };
+  const toggle = async (t) => {
+    await client.from("todos").update({ done: !t.done, done_at: t.done ? null : new Date().toISOString() }).eq("id", t.id);
+    if (!t.done) { try { navigator.vibrate && navigator.vibrate(25); } catch {} }
+    load();
+  };
+  const remove = async (t) => { await client.from("todos").delete().eq("id", t.id); load(); };
+  const clearDone = async () => { await client.from("todos").delete().eq("done", true); load(); };
+
+  const today = todayISO();
+  const open = (todos || []).filter((t) => !t.done);
+  const reminders = open.filter((t) => t.due_on).sort((a, b) => a.due_on < b.due_on ? -1 : 1);
+  const plain = open.filter((t) => !t.due_on);
+  const doneList = (todos || []).filter((t) => t.done).sort((a, b) => (a.done_at < b.done_at ? 1 : -1));
+
+  const Row = (t) => html`<div class="todorow" key=${t.id}>
+    <button class=${`tdcheck ${t.done ? "on" : ""}`} onClick=${() => toggle(t)}>${t.done ? "✓" : ""}</button>
+    <span class=${`tdtext ${t.done ? "done" : ""}`}>${t.text}</span>
+    ${t.due_on && !t.done && html`<span class=${`pill ${t.due_on < today ? "loss" : ""}`}>${t.due_on < today ? "late · " : ""}${dayLabel(t.due_on)}</span>`}
+    <span class="tiny" style="opacity:.55">${pinfo(t.created_by).emoji}</span>
+    <button class="linkbtn danger" onClick=${() => remove(t)}>✕</button>
+  </div>`;
+
+  return html`<div class="card">
+    <h2>To-dos</h2>
+    <div class="row" style="margin-bottom:12px">
+      <input placeholder=${withDate ? "Remind us to…" : "Add a to-do…"} maxlength="120" value=${text}
+        onInput=${(e) => setText(e.target.value)}
+        onKeyDown=${(e) => { if (e.key === "Enter") add(); }} />
+      <button class=${`iconbtn ${withDate ? "on" : ""}`} title="Add a date" onClick=${() => setWithDate(!withDate)}>🔔</button>
+      <button class="btn sm" disabled=${!text.trim() || (withDate && !due)} onClick=${add}>＋</button>
+    </div>
+    ${withDate && html`<div class="row" style="margin:-4px 0 12px">
+      <input type="date" min=${today} value=${due} onInput=${(e) => setDue(e.target.value)} />
+    </div>`}
+    ${todos === null && html`<div class="empty tiny">…</div>`}
+    ${todos !== null && open.length === 0 && doneList.length === 0 && html`<div class="empty tiny">nothing on the list — suspiciously relaxing</div>`}
+    <div class="todolist">
+      ${reminders.map(Row)}
+      ${plain.map(Row)}
+    </div>
+    ${doneList.length > 0 && html`<div class="row between" style="margin-top:10px">
+      <button class="linkbtn" onClick=${() => setShowDone(!showDone)}>${showDone ? "Hide done" : `Done (${doneList.length})`}</button>
+      <button class="linkbtn danger" onClick=${clearDone}>clear done</button>
+    </div>`}
+    ${showDone && html`<div class="todolist" style="opacity:.55">${doneList.map(Row)}</div>`}
+  </div>`;
+}
+
 export function PlansTab({ client, me, players, flash }) {
   const partner = players.find((p) => p.id !== me.id);
   const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
@@ -363,6 +449,8 @@ export function PlansTab({ client, me, players, flash }) {
       ${showPast && html`<div class="list" style="opacity:.6">${past.map(Row)}</div>`}
       `}
     </div>
+
+    <${TodoCard} client=${client} me=${me} players=${players} flash=${flash} />
 
     ${compose && html`<div class="modal-bg" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setCompose(null); }}>
       <div class="modal">
