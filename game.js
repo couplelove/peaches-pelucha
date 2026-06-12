@@ -410,7 +410,7 @@ function fanOf(i, n, sel) {
 //   dies when iOS interrupts a gesture); pointerup/cancel/blur/visibility all
 //   end the drag, and a watchdog force-ends it if events stop arriving
 // - on release the ghost glides into the card's slot, then evaporates
-function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard }) {
+function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard, canTargetMelds }) {
   const drag = useRef(null);
   const wrap = useRef(null);
 
@@ -425,7 +425,7 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
     window.removeEventListener("blur", d.onCancel);
     document.removeEventListener("visibilitychange", d.onVis);
     cancelAnimationFrame(d.raf);
-    if (d.hoverEl) d.hoverEl.classList.remove("hit", "droptgt");
+    if (d.hoverEl) d.hoverEl.classList.remove("over");
     const ghost = d.ghost, el = d.el;
     if (el) el.classList.remove("lifted");
     if (ghost) {
@@ -488,16 +488,19 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
     const under = document.elementFromPoint(d.cx, d.cy);   // ghost is pointer-events:none
     const dropEl = under && under.closest ? (under.closest("[data-meld]") || under.closest("[data-discard]")) : null;
     if (dropEl) {
+      // hover feedback is validity-BLIND (house rule: legality glows are
+      // hints). Zones react only by turn structure; the fit check happens
+      // at release, where an illegal drop bounces home.
       const isDiscard = dropEl.hasAttribute("data-discard");
       const ok = isDiscard
         ? !!(canDropOnDiscard && canDropOnDiscard(d.id))
-        : !!(canDropOnMeld && canDropOnMeld(d.id, dropEl.getAttribute("data-owner"), +dropEl.getAttribute("data-idx")));
-      if (d.hoverEl && d.hoverEl !== dropEl) d.hoverEl.classList.remove("hit", "droptgt");
+        : !!(canTargetMelds && canTargetMelds());
+      if (d.hoverEl && d.hoverEl !== dropEl) d.hoverEl.classList.remove("over");
       d.hoverEl = ok ? dropEl : null;
-      if (ok) dropEl.classList.add(isDiscard ? "droptgt" : "hit");
+      if (ok) dropEl.classList.add("over");
       return;
     }
-    if (d.hoverEl) { d.hoverEl.classList.remove("hit", "droptgt"); d.hoverEl = null; }
+    if (d.hoverEl) { d.hoverEl.classList.remove("over"); d.hoverEl = null; }
     // geometric insertion (row-aware; layout offsets ignore mid-slide transforms)
     const cont = wrap.current;
     if (!cont) return;
@@ -526,9 +529,20 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
     if (hoverEl) {
       const isDiscard = hoverEl.hasAttribute("data-discard");
       const owner = hoverEl.getAttribute("data-owner"), idx = +hoverEl.getAttribute("data-idx");
-      endDrag(false);
-      if (isDiscard) onDropOnDiscard && onDropOnDiscard(id);
-      else onDropOnMeld && onDropOnMeld(id, owner, idx);
+      const legal = isDiscard
+        ? !!(canDropOnDiscard && canDropOnDiscard(id))
+        : !!(canDropOnMeld && canDropOnMeld(id, owner, idx));
+      if (legal) {
+        endDrag(false);
+        if (isDiscard) onDropOnDiscard && onDropOnDiscard(id);
+        else onDropOnMeld && onDropOnMeld(id, owner, idx);
+        return;
+      }
+      // doesn't fit: the pile shakes, the card glides back to the hand
+      hoverEl.classList.add("nope");
+      try { navigator.vibrate && navigator.vibrate(40); } catch {}
+      setTimeout(() => hoverEl.classList.remove("nope"), 380);
+      endDrag(true);
       return;
     }
     endDrag(true);
@@ -582,11 +596,23 @@ function TalkStrip({ talk, meId, pinfo }) {
   </div>`;
 }
 
-function Meld({ meld, hittable, onHit, owner, idx }) {
-  return html`<div class=${`meld ${hittable ? "hit" : ""}`} onClick=${hittable ? onHit : null}
+// Melds NEVER advertise whether a card fits (house rule: that's a hint).
+// With a card selected, tapping any meld ATTEMPTS the hit — illegal gets a
+// shake, legal just plays. You learn legality by committing, like a real table.
+function Meld({ meld, targetable, onHit, owner, idx }) {
+  const ref = useRef(null);
+  const tap = () => {
+    if (!onHit) return;
+    if (!onHit() && ref.current) {
+      const el = ref.current;
+      el.classList.add("nope");
+      try { navigator.vibrate && navigator.vibrate(40); } catch {}
+      setTimeout(() => el.classList.remove("nope"), 380);
+    }
+  };
+  return html`<div ref=${ref} class="meld" onClick=${targetable ? tap : null}
     data-meld="1" data-owner=${owner} data-idx=${idx}>
     ${meld.cards.map((c) => html`<${Card} key=${c.id} card=${c} small=${true} />`)}
-    ${hittable && html`<span class="hitplus">＋</span>`}
   </div>`;
 }
 
@@ -671,7 +697,16 @@ function Board(props) {
 
   const draw = (src) => commit(E.drawFrom(s, meId, src));
   const doDiscard = () => { if (pick) commit(E.discard(s, meId, pick)); };
-  const doHit = (ownerId, idx) => { if (pick) { commit(E.hit(s, meId, pick, ownerId, idx)); setPick(null); } };
+  // returns whether the hit was legal — the meld shakes itself on false
+  const doHit = (ownerId, idx) => {
+    if (!pick) return false;
+    const card = (s.hands[meId] || []).find((c) => c.id === pick);
+    const meld = (s.table[ownerId] || [])[idx];
+    if (!(card && meld && E.canHit(meld, card))) return false;
+    commit(E.hit(s, meId, pick, ownerId, idx));
+    setPick(null);
+    return true;
+  };
 
   // Drag-a-card-onto-a-pile: legal only on your play step, after laying down,
   // and when the engine says the card fits that pile (wilds just work).
@@ -695,9 +730,10 @@ function Board(props) {
     commit(E.discard(s, meId, cardId));
   };
 
-  // With a card selected, every pile it can legally join glows — tap to place.
+  // With a card selected, melds become tappable TARGETS — but never reveal
+  // whether the card fits. Targetable = turn structure only, no E.canHit.
   const pickedCard = pick ? myHand.find((c) => c.id === pick) : null;
-  const tapHittable = (m) => !!pickedCard && myTurn && s.turnPhase === "play" && s.laidDown[meId] && E.canHit(m, pickedCard);
+  const tapTargetable = !!pickedCard && myTurn && s.turnPhase === "play" && s.laidDown[meId];
 
   const topDiscard = s.discard[s.discard.length - 1];
   const discardIsSkip = topDiscard && E.isSkip(topDiscard);
@@ -719,7 +755,7 @@ function Board(props) {
         <div class="microstat">P${s.phaseOf[oppId]} · ${s.scores[oppId]} · ${(s.hands[oppId] || []).length} cards</div>
         ${(s.table[oppId] || []).length > 0 && html`<div class=${`melds ${slam === oppId ? "slam" : ""}`}>
           ${s.table[oppId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${oppId} idx=${i}
-            hittable=${tapHittable(m)} onHit=${() => doHit(oppId, i)} />`)}
+            targetable=${tapTargetable} onHit=${() => doHit(oppId, i)} />`)}
         </div>`}
       </div>
 
@@ -745,7 +781,7 @@ function Board(props) {
         <${TalkStrip} talk=${props.talk || []} meId=${meId} pinfo=${pinfo} />
         ${(s.table[meId] || []).length > 0 && html`<div class=${`melds ${slam === meId ? "slam" : ""}`}>
           ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${meId} idx=${i}
-            hittable=${tapHittable(m)} onHit=${() => doHit(meId, i)} />`)}
+            targetable=${tapTargetable} onHit=${() => doHit(meId, i)} />`)}
         </div>`}
 
         ${mode === "laying"
@@ -760,7 +796,7 @@ function Board(props) {
           `}
           <${Hand} cards=${myHand} flat=${flatHand} interactive=${myTurn && s.turnPhase === "play"}
             selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
-            canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld}
+            canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld} canTargetMelds=${() => myTurn && s.turnPhase === "play" && !!s.laidDown[meId]}
             canDropOnDiscard=${canDropOnDiscard} onDropOnDiscard=${onDropOnDiscard} />
           <div class="phasereq">${s.laidDown[meId]
             ? html`${E.phaseText(s.phaseOf[meId])} <b>✓</b>`

@@ -52,8 +52,10 @@ balances are `SUM(transactions.amount)` — never denormalize.
   boxes, minimal text (no instructional sentences — expert users), emoji as
   accents. Muted card colors; tabular numerals for scores.
 - **Interactions are drag-first** on the board: drag a card onto a pile to play
-  it, onto the discard pile to end the turn; tap = select (glowing valid
-  targets + one contextual pill).
+  it, onto the discard pile to end the turn; tap = select + one contextual pill.
+  **Never disclose move legality before commitment** (Peaches's house rule:
+  validity glows are hints). Zones give neutral hover feedback only; an illegal
+  placement gets a `.nope` shake and the card glides home.
 - **Deploy ritual:** bump `pp-vN` in `sw.js` for ANY user-facing change →
   commit → push → wait for the Actions run → verify
   `curl https://couplelove.github.io/peaches-pelucha/sw.js | grep pp-v`.

@@ -582,8 +582,17 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   background: var(--ink); opacity: .18; z-index: -1; }
 .deckstack::before { transform: translate(-5px, 4px) rotate(-3deg); }
 .deckstack::after { transform: translate(4px, 3px) rotate(2deg); }
-.pile.droptgt .pcard, .pile.droptgt .pcardback { box-shadow: 0 0 0 3px var(--accent); }
-.pile.droptgt { transform: scale(1.06); }
+/* drop-zone feedback is validity-BLIND by house rule: a hovered zone only
+   says "you're over me" (neutral scale) — never whether the card fits.
+   An illegal release shakes the zone instead. */
+.pile.over, .meld.over { transform: scale(1.06); transition: transform .12s ease; }
+.nope { animation: nopeshake .34s ease; }
+@keyframes nopeshake {
+  0%, 100% { transform: translateX(0); }
+  22% { transform: translateX(-6px) rotate(-1deg); }
+  48% { transform: translateX(5px) rotate(1deg); }
+  74% { transform: translateX(-3px); }
+}
 .phasereq { text-align: center; font-size: 13px; color: var(--ink-2); margin: -6px 0 6px; }
 .phasereq b { color: var(--ink); font-weight: 600; }
 
@@ -631,8 +640,6 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   100% { opacity: 0; transform: translate(var(--dx), -6px) scale(1.7); }
 }
 .meld { display: flex; gap: 3px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 9px; padding: 5px 7px; position: relative; }
-.meld.hit { border-color: var(--good); background: #eaf2ec; cursor: pointer; box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 30%, transparent); }
-.hitplus { position: absolute; top: -8px; right: -8px; background: var(--good); color: #fff; width: 19px; height: 19px; border-radius: 50%; display: grid; place-content: center; font-weight: 700; font-size: 12px; }
 
 .actionbar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
 .btn.ghost.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
