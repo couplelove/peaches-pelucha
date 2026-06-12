@@ -258,18 +258,18 @@ function ResumeCard({ match, me, players, onOpen }) {
   const s = match.state;
   const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
   const oppId = s.players.find((p) => p !== me.id) || s.players[0];
+  const yourTurn = s.status === "playing" && s.turn === me.id;
   let status;
   if (s.status === "matchOver") status = `${pinfo(s.winner).emoji} ${pinfo(s.winner).name} won 👑`;
   else if (s.status === "handOver") status = "Hand over — deal the next one";
-  else status = s.turn === me.id ? "Your turn" : `Waiting for ${pinfo(oppId).emoji} ${pinfo(oppId).name}`;
-  return html`<div class="card">
-    <div class="row between">
-      <div>
-        <div class="eyebrow">Phase 10 · Hand ${s.handNumber}</div>
-        <div class="ghand" style="margin-top:4px">${status}</div>
-      </div>
-      <button class="btn" onClick=${onOpen}>Open game</button>
+  else status = yourTurn ? "Your turn" : `Waiting for ${pinfo(oppId).emoji} ${pinfo(oppId).name}`;
+  return html`<div class="card gamehero" onClick=${onOpen}>
+    <div class="eyebrow">Current game · Hand ${s.handNumber}</div>
+    <div class="gamehero-title">${status}</div>
+    <div class="gamehero-meta tnum">
+      ${s.players.map((pid) => `${pinfo(pid).emoji} P${s.phaseOf[pid]} · ${s.scores[pid]}`).join("   ·   ")}
     </div>
+    <button class="btn gamehero-btn" onClick=${(e) => { e.stopPropagation(); onOpen(); }}>${yourTurn ? "Play your turn" : "Open game"}</button>
   </div>`;
 }
 

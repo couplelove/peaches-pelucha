@@ -102,7 +102,7 @@ export function DateRoulette({ client, me, players, flash, onPlan }) {
 
   return html`<div class="card roulette">
     <div class="row between">
-      <h2 style="margin:0">Date Night Roulette 🎰</h2>
+      <h2 style="margin:0">Date night roulette</h2>
       <button class="linkbtn" onClick=${() => setManage(!manage)}>${manage ? "Done" : "Edit"}</button>
     </div>
 
@@ -114,7 +114,7 @@ export function DateRoulette({ client, me, players, flash, onPlan }) {
     <div class=${`rdisplay ${spinning ? "spinning" : ""} ${landed ? "landed" : ""}`}>
       ${reel != null ? reel
         : spin ? `${spin.emoji} ${spin.label}`
-        : ideas === null ? "…" : "Spin for tonight’s plan"}
+        : ideas === null ? "…" : "Spin for tonight"}
     </div>
     ${spin && !spinning && html`<div class="tiny muted center" style="margin-top:-6px">
       spun by ${pinfo(spin.spun_by).emoji} ${pinfo(spin.spun_by).name}
@@ -122,7 +122,7 @@ export function DateRoulette({ client, me, players, flash, onPlan }) {
         onClick=${() => onPlan({ emoji: spin.emoji, title: spin.label })}>add to calendar →</button>`}</div>`}
 
     <button class="btn block mt" disabled=${spinning || pool.length === 0} onClick=${doSpin}>
-      ${pool.length === 0 ? "Add some ideas first" : spinning ? "…" : "Spin 🎰"}
+      ${pool.length === 0 ? "Add some ideas first" : spinning ? "…" : "Spin"}
     </button>
 
     ${manage && html`<div class="rmanage">

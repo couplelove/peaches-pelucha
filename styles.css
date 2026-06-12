@@ -58,6 +58,7 @@ body {
 .app-shell { max-width: var(--maxw); margin: 0 auto; padding: calc(var(--safe-top) + 14px) 18px 104px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px 18px; }
 .brand { font-family: var(--serif); font-weight: 500; font-size: 19px; letter-spacing: -0.01em; color: var(--ink); display: flex; align-items: center; gap: 7px; }
+.brand.script { font-family: "Caveat", cursive; font-weight: 500; font-size: 25px; color: var(--ink-2); }
 .brand .dot { font-size: 16px; }
 .whoami {
   display: inline-flex; align-items: center; gap: 8px; background: transparent;
@@ -68,8 +69,9 @@ body {
 .whoami .av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-content: center; font-size: 15px; background: var(--paper-2); }
 
 /* ---- cards / sections ---- */
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
-.card h2 { font-family: var(--serif); font-weight: 500; font-size: 18px; letter-spacing: -0.01em; color: var(--ink); margin: 0 0 14px; }
+.card { background: transparent; border: none; border-radius: 0; padding: 10px 2px 22px; margin-bottom: 0; box-shadow: none; }
+.card + .card { border-top: 1px solid var(--line-2); padding-top: 20px; }
+.card h2 { font-family: var(--serif); font-weight: 500; font-size: 16.5px; letter-spacing: -0.01em; color: var(--ink); margin: 0 0 12px; }
 .card .sub { color: var(--ink-2); font-size: 13.5px; margin: -8px 0 16px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .between { justify-content: space-between; }
@@ -131,7 +133,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 /* ---- stat tiles (wallet/shop) ---- */
 .score-head { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.score-tile { border: 1px solid var(--line); border-radius: var(--r); padding: 16px; background: var(--surface); position: relative; }
+.score-tile { border: 1px solid var(--line-2); border-radius: var(--r); padding: 16px; background: var(--paper-2); position: relative; }
 .score-tile .nm { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 7px; color: var(--ink); }
 .score-tile .pts { font-family: var(--serif); font-weight: 500; font-variant-numeric: tabular-nums; font-size: 40px; line-height: 1; margin: 10px 0 4px; color: var(--ink); }
 .score-tile .ph { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
@@ -211,6 +213,25 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .dhead:first-of-type { margin-top: 8px; }
 .evrow.ask { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px; margin: 6px 0; border-bottom: none; }
 .evrow .btn.sm { white-space: nowrap; }
+
+/* ---- home screen ---- */
+.lifeline { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 2px 0 18px; border-bottom: 1px solid var(--line-2); }
+.lifestat { font-size: 14px; color: var(--ink-2); }
+.lifestat b { font-family: var(--serif); font-weight: 500; font-size: 17px; color: var(--ink); }
+
+.gamehero { text-align: center; cursor: pointer; }
+.gamehero-title { font-family: var(--serif); font-weight: 500; font-size: 27px; letter-spacing: -0.015em; color: var(--ink); margin-top: 8px; line-height: 1.15; }
+.gamehero-meta { font-size: 12.5px; color: var(--ink-2); margin-top: 7px; white-space: pre; }
+.gamehero-btn { margin-top: 14px; min-width: 170px; }
+
+.muted-glyph { color: var(--ink-3); font-size: 14px; }
+.horo { display: grid; gap: 14px; margin-top: 12px; }
+.horo-half .eyebrow { margin-bottom: 4px; }
+.horo-text { font-family: var(--serif); font-size: 15.5px; line-height: 1.55; color: var(--ink); margin: 0; font-style: italic; }
+.horo-closer { color: var(--accent); font-style: normal; font-size: 13.5px; }
+
+.verse { margin: 4px 0 0; padding: 0; text-align: center; }
+.verse-text { font-family: var(--serif); font-size: 18px; line-height: 1.5; font-style: italic; color: var(--ink); margin: 0 0 8px; }
 
 /* ---- magazine home ---- */
 .lbword { font-family: "Caveat", cursive; font-weight: 500; font-size: 26px; color: var(--ink-2); line-height: 1; }

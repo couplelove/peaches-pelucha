@@ -6,6 +6,7 @@ import htm from "https://esm.sh/htm@3.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PlayTab } from "./game.js";
 import { DateRoulette } from "./roulette.js";
+import { HoroscopeCard, ScriptureCard } from "./home.js";
 import { PlansTab } from "./events.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 
@@ -262,7 +263,7 @@ function App({ client, onResetCreds }) {
   return html`
     <div class="app-shell">
       <div class="topbar">
-        <div class="brand"><span class="dot">🍑</span> Peaches & Pelucha <span class="dot">🧸</span></div>
+        <div class="brand script">peaches & pelucha</div>
         <button class="whoami" onClick=${() => setModal({ type: "switch" })}>
           <span class="av" style=${`background:${me.color}22`}>${me.emoji}</span>
           ${me.name}
@@ -399,18 +400,21 @@ function Login({ players, onPick, onAdd, modal, setModal, api }) {
 
 /* ============================================================ Score ======= */
 // The Score tab is now the live, playable Phase 10 game (see game.js), with the
-// lifetime wins card underneath.
+// The home screen: current game (prominent) → lifetime line → his & hers
+// Cancer horoscopes → daily scripture → Date Night Roulette.
 function ScoreTab(ctx) {
   return html`<${Fragment}>
     <${PlayTab} ...${ctx} />
     <${LifetimeCard} ...${ctx} />
+    <${HoroscopeCard} players=${ctx.players} />
+    <${ScriptureCard} />
     <${DateRoulette} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash}
       onPlan=${(pick) => { window.__ppPlanPrefill = pick; ctx.setTab("plans"); }} />
   <//>`;
 }
 
-function LifetimeCard({ txns, bets, players, client }) {
-  // lifetime wins from finished games
+// One quiet line, not a whole card.
+function LifetimeCard({ txns, players, client }) {
   const [wins, setWins] = useState(null);
   useEffect(() => {
     let live = true;
@@ -422,18 +426,10 @@ function LifetimeCard({ txns, bets, players, client }) {
     });
     return () => { live = false; };
   }, [client, txns]);
-
-  return html`
-    <div class="card">
-      <h2>Lifetime 🏆</h2>
-      <div class="list">
-        ${players.map((p) => html`
-          <div class="line" key=${p.id}>
-            <div class="l"><span class="em">${p.emoji}</span><div class="txt"><b>${p.name}</b></div></div>
-            <span class="pill gold">${wins ? (wins[p.id] || 0) : "…"} ${(wins?.[p.id] || 0) === 1 ? "win" : "wins"}</span>
-          </div>`)}
-      </div>
-    </div>`;
+  return html`<div class="lifeline">
+    <span class="eyebrow">Lifetime</span>
+    ${players.map((p) => html`<span class="lifestat" key=${p.id}>${p.emoji} <b>${wins ? (wins[p.id] || 0) : "·"}</b></span>`)}
+  </div>`;
 }
 
 /* ============================================================ Wallet ====== */
@@ -442,7 +438,7 @@ function WalletTab(ctx) {
   const { players, balances, txns, me, setModal, api } = ctx;
   return html`
     <div class="card">
-      <h2>Love currency 💗</h2>
+      <h2>Hearts</h2>
       <div class="score-head">
         ${players.map((p) => html`
           <div class="score-tile">
@@ -491,7 +487,7 @@ function BetsTab(ctx) {
   const done = bets.filter((b) => b.status !== "open");
   return html`
     <div class="card">
-      <div class="row between"><h2 style="margin:0">Open bets 🎲</h2>
+      <div class="row between"><h2 style="margin:0">Open bets</h2>
         <button class="btn sm" onClick=${() => setModal({ type: "newBet" })}>＋ New</button></div>
       ${!open.length && html`<div class="empty"><span class="big">🤝</span>No live wagers. Make one!</div>`}
       <div class="list">
@@ -538,7 +534,7 @@ function ShopTab(ctx) {
       <div class="balance-big">${bal} 💗</div>
     </div>
     <div class="card">
-      <div class="row between"><h2 style="margin:0">Reward shop 🎁</h2>
+      <div class="row between"><h2 style="margin:0">Reward shop</h2>
         <button class="btn sm ghost" onClick=${() => setModal({ type: "manageRewards" })}>Edit</button></div>
       ${!active.length && html`<div class="empty"><span class="big">🎁</span>No rewards yet — add some!</div>`}
       <div class="list">

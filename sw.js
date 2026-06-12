@@ -1,7 +1,7 @@
 // Service worker for Peaches & Pelucha.
 // Strategy: cache the app shell so it installs and opens instantly / offline.
 // (Live data still needs a connection — that's Supabase, never cached.)
-const CACHE = "pp-v26";
+const CACHE = "pp-v27";
 const SHELL = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const SHELL = [
   "./game.js",
   "./push.js",
   "./roulette.js",
+  "./home.js",
   "./events.js",
   "./config.js",
   "./manifest.webmanifest",
