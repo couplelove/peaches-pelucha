@@ -55,6 +55,45 @@ function horizonOf(iso) {
   return date.getFullYear() === now.getFullYear() ? month : `${month} ${date.getFullYear()}`;
 }
 
+const endOfThisWeek = () => {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const dayIdx = (now.getDay() + 6) % 7;                 // 0=Mon … 6=Sun
+  const e = new Date(now); e.setDate(now.getDate() + (6 - dayIdx));
+  return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+};
+
+// The magazine deck: a generated prose summary of their upcoming life.
+// Deterministic templates — reads like an editor wrote it, no AI calls.
+function summarize(upcoming) {
+  if (!upcoming.length) return {
+    title: "A blank page",
+    body: "Nothing on the books yet. Add a plan and give yourselves something to look forward to — the best chapters start with a date.",
+  };
+  const today = todayISO(), eow = endOfThisWeek();
+  const first = upcoming[0];
+  const week = upcoming.filter((e) => e.starts_on <= eow && e !== first);
+  const beyond = upcoming.filter((e) => e.starts_on > eow && e !== first);
+
+  const s = [];
+  const when = first.starts_on === today ? "today" : dayLabel(first.starts_on).toLowerCase().replace(/^([a-z])/, "$1");
+  s.push(`First up: ${first.title}, ${when}${first.starts_at ? ` at ${timeLabel(first.starts_at)}` : ""}${first.location ? ` — ${first.location}` : ""}.`);
+  if (week.length === 1) s.push(`Then ${week[0].title.toLowerCase().startsWith("the") ? week[0].title : week[0].title} rounds out the week.`);
+  else if (week.length > 1) s.push(`${week[0].title} and ${week[1].title.toLowerCase()}${week.length > 2 ? `, among others,` : ""} round out the week.`);
+  if (beyond.length) {
+    const far = beyond[beyond.length - 1];
+    const month = parseISO(far.starts_on).toLocaleDateString(undefined, { month: "long" });
+    s.push(beyond.length === 1
+      ? `And on the horizon — ${far.title.toLowerCase().startsWith("the") ? far.title : far.title}, in ${month}.`
+      : `And on the horizon: ${beyond.length} more plans, stretching all the way to ${far.title} in ${month}.`);
+  }
+
+  const title =
+    first.starts_on === today ? "Tonight’s the night" :
+    dayLabel(first.starts_on) === "Tomorrow" ? "Tomorrow, and beyond" :
+    upcoming.length >= 5 ? "So much to look forward to" : "The weeks ahead";
+  return { title, body: s.join(" ") };
+}
+
 export function PlansTab({ client, me, players, flash }) {
   const partner = players.find((p) => p.id !== me.id);
   const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
@@ -88,6 +127,21 @@ export function PlansTab({ client, me, players, flash }) {
 
   const upcoming = (events || []).filter((e) => e.starts_on >= todayISO());
   const past = (events || []).filter((e) => e.starts_on < todayISO()).reverse();
+
+  // ---- magazine home state ----
+  const [view, setView] = useState("home");        // 'home' | 'list'
+  const [filter, setFilter] = useState(null);      // 'rsvp'|'today'|'week'|'beyond'
+  const [selectedId, setSelectedId] = useState(null);
+  const needsMe = upcoming.filter((e) => e.kind === "invite" && e.created_by !== me.id && e.rsvp === "pending");
+  const activeFilter = filter || (needsMe.length ? "rsvp" : "week");
+  const eow = endOfThisWeek();
+  const filtered =
+    activeFilter === "rsvp" ? needsMe :
+    activeFilter === "today" ? upcoming.filter((e) => e.starts_on === todayISO()) :
+    activeFilter === "week" ? upcoming.filter((e) => e.starts_on <= eow) :
+    upcoming.filter((e) => e.starts_on > eow);
+  const featured = upcoming.slice(0, 5);
+  const deck = summarize(upcoming);
 
   // Editorial layout: the nearest plan is the "Next up" hero; the rest group
   // into look-ahead horizons (This week · Next week · This summer …), each
@@ -177,13 +231,92 @@ export function PlansTab({ client, me, players, flash }) {
     </div>`;
   };
 
+  // ---- magazine pieces ----
+  const FCard = (e, i) => {
+    const mine = e.created_by === me.id;
+    const needsAnswer = e.kind === "invite" && !mine && e.rsvp === "pending";
+    const d = parseISO(e.starts_on);
+    const eyebrow = i === 0 ? "Next event"
+      : `${d.toLocaleDateString(undefined, { weekday: "short" })} · ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    return html`<div class=${`fcard ${i === 0 ? "first" : ""}`} key=${e.id}>
+      <div class="eyebrow">${eyebrow}</div>
+      <div class="fcard-title">${e.emoji} ${e.title}</div>
+      <div class="fcard-meta">${dayLabel(e.starts_on)}${e.starts_at ? " · " + timeLabel(e.starts_at) : ""}${e.location ? " · 📍 " + e.location : ""}</div>
+      <div class="row" style="gap:8px; margin-top:auto; padding-top:12px">
+        ${needsAnswer
+          ? html`<button class="btn sm" onClick=${() => rsvp(e, "in")}>I’m in 💗</button>
+                 <button class="btn ghost sm" onClick=${() => rsvp(e, "cant")}>Can’t</button>`
+          : html`
+            ${e.kind === "fyi" && html`<span class="pill">📌 fyi</span>`}
+            ${e.kind === "invite" && e.rsvp === "in" && html`<span class="pill win">both in 💗</span>`}
+            ${e.kind === "invite" && e.rsvp === "cant" && html`<span class="pill loss">can’t 🙁</span>`}
+            ${e.kind === "invite" && e.rsvp === "pending" && mine && html`<span class="pill">⏳ waiting on ${partner?.emoji}</span>`}
+          `}
+      </div>
+    </div>`;
+  };
+
+  const ERow = (e) => {
+    const mine = e.created_by === me.id;
+    const needsAnswer = e.kind === "invite" && !mine && e.rsvp === "pending";
+    const open = selectedId === e.id;
+    return html`<div class=${`erow ${open ? "sel" : ""} ${needsAnswer ? "ask" : ""}`} key=${e.id}
+      onClick=${() => setSelectedId(open ? null : e.id)}>
+      <div class="row between">
+        <div class="l" style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span class="em">${e.emoji}</span>
+          <div class="txt" style="min-width:0"><b>${e.title}</b>
+            <span class="tiny muted" style="display:block">${dayLabel(e.starts_on)}${e.starts_at ? " · " + timeLabel(e.starts_at) : ""}</span></div>
+        </div>
+        ${needsAnswer ? html`<span class="pill open">RSVP</span>`
+          : e.kind === "invite" && e.rsvp === "in" ? html`<span class="pill win">in 💗</span>`
+          : e.kind === "invite" && e.rsvp === "cant" ? html`<span class="pill loss">🙁</span>`
+          : e.kind === "fyi" ? html`<span class="pill">📌</span>` : null}
+      </div>
+      ${open && html`<div class="erow-detail" onClick=${(ev) => ev.stopPropagation()}>
+        ${e.location && html`<div class="tiny muted">📍 ${e.location}</div>`}
+        ${e.notes && html`<div class="tiny muted">“${e.notes}”</div>`}
+        <div class="tiny muted">${e.kind === "invite" ? "invite" : "fyi"} from ${mine ? "you" : pinfo(e.created_by).name}</div>
+        <div class="row" style="gap:8px;margin-top:10px">
+          ${needsAnswer && html`<button class="btn sm" onClick=${() => rsvp(e, "in")}>I’m in 💗</button>
+            <button class="btn ghost sm" onClick=${() => rsvp(e, "cant")}>Can’t</button>`}
+          ${mine && html`<button class="btn ghost sm" onClick=${() => editEvent(e)}>✎ Edit</button>`}
+          ${mine && html`<button class="linkbtn danger" onClick=${() => remove(e)}>delete</button>`}
+        </div>
+      </div>`}
+    </div>`;
+  };
+
   return html`<div>
     <div class="card">
       <div class="row between">
-        <h2 style="margin:0">Love Bug Calendar 📅</h2>
-        <button class="btn sm" onClick=${() => setCompose({ emoji: "💗", title: "", date: todayISO(), time: "", kind: "invite", notes: "", location: "" })}>＋ Plan</button>
+        <span class="lbword">love bug calendar</span>
+        <div class="row" style="gap:8px">
+          <button class="iconbtn" title=${view === "home" ? "All events" : "Back"} onClick=${() => setView(view === "home" ? "list" : "home")}>${view === "home" ? "☰" : "✕"}</button>
+          <button class="btn sm" onClick=${() => setCompose({ emoji: "💗", title: "", date: todayISO(), time: "", kind: "invite", notes: "", location: "" })}>＋ Plan</button>
+        </div>
       </div>
       ${events === null && html`<div class="empty">…</div>`}
+
+      ${view === "home" && events !== null && html`
+        <div class="deck">
+          <div class="deck-title">${deck.title}</div>
+          <p class="deck-body">${deck.body}</p>
+        </div>
+        ${featured.length > 0 && html`<div class="fcar">${featured.map(FCard)}</div>`}
+        ${upcoming.length > 0 && html`<div class="fchips">
+          ${needsMe.length > 0 && html`<button class=${`fchip rsvp ${activeFilter === "rsvp" ? "on" : ""}`} onClick=${() => setFilter("rsvp")}>● RSVP!</button>`}
+          <button class=${`fchip ${activeFilter === "today" ? "on" : ""}`} onClick=${() => setFilter("today")}>today</button>
+          <button class=${`fchip ${activeFilter === "week" ? "on" : ""}`} onClick=${() => setFilter("week")}>this week</button>
+          <button class=${`fchip ${activeFilter === "beyond" ? "on" : ""}`} onClick=${() => setFilter("beyond")}>& beyond!</button>
+        </div>`}
+        <div class="elist">
+          ${filtered.map(ERow)}
+          ${upcoming.length > 0 && filtered.length === 0 && html`<div class="empty tiny">nothing here — lucky you, go add something</div>`}
+        </div>
+      `}
+
+      ${view === "list" && html`
       ${events !== null && upcoming.length === 0 && html`<div class="empty"><span class="big">🗓️</span>Nothing planned — add something to look forward to.</div>`}
 
       ${hero && (() => {
@@ -228,6 +361,7 @@ export function PlansTab({ client, me, players, flash }) {
         <button class="linkbtn" onClick=${() => setShowPast(!showPast)}>${showPast ? "Hide past" : `Past (${past.length})`}</button>
       </div>`}
       ${showPast && html`<div class="list" style="opacity:.6">${past.map(Row)}</div>`}
+      `}
     </div>
 
     ${compose && html`<div class="modal-bg" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setCompose(null); }}>
