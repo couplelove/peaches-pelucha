@@ -202,11 +202,18 @@ function StartMatch({ players, client, onStarted, flash }) {
 }
 
 /* ----------------------------------------------------------- Card --------- */
+// Centre art per colour, matched to the muted palette.
+const CARD_ART = { red: "🌹", blue: "🦋", green: "🍀", yellow: "🌻" };
+
 function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   let face, bg = "#fff", color = "#fff8f3";
   if (E.isNumber(card)) { bg = CARD_BG[card.color]; face = card.num; }
   else if (E.isWild(card)) { bg = "#2b2521"; color = "#e7c98a"; face = "★"; }      // ink card, gold star
   else { bg = "#8c8077"; color = "#fff8f3"; face = "⊘"; }                          // warm grey skip
+  // Full-size cards show colour-matched emoji art in the centre; the number
+  // lives in the corner. Small meld chips keep the number as the face — that's
+  // how you read what's on a pile.
+  const art = !small && E.isNumber(card) ? CARD_ART[card.color] : null;
   const interactive = !!(onClick || onPointerDown);
   const f = fan || {};
   // Interactive cards are buttons; static ones (pile faces, meld chips) are
@@ -218,7 +225,7 @@ function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, on
     class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${dragging ? "dragging" : ""} ${interactive ? "" : "static"}`}
     style=${`background:${bg};color:${color};${f.css || ""}`} onClick=${onClick}
     onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp} onPointerCancel=${onPointerCancel}>
-    ${!small && html`<span class="pcorner">${face}</span>`}${face}<//>`;
+    ${!small && html`<span class="pcorner">${face}</span>`}${art ? html`<span class="cart">${art}</span>` : face}<//>`;
 }
 
 // Fan layout: one overlapping arched row, like cards held in a hand.
