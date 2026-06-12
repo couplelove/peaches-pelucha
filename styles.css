@@ -323,6 +323,36 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pile, .meld { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* static card faces inside piles/melds must never intercept the tap */
 .pile .pcard, .meld .pcard { pointer-events: none; }
+/* ---- presence + reactions ---- */
+.wavehand { display: inline-block; font-size: 16px; transform-origin: 70% 70%;
+  animation: wavey 1.8s ease-in-out infinite; }
+@keyframes wavey {
+  0%, 55%, 100% { transform: rotate(0); }
+  10% { transform: rotate(18deg); } 20% { transform: rotate(-8deg); }
+  30% { transform: rotate(14deg); } 42% { transform: rotate(-4deg); }
+}
+.reactfab { position: fixed; right: 18px; bottom: calc(26px + var(--safe-bottom)); z-index: 70;
+  width: 54px; height: 54px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); font-size: 24px; box-shadow: var(--shadow); cursor: pointer;
+  display: grid; place-content: center; animation: gopop .45s cubic-bezier(.2,1.4,.4,1); }
+.reactfab:active { transform: scale(.92); }
+.reactfab.used { opacity: .35; }
+.reactsheet { position: fixed; inset: 0; z-index: 75; display: grid; place-content: center; gap: 16px;
+  background: color-mix(in srgb, var(--paper) 84%, transparent); backdrop-filter: blur(8px); animation: fade .15s ease; }
+.reactgrid { display: grid; grid-template-columns: repeat(4, 66px); gap: 14px; }
+.reactgrid button { font-size: 38px; line-height: 1; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 16px; width: 66px; height: 66px; cursor: pointer; display: grid; place-content: center;
+  transition: transform .08s ease; }
+.reactgrid button:active { transform: scale(1.18); }
+.reactnote { text-align: center; font-size: 12px; color: var(--ink-3); font-weight: 600; }
+.floatemoji { position: fixed; bottom: 100px; z-index: 72; font-size: 46px; pointer-events: none;
+  animation: floatup 2.5s ease-out forwards; }
+@keyframes floatup {
+  0%   { transform: translateY(0) scale(.5) rotate(0); opacity: 0; }
+  12%  { transform: translateY(-7vh) scale(1.15) rotate(-6deg); opacity: 1; }
+  100% { transform: translateY(-64vh) scale(.95) rotate(10deg); opacity: 0; }
+}
+
 /* ghost drag: a fixed clone follows the finger; the real card stays in flow */
 .pcard.dragghost { position: fixed; left: 0; top: 0; margin: 0 !important; z-index: 9999;
   pointer-events: none; transition: none; will-change: transform;

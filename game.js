@@ -114,6 +114,43 @@ export function PlayTab(ctx) {
     }
   }, [match, client, api, flash, reload, setMatch, me]);
 
+  // ---- presence (👋 they're here) + emoji reactions (broadcast, no DB) ----
+  const opp = players.find((p) => p.id !== me.id);
+  const demoMode = !!client._db;
+  const [online, setOnline] = useState({});
+  const [floats, setFloats] = useState([]);
+  const [sheet, setSheet] = useState(false);
+  const [reactedVer, setReactedVer] = useState(-1);   // one reaction per move
+  const reactCh = useRef(null);
+
+  const spawnFloat = useCallback((emoji) => {
+    const id = Math.random().toString(36).slice(2);
+    setFloats((f) => [...f, { id, emoji, x: 8 + Math.random() * 72 }]);
+    setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id)), 2600);
+  }, []);
+
+  useEffect(() => {
+    if (demoMode) return;
+    const ch = client.channel("pp-presence", { config: { presence: { key: me.id } } });
+    reactCh.current = ch;
+    ch.on("presence", { event: "sync" }, () => setOnline({ ...ch.presenceState() }))
+      .on("broadcast", { event: "react" }, ({ payload }) => { if (payload && payload.emoji) spawnFloat(payload.emoji); })
+      .subscribe(async (status) => { if (status === "SUBSCRIBED") { try { await ch.track({ at: Date.now() }); } catch {} } });
+    return () => { reactCh.current = null; try { client.removeChannel(ch); } catch {} };
+  }, [client, me.id, demoMode, spawnFloat]);
+
+  const oppOnline = demoMode || !!(opp && online[opp.id]);
+  const bothOnline = demoMode || (!!online[me.id] && !!(opp && online[opp.id]));
+  const canReact = !!match && reactedVer !== match.version;
+  const sendReact = (emoji) => {
+    if (!canReact) return;
+    setReactedVer(match.version);
+    setSheet(false);
+    spawnFloat(emoji);
+    try { navigator.vibrate && navigator.vibrate(20); } catch {}
+    try { reactCh.current && reactCh.current.send({ type: "broadcast", event: "react", payload: { emoji, from: me.id } }); } catch {}
+  };
+
   if (match === undefined) {
     return html`<div class="card center"><div class="muted">Loading game…</div></div>`;
   }
@@ -150,8 +187,22 @@ export function PlayTab(ctx) {
                  </span>`}
       </div>`}
       <div class="gamefs-body">
-        <${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} />
+        <${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} oppOnline=${oppOnline} />
       </div>
+
+      ${bothOnline && html`<button class=${`reactfab ${canReact ? "" : "used"}`}
+        title=${canReact ? "React" : "One per move 😉"}
+        onClick=${() => canReact && setSheet(true)}>💗</button>`}
+
+      ${sheet && html`<div class="reactsheet" onClick=${() => setSheet(false)}>
+        <div class="reactgrid">
+          ${["💗", "😂", "😱", "🔥", "😈", "👏", "🍑", "🧸"].map((e) =>
+            html`<button key=${e} onClick=${(ev) => { ev.stopPropagation(); sendReact(e); }}>${e}</button>`)}
+        </div>
+        <div class="reactnote">one per move 😉</div>
+      </div>`}
+
+      ${floats.map((f) => html`<span key=${f.id} class="floatemoji" style=${`left:${f.x}%`}>${f.emoji}</span>`)}
     </div>`;
   }
   return html`<${ResumeCard} match=${match} me=${me} players=${players} onOpen=${() => setImmersive(true)} />`;
@@ -428,7 +479,7 @@ function Meld({ meld, hittable, onHit, owner, idx }) {
 
 /* ----------------------------------------------------------- Board -------- */
 function Board(props) {
-  const { match, commit, players, me } = props;
+  const { match, commit, players, me, oppOnline } = props;
   const s = match.state;
   const meId = me.id;
   const oppId = s.players.find((p) => p !== meId) || s.players[0];
@@ -547,6 +598,7 @@ function Board(props) {
       <!-- opponent zone -->
       <div class="zone opp">
         <div class="pname">
+          ${oppOnline && html`<span class="wavehand" title="online now">👋</span>`}
           <span class="nm">${opp_.emoji} ${opp_.name}</span>
           ${s.turn === oppId && s.status === "playing" && html`<span class="gobadge">GO</span>`}
           ${s.skipInfo?.victim === oppId && html`<span class="gobadge skipd">⊘ SKIPPED</span>`}
