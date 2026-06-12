@@ -302,11 +302,11 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pilelbl { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
 .pcardback { width: 46px; height: 64px; border-radius: 9px; background: var(--ink); display: grid; place-content: center; font-size: 22px; color: var(--paper); box-shadow: var(--shadow); }
 
-.pcard { width: 56px; height: 78px; border-radius: 11px; border: none; font-family: var(--serif); font-size: 27px; font-weight: 500; font-variant-numeric: tabular-nums; display: inline-grid; place-content: center; box-shadow: 0 2px 7px -2px rgba(43,37,33,.3); cursor: pointer; flex: 0 0 auto; transition: transform .24s cubic-bezier(.22,1.1,.3,1.12), box-shadow .2s ease; position: relative; }
+.pcard { width: 62px; height: 86px; border-radius: 12px; border: none; font-family: var(--serif); font-size: 27px; font-weight: 500; font-variant-numeric: tabular-nums; display: inline-grid; place-content: center; box-shadow: 0 2px 7px -2px rgba(43,37,33,.3); cursor: pointer; flex: 0 0 auto; transition: transform .24s cubic-bezier(.22,1.1,.3,1.12), box-shadow .2s ease; position: relative; }
 /* corner index: stays readable on the exposed left edge of overlapped fan cards */
-.pcorner { position: absolute; top: 4px; left: 6px; font-size: 15px; line-height: 1; font-weight: 600; opacity: .95; }
+.pcorner { position: absolute; top: 5px; left: 7px; font-size: 16px; line-height: 1; font-weight: 600; opacity: .95; }
 /* centre art: colour-matched emoji, nudged down so the corner number owns the top */
-.cart { font-size: 28px; line-height: 1; transform: translateY(4px); filter: saturate(.85); }
+.cart { font-size: 31px; line-height: 1; transform: translateY(4px); filter: saturate(.85); }
 .pile.lg .cart { font-size: 33px; }
 .pcard.sm { width: 30px; height: 42px; font-size: 15px; border-radius: 7px; }
 .pcard.sel { transform: translateY(-9px); box-shadow: 0 0 0 2px var(--accent), 0 10px 18px -8px rgba(43,37,33,.35); }
@@ -323,9 +323,11 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pile, .meld { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* static card faces inside piles/melds must never intercept the tap */
 .pile .pcard, .meld .pcard { pointer-events: none; }
-.pcard.dragging { transition: none !important; z-index: 999 !important; pointer-events: none;
-  box-shadow: 0 18px 30px -8px rgba(43,37,33,.5) !important; }
-.pcard.settling { z-index: 998 !important; }     /* stays on top while springing home */
+/* ghost drag: a fixed clone follows the finger; the real card stays in flow */
+.pcard.dragghost { position: fixed; left: 0; top: 0; margin: 0 !important; z-index: 9999;
+  pointer-events: none; transition: none; will-change: transform;
+  box-shadow: 0 22px 38px -10px rgba(43,37,33,.5); }
+.pcard.lifted { opacity: .28; transition: opacity .12s ease, transform .2s cubic-bezier(.2,.85,.3,1.12); }
 .handbar { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
 .handbar .linkbtn { font-size: 12px; padding: 4px 6px; }
 
@@ -374,7 +376,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .bigpill:active { transform: translateY(1px); }
 
 /* bigger piles */
-.pile.lg .pcard, .pile.lg .pcardback { width: 64px; height: 88px; font-size: 30px; border-radius: 12px; }
+.pile.lg .pcard, .pile.lg .pcardback { width: 68px; height: 94px; font-size: 31px; border-radius: 13px; }
 .deckstack { position: relative; }
 .deckstack::before, .deckstack::after { content: ""; position: absolute; inset: 0; border-radius: 11px;
   background: var(--ink); opacity: .18; z-index: -1; }

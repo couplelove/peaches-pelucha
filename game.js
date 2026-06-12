@@ -19,7 +19,10 @@ function useMatch(client) {
   useEffect(() => { matchRef.current = match; }, [match]);
 
   const load = useCallback(async () => {
-    if (window.__ppDragging) return;             // never yank cards mid-drag
+    // never yank cards mid-drag — but self-expire the guard so a drag that died
+    // without cleanup can't freeze sync forever (the old refresh-to-fix bug)
+    if (window.__ppDragging && Date.now() - (window.__ppDragSince || 0) < 4000) return;
+    window.__ppDragging = false;
     const { data } = await client.from("matches").select("*")
       .eq("status", "playing").order("created_at", { ascending: false }).limit(1);
     const row = (data && data[0]) || null;
@@ -37,7 +40,7 @@ function useMatch(client) {
         .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (p) => {
           if (p.eventType === "DELETE") { load(); return; }
           const row = p.new;
-          if (window.__ppDragging) return;
+          if (window.__ppDragging) { setTimeout(load, 1200); return; }   // catch up right after the drag
           if (row.status === "playing") setMatch(row);
           else load();
         })
@@ -249,92 +252,97 @@ function fanOf(i, n, sel) {
   const rot = c * Math.min(4.5, 34 / n);
   const arc = c * c * (n > 8 ? 0.6 : 1.2);
   const lift = sel ? -20 : 0;
-  const overlap = n <= 6 ? -10 : n <= 8 ? -18 : n <= 10 ? -24 : n <= 12 ? -28 : -31;
+  const overlap = n <= 6 ? -12 : n <= 8 ? -22 : n <= 10 ? -29 : n <= 12 ? -34 : -37;
   const tf = `rotate(${rot.toFixed(2)}deg) translateY(${(arc + lift).toFixed(1)}px)`;
   return { tf, css: `margin-left:${i === 0 ? 0 : overlap}px; z-index:${sel ? 99 : i + 1}; transform:${tf};` };
 }
 
-// Draggable fanned hand. Tap a card to select it; drag to rearrange; drag onto
-// a glowing pile to play it there. Order is the player's own (never re-sorted).
-//
-// Drag mechanics, tuned for smoothness:
-// - the dragged card is GLUED to the finger: translate = finger delta,
-//   compensated by how far the card's layout slot moved (offsetLeft delta), so
-//   reorders never yank it; a pre-paint layout effect re-glues after renders
-// - insertion is geometric (which slot midpoints the finger has passed), so
-//   the order can't oscillate the way hit-testing overlapped cards did
-// - siblings slide aside via the CSS transition; on release the card settles
-//   into its slot with the same spring
+// Draggable fanned hand — GHOST architecture, built so a drag can never strand
+// the layout:
+// - the card you grab stays in flow (faded); a fixed-position GHOST clone
+//   follows your finger with spring physics (lerp + velocity tilt)
+// - the real card never receives inline transforms, so there is nothing to
+//   get "stuck offset" — worst case the ghost is removed and all is normal
+// - listeners live on WINDOW for the duration of the drag (element capture
+//   dies when iOS interrupts a gesture); pointerup/cancel/blur/visibility all
+//   end the drag, and a watchdog force-ends it if events stop arriving
+// - on release the ghost glides into the card's slot, then evaporates
 function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard }) {
   const drag = useRef(null);
   const wrap = useRef(null);
 
-  // Magnetic spring: each frame the card eases toward the finger; how far it
-  // lags gives a natural velocity tilt, like a card pinched loosely.
+  const endDrag = (glide) => {
+    const d = drag.current;
+    if (!d) return;
+    drag.current = null;
+    window.__ppDragging = false;
+    window.removeEventListener("pointermove", d.onMove);
+    window.removeEventListener("pointerup", d.onUp);
+    window.removeEventListener("pointercancel", d.onCancel);
+    window.removeEventListener("blur", d.onCancel);
+    document.removeEventListener("visibilitychange", d.onVis);
+    cancelAnimationFrame(d.raf);
+    if (d.hoverEl) d.hoverEl.classList.remove("hit", "droptgt");
+    const ghost = d.ghost, el = d.el;
+    if (el) el.classList.remove("lifted");
+    if (ghost) {
+      if (glide && el && document.contains(el)) {
+        const r = el.getBoundingClientRect();
+        ghost.style.transition = "transform .24s cubic-bezier(.2,.85,.3,1.12), opacity .24s ease";
+        ghost.style.transform = `translate(${r.left}px, ${r.top}px) rotate(0deg) scale(1)`;
+        ghost.style.opacity = "0";
+        setTimeout(() => ghost.remove(), 260);
+      } else ghost.remove();
+    }
+    // belt & braces: no orphaned ghosts, ever
+    document.querySelectorAll(".dragghost").forEach((g) => { if (g !== ghost) g.remove(); });
+  };
+
+  // unmount safety
+  useEffect(() => () => endDrag(false), []);
+
+  const startGhost = (d) => {
+    const r = d.el.getBoundingClientRect();
+    d.grabX = d.x - r.left; d.grabY = d.y - r.top;
+    d.px = r.left; d.py = r.top;
+    const g = d.el.cloneNode(true);                       // keeps corner number + art
+    g.className = "pcard dragghost";
+    const cs = getComputedStyle(d.el);
+    g.style.cssText = `background:${cs.backgroundColor}; color:${cs.color};` +
+      `width:${d.el.offsetWidth}px; height:${d.el.offsetHeight}px;` +
+      `transform: translate(${d.px}px, ${d.py}px);`;
+    document.body.appendChild(g);
+    d.ghost = g;
+    d.el.classList.add("lifted");
+  };
+
+  // spring loop: ghost eases toward the finger; lag gives a natural tilt.
+  // Doubles as the watchdog — if the OS stops sending events, end cleanly.
   const step = () => {
     const d = drag.current;
-    if (!d || !d.moved || !d.el) return;
-    const tx = (d.cx - d.x) + (d.baseLeft - d.el.offsetLeft);
-    const ty = (d.cy - d.y) + (d.baseTop - d.el.offsetTop);
-    d.px += (tx - d.px) * 0.42;
-    d.py += (ty - d.py) * 0.42;
-    const tilt = Math.max(-9, Math.min(9, (tx - d.px) * 0.55));
-    d.el.style.transform = `translate(${d.px.toFixed(1)}px, ${d.py.toFixed(1)}px) rotate(${tilt.toFixed(1)}deg) scale(1.07)`;
+    if (!d || !d.moved) return;
+    if (performance.now() - d.lastEvent > 1600) { endDrag(true); return; }
+    const tx = d.cx - d.grabX, ty = d.cy - d.grabY;
+    d.px += (tx - d.px) * 0.38;
+    d.py += (ty - d.py) * 0.38;
+    const tilt = Math.max(-10, Math.min(10, (tx - d.px) * 0.5));
+    d.ghost.style.transform = `translate(${d.px.toFixed(1)}px, ${d.py.toFixed(1)}px) rotate(${tilt.toFixed(1)}deg) scale(1.07)`;
     d.raf = requestAnimationFrame(step);
   };
 
-  // After ANY render: keep the dragged card where the spring left it (no
-  // one-frame snap on reorders) and sweep stray transforms off every other
-  // card — self-healing if a drag ever dies without cleanup (e.g. multitouch
-  // chaos), so a stranded card can never sit over the piles eating taps.
-  useLayoutEffect(() => {
-    const d = drag.current;
-    if (d && d.moved && d.el) {
-      d.el.style.transform = `translate(${d.px.toFixed(1)}px, ${d.py.toFixed(1)}px) scale(1.07)`;
-    }
-    if (wrap.current) {
-      for (const el of wrap.current.querySelectorAll(".pcard")) {
-        if (d && el === d.el) continue;
-        const home = el.dataset.tf || "";
-        if (el.style.transform !== home) el.style.transform = home;
-        el.classList.remove("dragging");
-      }
-    }
-  });
-
-  const reset = (d) => {
-    if (d && d.raf) cancelAnimationFrame(d.raf);
-    if (d && d.el) {
-      d.el.classList.remove("dragging");
-      d.el.classList.add("settling");             // keep it on top while it springs home
-      const el = d.el;
-      setTimeout(() => el.classList.remove("settling"), 320);
-      d.el.style.transform = d.el.dataset.tf || "";
-    }
-    if (d && d.hoverEl) d.hoverEl.classList.remove("hit", "droptgt");
-    drag.current = null;
-    window.__ppDragging = false;                  // sync reloads may resume
-  };
-  const down = (e, id) => {
-    if (drag.current) return;                     // one drag at a time — ignore extra fingers
-    const el = e.currentTarget;
-    drag.current = { id, el, pointerId: e.pointerId, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY,
-      baseLeft: el.offsetLeft, baseTop: el.offsetTop, px: 0, py: 0, raf: 0, moved: false, hoverEl: null };
-    try { el.setPointerCapture(e.pointerId); } catch {}
-  };
   const move = (e) => {
     const d = drag.current;
-    if (!d || e.pointerId !== d.pointerId) return; // ignore other fingers entirely
-    d.cx = e.clientX; d.cy = e.clientY;
+    if (!d || e.pointerId !== d.pointerId) return;
+    d.cx = e.clientX; d.cy = e.clientY; d.lastEvent = performance.now();
     if (!d.moved) {
       if (Math.hypot(d.cx - d.x, d.cy - d.y) <= 6) return;
       d.moved = true;
-      window.__ppDragging = true;                 // pause sync reloads mid-gesture
-      d.el.classList.add("dragging");             // kills transition + pointer events
-      d.raf = requestAnimationFrame(step);        // start the spring
+      window.__ppDragging = true;
+      window.__ppDragSince = Date.now();
+      startGhost(d);
+      d.raf = requestAnimationFrame(step);
     }
-    const under = document.elementFromPoint(d.cx, d.cy);
-    // over a meld or the discard pile? highlight it if this card can go there
+    const under = document.elementFromPoint(d.cx, d.cy);   // ghost is pointer-events:none
     const dropEl = under && under.closest ? (under.closest("[data-meld]") || under.closest("[data-discard]")) : null;
     if (dropEl) {
       const isDiscard = dropEl.hasAttribute("data-discard");
@@ -347,11 +355,11 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
       return;
     }
     if (d.hoverEl) { d.hoverEl.classList.remove("hit", "droptgt"); d.hoverEl = null; }
-    // geometric insertion: count siblings whose slot the finger has passed, in
-    // reading order (row-aware so the flat wrapped view reorders correctly).
-    // Layout offsets ignore transforms, so mid-animation slides can't jitter it.
-    const p = d.el.parentElement.getBoundingClientRect();
-    const sibs = [...d.el.parentElement.querySelectorAll(".pcard")].filter((el) => el !== d.el);
+    // geometric insertion (row-aware; layout offsets ignore mid-slide transforms)
+    const cont = wrap.current;
+    if (!cont) return;
+    const p = cont.getBoundingClientRect();
+    const sibs = [...cont.querySelectorAll(".pcard")].filter((el) => el !== d.el);
     const to = sibs.reduce((acc, el) => {
       const cX = p.left + el.offsetLeft + el.offsetWidth / 2;
       const cY = p.top + el.offsetTop + el.offsetHeight / 2;
@@ -363,31 +371,50 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
     if (to !== cur && cur >= 0) {
       const ids = cards.map((c) => c.id).filter((x) => x !== d.id);
       ids.splice(to, 0, d.id);
+      try { navigator.vibrate && navigator.vibrate(8); } catch {}
       onReorder(ids);
     }
   };
+
   const up = (e) => {
     const d = drag.current;
-    if (!d || (e && e.pointerId !== d.pointerId)) return;
-    if (d.hoverEl) {                              // released over a valid target → play it
-      const isDiscard = d.hoverEl.hasAttribute("data-discard");
-      const owner = d.hoverEl.getAttribute("data-owner"), idx = +d.hoverEl.getAttribute("data-idx");
-      const id = d.id;
-      reset(d);
+    if (!d || (e && e.pointerId !== undefined && e.pointerId !== d.pointerId)) return;
+    const { hoverEl, moved, id } = d;
+    if (hoverEl) {
+      const isDiscard = hoverEl.hasAttribute("data-discard");
+      const owner = hoverEl.getAttribute("data-owner"), idx = +hoverEl.getAttribute("data-idx");
+      endDrag(false);
       if (isDiscard) onDropOnDiscard && onDropOnDiscard(id);
       else onDropOnMeld && onDropOnMeld(id, owner, idx);
       return;
     }
-    const wasTap = !d.moved;
-    const id = d.id;
-    reset(d);
-    if (wasTap && interactive) onSelect(id);      // simple tap → select
+    endDrag(true);
+    if (!moved && interactive) onSelect(id);      // simple tap → select
   };
+
+  const down = (e, id) => {
+    if (drag.current) return;                     // one drag at a time
+    const el = e.currentTarget;
+    const d = { id, el, pointerId: e.pointerId, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY,
+      px: 0, py: 0, grabX: 0, grabY: 0, raf: 0, moved: false, hoverEl: null, ghost: null,
+      lastEvent: performance.now() };
+    d.onMove = move;
+    d.onUp = up;
+    d.onCancel = () => endDrag(true);
+    d.onVis = () => { if (document.visibilityState !== "visible") endDrag(false); };
+    drag.current = d;
+    // window-level listeners survive element churn and iOS gesture interrupts
+    window.addEventListener("pointermove", d.onMove);
+    window.addEventListener("pointerup", d.onUp);
+    window.addEventListener("pointercancel", d.onCancel);
+    window.addEventListener("blur", d.onCancel);
+    document.addEventListener("visibilitychange", d.onVis);
+  };
+
   return html`<div ref=${wrap} class=${`hand ${flat ? "flat" : ""}`}>
     ${cards.map((c, i) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id}
-      dragging=${!!(drag.current && drag.current.id === c.id && drag.current.moved)}
       fan=${flat ? null : fanOf(i, cards.length, selectedId === c.id)}
-      onPointerDown=${(e) => down(e, c.id)} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up} />`)}
+      onPointerDown=${(e) => down(e, c.id)} />`)}
   </div>`;
 }
 
