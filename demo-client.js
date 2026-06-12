@@ -32,6 +32,7 @@ function seed() {
     ],
     bets: [],
     matches: [],
+    trash_talk: [],
     push_subscriptions: [],
     date_ideas: [
       { id: uid(), label: "Sushi night", emoji: "🍣", category: "food", active: true, added_by: peaches, created_at: nowISO() },
@@ -71,13 +72,14 @@ const DEFAULTS = {
   rewards: { cost: 50, emoji: "🎁", active: true, sort: 0 },
   bets: { stake: 10, status: "open", winner_id: null, settled_at: null },
   matches: { status: "playing", version: 0 },
+  trash_talk: { player_id: null },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
   events: { emoji: "💗", starts_at: null, notes: null, location: null, kind: "invite", created_by: null, rsvp: "pending" },
 };
 
 function matches(row, filters) {
-  return filters.every((f) => (f.op === "gte" ? row[f.col] >= f.val : row[f.col] === f.val));
+  return filters.every((f) => f.op === "gte" ? row[f.col] >= f.val : f.op === "lt" ? row[f.col] < f.val : row[f.col] === f.val);
 }
 
 // Minimal thenable query builder mirroring the bits of supabase-js the app uses.
@@ -87,6 +89,7 @@ function query(db, table) {
     select(str) { state.selectStr = str || "*"; if (state.op !== "select") state._returnRows = true; return builder; },
     eq(col, val) { state.filters.push({ col, val }); return builder; },
     gte(col, val) { state.filters.push({ col, val, op: "gte" }); return builder; },
+    lt(col, val) { state.filters.push({ col, val, op: "lt" }); return builder; },
     order(col, opts) { state.orders.push({ col, asc: !opts || opts.ascending !== false }); return builder; },
     limit(n) { state.limitN = n; return builder; },
     single() { state.single = true; return builder; },

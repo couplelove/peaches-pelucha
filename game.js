@@ -141,6 +141,44 @@ export function PlayTab(ctx) {
 
   const oppOnline = demoMode || !!(opp && online[opp.id]);
   const bothOnline = demoMode || (!!online[me.id] && !!(opp && online[opp.id]));
+
+  // ---- 💩 trash talk: per-hand chat bubbles, purged when the next hand deals
+  const [talk, setTalk] = useState([]);
+  const [talkOpen, setTalkOpen] = useState(false);
+  const [talkText, setTalkText] = useState("");
+  const matchId = match ? match.id : null;
+  const handNo = match && match.state ? match.state.handNumber : null;
+  const loadTalk = useCallback(async () => {
+    if (!matchId || !handNo) { setTalk([]); return; }
+    const { data } = await client.from("trash_talk").select("*")
+      .eq("match_id", matchId).eq("hand_number", handNo).order("created_at");
+    if (data) setTalk(data);
+    // purge older hands' smack opportunistically (fire & forget)
+    client.from("trash_talk").delete().eq("match_id", matchId).lt("hand_number", handNo).then(() => {});
+  }, [client, matchId, handNo]);
+  useEffect(() => { loadTalk(); }, [loadTalk]);
+  useEffect(() => {
+    if (demoMode || !matchId) return;
+    const ch = client.channel("pp-talk")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "trash_talk" }, (p) => {
+        const r = p.new;
+        if (r.match_id === matchId && r.hand_number === handNo) {
+          setTalk((t) => (t.some((x) => x.id === r.id) ? t : [...t, r]));
+          if (r.player_id !== me.id) { try { navigator.vibrate && navigator.vibrate(15); } catch {} }
+        }
+      }).subscribe();
+    return () => { try { client.removeChannel(ch); } catch {} };
+  }, [client, matchId, handNo, demoMode]);
+  const sendTalk = async () => {
+    const text = talkText.trim().slice(0, 140);
+    if (!text || !matchId) return;
+    setTalkText("");
+    const optimistic = { id: "t" + Math.random().toString(36).slice(2), match_id: matchId, hand_number: handNo, player_id: me.id, text, created_at: new Date().toISOString() };
+    setTalk((t) => [...t, optimistic]);
+    const { data } = await client.from("trash_talk")
+      .insert({ match_id: matchId, hand_number: handNo, player_id: me.id, text }).select().single();
+    if (data) setTalk((t) => t.map((x) => (x.id === optimistic.id ? data : x)));
+  };
   const canReact = !!match && reactedVer !== match.version;
   const sendReact = (emoji) => {
     if (!canReact) return;
@@ -187,8 +225,16 @@ export function PlayTab(ctx) {
                  </span>`}
       </div>`}
       <div class="gamefs-body">
-        <${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} oppOnline=${oppOnline} />
+        <${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} oppOnline=${oppOnline} talk=${talk} />
       </div>
+
+      <button class=${`talkfab ${talkOpen ? "on" : ""}`} title="Talk your shit" onClick=${() => setTalkOpen(!talkOpen)}>💩</button>
+      ${talkOpen && html`<div class="talkbar">
+        <input placeholder="talk your shit…" maxlength="140" value=${talkText} autoFocus
+          onInput=${(e) => setTalkText(e.target.value)}
+          onKeyDown=${(e) => { if (e.key === "Enter") sendTalk(); }} />
+        <button class="btn sm" disabled=${!talkText.trim()} onClick=${sendTalk}>💩 Send</button>
+      </div>`}
 
       ${bothOnline && html`<button class=${`reactfab ${canReact ? "" : "used"}`}
         title=${canReact ? "React" : "One per move 😉"}
@@ -469,6 +515,20 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
   </div>`;
 }
 
+// 💩 per-hand chat bubbles — fills the dead space between the piles and your
+// hand; scrolls smoothly, auto-follows the newest message.
+function TalkStrip({ talk, meId, pinfo }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [talk.length]);
+  if (!talk.length) return null;
+  return html`<div class="talkstrip" ref=${ref}>
+    ${talk.map((m) => html`<div class=${`tbub ${m.player_id === meId ? "mine" : ""}`} key=${m.id}>
+      ${m.player_id !== meId && html`<span class="tb-who">${pinfo(m.player_id).emoji}</span>`}
+      <span class="tb-txt">${m.text}</span>
+    </div>`)}
+  </div>`;
+}
+
 function Meld({ meld, hittable, onHit, owner, idx }) {
   return html`<div class=${`meld ${hittable ? "hit" : ""}`} onClick=${hittable ? onHit : null}
     data-meld="1" data-owner=${owner} data-idx=${idx}>
@@ -629,6 +689,7 @@ function Board(props) {
 
       <!-- my zone -->
       <div class="zone mine">
+        <${TalkStrip} talk=${props.talk || []} meId=${meId} pinfo=${pinfo} />
         ${(s.table[meId] || []).length > 0 && html`<div class=${`melds ${slam === meId ? "slam" : ""}`}>
           ${s.table[meId].map((m, i) => html`<${Meld} key=${i} meld=${m} owner=${meId} idx=${i}
             hittable=${tapHittable(m)} onHit=${() => doHit(meId, i)} />`)}
