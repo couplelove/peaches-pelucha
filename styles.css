@@ -380,6 +380,45 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   100% { transform: translateY(-64vh) scale(.95) rotate(10deg); opacity: 0; }
 }
 
+/* ---- 📸 memories: gallery, lightbox, match game ---- */
+.memday { font-family: var(--serif); font-weight: 500; font-size: 15px; color: var(--ink); margin: 16px 0 8px; }
+.memgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.memcell { position: relative; border: none; padding: 0; background: var(--paper-2); border-radius: 10px;
+  overflow: hidden; aspect-ratio: 1; cursor: pointer; }
+.memcell img, .memcell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.memcell:active { transform: scale(.97); }
+.memplay { position: absolute; inset: 0; display: grid; place-content: center; color: #fff;
+  font-size: 22px; text-shadow: 0 1px 8px rgba(0,0,0,.55); pointer-events: none; }
+
+.upbar { height: 4px; border-radius: 999px; background: var(--paper-2); margin: 12px 0; overflow: hidden; }
+.upbar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .25s ease; }
+
+.memskel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+.memskel-cell { aspect-ratio: 1; border-radius: 10px; background: linear-gradient(100deg, var(--paper-2) 40%, var(--line-2) 50%, var(--paper-2) 60%); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+.lightbox { position: fixed; inset: 0; z-index: 90; background: rgba(26,22,19,.96); display: flex;
+  flex-direction: column; animation: fade .15s ease; touch-action: none; }
+.lb-stage { flex: 1; display: grid; place-content: center; min-height: 0; padding: 12px; }
+.lb-stage img, .lb-stage video { max-width: 96vw; max-height: 82vh; border-radius: 10px; object-fit: contain; }
+.lb-close { position: absolute; top: calc(var(--safe-top) + 10px); right: 14px; z-index: 2; width: 38px; height: 38px;
+  border-radius: 50%; border: none; background: rgba(255,255,255,.14); color: #fff; font-size: 17px; cursor: pointer; }
+.lb-meta { text-align: center; color: rgba(255,255,255,.65); font-size: 12.5px; padding: 0 0 calc(16px + var(--safe-bottom)); }
+
+.matchgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mcard { border: none; background: none; padding: 0; aspect-ratio: 3/4; cursor: pointer; perspective: 600px; }
+.mcard-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
+  transition: transform .45s cubic-bezier(.3,.9,.3,1.05); }
+.mcard.up .mcard-inner { transform: rotateY(180deg); }
+.mcard-back, .mcard-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  border-radius: 12px; overflow: hidden; }
+.mcard-back { background: var(--ink); display: grid; place-content: center; font-size: 22px;
+  box-shadow: 0 2px 7px -2px rgba(43,37,33,.3); }
+.mcard-face { transform: rotateY(180deg); background: var(--paper-2); }
+.mcard-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mcard.done { animation: gopop .45s cubic-bezier(.2,1.4,.4,1); }
+.mcard.done .mcard-face { outline: 3px solid var(--good); outline-offset: -3px; }
+
 /* ---- 💩 trash talk ---- */
 .talkfab { position: fixed; left: 18px; bottom: calc(26px + var(--safe-bottom)); z-index: 70;
   width: 54px; height: 54px; border-radius: 50%; border: 1px solid var(--line);

@@ -33,6 +33,7 @@ function seed() {
     bets: [],
     matches: [],
     trash_talk: [],
+    memories: [],
     push_subscriptions: [],
     date_ideas: [
       { id: uid(), label: "Sushi night", emoji: "🍣", category: "food", active: true, added_by: peaches, created_at: nowISO() },
@@ -73,6 +74,7 @@ const DEFAULTS = {
   bets: { stake: 10, status: "open", winner_id: null, settled_at: null },
   matches: { status: "playing", version: 0 },
   trash_talk: { player_id: null },
+  memories: { kind: "photo", uploaded_by: null },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
   events: { emoji: "💗", starts_at: null, notes: null, location: null, kind: "invite", created_by: null, rsvp: "pending" },
@@ -152,6 +154,7 @@ export function createDemoClient() {
     channel() { return { on() { return this; }, subscribe() { return this; } }; },
     removeChannel() {},
     functions: { invoke: async () => ({ data: null, error: null }) }, // push no-op in demo
+    storage: { from: () => ({ upload: async () => ({ error: { message: "demo mode — no storage" } }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
     _db: db,
   };
   // Demo-only handle so the app's in-memory data can be inspected/crafted from

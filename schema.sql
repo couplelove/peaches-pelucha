@@ -278,3 +278,27 @@ do $$ begin
   alter publication supabase_realtime add table trash_talk;
 exception when duplicate_object then null;
 end $$;
+
+-- ---- 📸 Memories (gallery + same-day match game) ----------------------------
+create table if not exists memories (
+  id          uuid primary key default gen_random_uuid(),
+  path        text not null unique,
+  kind        text not null default 'photo',   -- 'photo' | 'video'
+  taken_on    date not null,
+  uploaded_by uuid references players(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+alter table memories enable row level security;
+drop policy if exists anon_all on memories;
+create policy anon_all on memories
+  for all to anon, authenticated using (true) with check (true);
+do $$ begin
+  alter publication supabase_realtime add table memories;
+exception when duplicate_object then null;
+end $$;
+insert into storage.buckets (id, name, public) values ('memories','memories', true)
+on conflict (id) do update set public = true;
+drop policy if exists memories_all on storage.objects;
+create policy memories_all on storage.objects
+  for all to anon, authenticated
+  using (bucket_id = 'memories') with check (bucket_id = 'memories');
