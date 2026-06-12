@@ -12,18 +12,45 @@ const dayHead = (iso) => {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "long", day: "numeric", year: "numeric" });
 };
 
-// client-side photo downscale → fast uploads, consistent quality
+// client-side photo downscale → fast uploads, consistent quality.
+// Two decode paths: createImageBitmap (fast) falling back to an <img> decode
+// (handles iPhone HEIC on Safari, where createImageBitmap can refuse).
+async function decodeImage(file) {
+  try { return await createImageBitmap(file); } catch {}
+  return await new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("undecodable image")); };
+    img.src = url;
+  });
+}
 async function shrinkPhoto(file) {
-  try {
-    const bmp = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
-    const w = Math.round(bmp.width * scale), hh = Math.round(bmp.height * scale);
-    const cv = document.createElement("canvas");
-    cv.width = w; cv.height = hh;
-    cv.getContext("2d").drawImage(bmp, 0, 0, w, hh);
-    const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.82));
-    return blob || file;
-  } catch { return file; }   // HEIC on non-Safari etc. → upload original
+  const src = await decodeImage(file);            // throws if truly undecodable
+  const w0 = src.naturalWidth || src.width, h0 = src.naturalHeight || src.height;
+  const scale = Math.min(1, 1600 / Math.max(w0, h0));
+  const w = Math.round(w0 * scale), hh = Math.round(h0 * scale);
+  const cv = document.createElement("canvas");
+  cv.width = w; cv.height = hh;
+  cv.getContext("2d").drawImage(src, 0, 0, w, hh);
+  if (src.close) try { src.close(); } catch {}
+  if (src.src) try { URL.revokeObjectURL(src.src); } catch {}
+  const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.82));
+  if (!blob) throw new Error("couldn’t encode image");
+  return blob;
+}
+
+// upload with retries — mobile networks drop large bodies routinely
+async function uploadWithRetry(client, path, blob, contentType) {
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { error } = await client.storage.from("memories")
+      .upload(path, blob, { contentType, cacheControl: "31536000", upsert: true });
+    if (!error) return;
+    lastErr = error;
+    await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+  }
+  throw lastErr || new Error("upload failed");
 }
 
 export function MemoriesTab({ client, me, flash }) {
@@ -58,32 +85,91 @@ export function MemoriesTab({ client, me, flash }) {
     return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
   }, [client, load]);
 
+  // Concurrent upload queue (3 lanes) with per-file status — photos shrink
+  // on-device first; videos go as-is (50MB storage cap surfaced honestly).
   const onPick = async (e) => {
     const files = [...(e.target.files || [])];
     e.target.value = "";
     if (!files.length) return;
-    setUploads({ done: 0, total: files.length });
-    let ok = 0;
-    for (const f of files) {
+    const jobs = files.map((f, i) => ({ i, f, status: "queued" }));
+    const paint = () => setUploads({ done: jobs.filter((j) => j.status === "done" || j.status === "failed").length, total: jobs.length, failed: jobs.filter((j) => j.status === "failed").length });
+    paint();
+    const runJob = async (j) => {
+      const f = j.f;
       try {
         const isVideo = f.type.startsWith("video/");
-        const blob = isVideo ? f : await shrinkPhoto(f);
-        const ext = isVideo ? (f.name.toLowerCase().endsWith(".mov") ? "mov" : "mp4") : "jpg";
+        if (isVideo && f.size > 49 * 1024 * 1024) throw new Error("video over 50MB — trim it first");
+        j.status = "working"; paint();
+        let blob, ext, ct;
+        if (isVideo) { blob = f; ext = f.name.toLowerCase().endsWith(".mov") ? "mov" : "mp4"; ct = f.type || "video/mp4"; }
+        else { blob = await shrinkPhoto(f); ext = "jpg"; ct = "image/jpeg"; }
         const path = `u${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error: upErr } = await client.storage.from("memories")
-          .upload(path, blob, { contentType: isVideo ? f.type : "image/jpeg", cacheControl: "31536000" });
-        if (upErr) throw upErr;
+        await uploadWithRetry(client, path, blob, ct);
         const taken = new Date(f.lastModified || Date.now());
         const taken_on = `${taken.getFullYear()}-${String(taken.getMonth() + 1).padStart(2, "0")}-${String(taken.getDate()).padStart(2, "0")}`;
         const { error: rowErr } = await client.from("memories")
           .insert({ path, kind: isVideo ? "video" : "photo", taken_on, uploaded_by: me.id });
         if (rowErr) throw rowErr;
-        ok += 1;
-      } catch (err) { flash("⚠️ " + (err.message || "upload failed")); }
-      setUploads((u) => (u ? { ...u, done: u.done + 1 } : u));
-    }
+        j.status = "done";
+      } catch (err) {
+        j.status = "failed"; j.err = err.message || "failed";
+      }
+      paint();
+    };
+    const lanes = Array.from({ length: 3 }, async () => {
+      for (;;) {
+        const j = jobs.find((x) => x.status === "queued");
+        if (!j) return;
+        j.status = "working";
+        await runJob(j);
+      }
+    });
+    await Promise.all(lanes);
+    const ok = jobs.filter((j) => j.status === "done").length;
+    const failed = jobs.filter((j) => j.status === "failed");
     setUploads(null);
-    if (ok) { flash(`Added ${ok} ${ok === 1 ? "memory" : "memories"} 📸`); load(); }
+    if (ok) load();
+    if (failed.length) flash(`⚠️ ${failed.length} failed (${failed[0].err})${ok ? ` · ${ok} added` : ""}`);
+    else if (ok) flash(`Added ${ok} ${ok === 1 ? "memory" : "memories"} 📸`);
+  };
+
+  // tap & hold a memory → options (save / delete)
+  const [sheet, setSheet] = useState(null);          // a memory item
+  const press = useRef(null);
+  const holdStart = (it) => (e) => {
+    press.current = { t: setTimeout(() => { press.current = { fired: true }; try { navigator.vibrate && navigator.vibrate(30); } catch {} setSheet(it); }, 480), fired: false };
+  };
+  const holdEnd = (it) => () => {
+    const p = press.current;
+    if (p && p.t) clearTimeout(p.t);
+    const fired = p && p.fired;
+    press.current = null;
+    if (!fired) setLightbox(flat.indexOf(it));       // normal tap → lightbox
+  };
+  const holdCancel = () => { const p = press.current; if (p && p.t) clearTimeout(p.t); press.current = null; };
+
+  const saveItem = async (it) => {
+    try {
+      const res = await fetch(pubUrl(it.path));
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = it.path;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      flash("Saving 📥");
+    } catch { flash("⚠️ couldn’t fetch the file"); }
+    setSheet(null);
+  };
+  const deleteItem = async (it) => {
+    if (!confirm("Delete this memory for both of you?")) return;
+    try {
+      await client.storage.from("memories").remove([it.path]);
+      await client.from("memories").delete().eq("id", it.id);
+      flash("Deleted");
+      setSheet(null);
+      load();
+    } catch (err) { flash("⚠️ " + (err.message || "delete failed")); }
   };
 
   // group by day for the gallery
@@ -101,9 +187,9 @@ export function MemoriesTab({ client, me, flash }) {
 
   return html`<div>
     <div class="card">
-      <div class="row between">
-        <h2 style="margin:0">Memories</h2>
-        <div class="row" style="gap:8px">
+      <div class="shead">
+        <h2>Memories</h2>
+        <div class="shead-actions">
           <div class="seg" style="padding:3px">
             <button class=${view === "gallery" ? "on" : ""} onClick=${() => setView("gallery")}>Gallery</button>
             <button class=${view === "game" ? "on" : ""} onClick=${() => setView("game")}>Match</button>
@@ -116,6 +202,7 @@ export function MemoriesTab({ client, me, flash }) {
       <input ref=${fileInput} type="file" accept="image/*,video/*" multiple style="display:none" onChange=${onPick} />
 
       ${uploads && html`<div class="upbar"><div class="upbar-fill" style=${`width:${Math.round((uploads.done / uploads.total) * 100)}%`}></div></div>`}
+      ${uploads && html`<div class="tiny muted" style="margin:-6px 0 10px">uploading ${uploads.done}/${uploads.total}${uploads.failed ? ` · ${uploads.failed} failed` : ""}</div>`}
 
       ${items === null && html`<div class="memskel">${[...Array(9)].map((_, i) => html`<div class="memskel-cell" key=${i}></div>`)}</div>`}
       ${items !== null && items.length === 0 && html`<div class="empty"><span class="big">📸</span>No memories yet — add your first.</div>`}
@@ -123,7 +210,10 @@ export function MemoriesTab({ client, me, flash }) {
       ${view === "gallery" && groups.map((g) => html`<div key=${g.date}>
         <div class="memday">${dayHead(g.date)}</div>
         <div class="memgrid">
-          ${g.items.map((it) => html`<button class="memcell" key=${it.id} onClick=${() => setLightbox(flat.indexOf(it))}>
+          ${g.items.map((it) => html`<button class="memcell" key=${it.id}
+            onPointerDown=${holdStart(it)} onPointerUp=${holdEnd(it)}
+            onPointerMove=${holdCancel} onPointerCancel=${holdCancel}
+            onContextMenu=${(e) => e.preventDefault()}>
             ${it.kind === "video"
               ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline></video><span class="memplay">▶</span>`
               : html`<img src=${pubUrl(it.path)} loading="lazy" alt="" />`}
@@ -135,12 +225,27 @@ export function MemoriesTab({ client, me, flash }) {
     </div>
 
     ${lightbox !== null && html`<${Lightbox} items=${flat} index=${lightbox} pubUrl=${pubUrl}
-      onClose=${() => setLightbox(null)} onNav=${(i) => setLightbox(i)} />`}
+      onClose=${() => setLightbox(null)} onNav=${(i) => setLightbox(i)} onOptions=${(it) => setSheet(it)} />`}
+
+    ${sheet && html`<div class="modal-bg asheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setSheet(null); }}>
+      <div class="modal">
+        <div class="handle"></div>
+        <div class="asheet-preview">
+          ${sheet.kind === "video"
+            ? html`<video src=${pubUrl(sheet.path) + "#t=0.1"} preload="metadata" muted playsinline></video>`
+            : html`<img src=${pubUrl(sheet.path)} alt="" />`}
+          <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}</div>
+        </div>
+        <button class="btn ghost block mt" onClick=${() => saveItem(sheet)}>📥 Save to device</button>
+        <button class="btn ghost block mt" style="color:var(--bad);border-color:var(--bad)" onClick=${() => deleteItem(sheet)}>🗑 Delete for both</button>
+        <button class="linkbtn block mt" style="width:100%" onClick=${() => setSheet(null)}>Cancel</button>
+      </div>
+    </div>`}
   </div>`;
 }
 
 /* ---- fullscreen lightbox: swipe between memories, videos play inline ---- */
-function Lightbox({ items, index, pubUrl, onClose, onNav }) {
+function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions }) {
   const it = items[index];
   const start = useRef(null);
   const down = (e) => { start.current = { x: e.clientX, y: e.clientY }; };
@@ -165,6 +270,7 @@ function Lightbox({ items, index, pubUrl, onClose, onNav }) {
   if (!it) return null;
   return html`<div class="lightbox" onPointerDown=${down} onPointerUp=${up}>
     <button class="lb-close" onClick=${onClose}>✕</button>
+    <button class="lb-opts" onClick=${() => { onClose(); onOptions && onOptions(it); }}>⋯</button>
     <div class="lb-stage">
       ${it.kind === "video"
         ? html`<video key=${it.id} src=${pubUrl(it.path)} controls autoplay playsinline></video>`

@@ -101,9 +101,11 @@ export function DateRoulette({ client, me, players, flash, onPlan }) {
   const removeIdea = async (id) => { await client.from("date_ideas").delete().eq("id", id); load(); };
 
   return html`<div class="card roulette">
-    <div class="row between">
-      <h2 style="margin:0">Date night roulette</h2>
-      <button class="linkbtn" onClick=${() => setManage(!manage)}>${manage ? "Done" : "Edit"}</button>
+    <div class="shead">
+      <h2>Date night roulette</h2>
+      <div class="shead-actions">
+        <button class="linkbtn" onClick=${() => setManage(!manage)}>${manage ? "Done" : "Edit"}</button>
+      </div>
     </div>
 
     <div class="seg mt">

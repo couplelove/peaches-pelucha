@@ -491,8 +491,8 @@ function BetsTab(ctx) {
   const done = bets.filter((b) => b.status !== "open");
   return html`
     <div class="card">
-      <div class="row between"><h2 style="margin:0">Open bets</h2>
-        <button class="btn sm" onClick=${() => setModal({ type: "newBet" })}>＋ New</button></div>
+      <div class="shead"><h2>Open bets</h2>
+        <div class="shead-actions"><button class="btn sm" onClick=${() => setModal({ type: "newBet" })}>＋ New</button></div></div>
       ${!open.length && html`<div class="empty"><span class="big">🤝</span>No live wagers. Make one!</div>`}
       <div class="list">
         ${open.map((b) => {
@@ -538,8 +538,8 @@ function ShopTab(ctx) {
       <div class="balance-big">${bal} 💗</div>
     </div>
     <div class="card">
-      <div class="row between"><h2 style="margin:0">Reward shop</h2>
-        <button class="btn sm ghost" onClick=${() => setModal({ type: "manageRewards" })}>Edit</button></div>
+      <div class="shead"><h2>Reward shop</h2>
+        <div class="shead-actions"><button class="btn sm ghost" onClick=${() => setModal({ type: "manageRewards" })}>Edit</button></div></div>
       ${!active.length && html`<div class="empty"><span class="big">🎁</span>No rewards yet — add some!</div>`}
       <div class="list">
         ${active.map((r) => {
