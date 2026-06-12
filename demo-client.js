@@ -83,7 +83,7 @@ const DEFAULTS = {
 };
 
 function matches(row, filters) {
-  return filters.every((f) => f.op === "gte" ? row[f.col] >= f.val : f.op === "lt" ? row[f.col] < f.val : row[f.col] === f.val);
+  return filters.every((f) => f.op === "gte" ? row[f.col] >= f.val : f.op === "lt" ? row[f.col] < f.val : f.op === "in" ? f.vals.includes(row[f.col]) : row[f.col] === f.val);
 }
 
 // Minimal thenable query builder mirroring the bits of supabase-js the app uses.
@@ -94,6 +94,7 @@ function query(db, table) {
     eq(col, val) { state.filters.push({ col, val }); return builder; },
     gte(col, val) { state.filters.push({ col, val, op: "gte" }); return builder; },
     lt(col, val) { state.filters.push({ col, val, op: "lt" }); return builder; },
+    in(col, vals) { state.filters.push({ col, vals, op: "in" }); return builder; },
     order(col, opts) { state.orders.push({ col, asc: !opts || opts.ascending !== false }); return builder; },
     limit(n) { state.limitN = n; return builder; },
     single() { state.single = true; return builder; },
@@ -156,7 +157,7 @@ export function createDemoClient() {
     channel() { return { on() { return this; }, subscribe() { return this; } }; },
     removeChannel() {},
     functions: { invoke: async () => ({ data: null, error: null }) }, // push no-op in demo
-    storage: { from: () => ({ upload: async () => ({ error: { message: "demo mode — no storage" } }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
+    storage: { from: () => ({ upload: async () => ({ error: { message: "demo mode — no storage" } }), remove: async () => ({ data: null, error: null }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
     _db: db,
   };
   // Demo-only handle so the app's in-memory data can be inspected/crafted from

@@ -241,6 +241,77 @@ export function MemoriesTab({ client, me, flash }) {
   };
   const holdCancel = () => { const p = press.current; if (p && p.t) clearTimeout(p.t); press.current = null; };
 
+  /* ---- select mode: tap to toggle, drag across cells to sweep-select ----
+     (cells get touch-action: pan-y, so vertical scrolling still works) */
+  const [sel, setSel] = useState(null);              // null = browsing; Set of ids = selecting
+  const [editor, setEditor] = useState(null);        // {type:'date'|'place', ids:[...]}
+  const [busy, setBusy] = useState(false);
+  const edInput = useRef(null);
+  const dragSel = useRef(null);
+  const selToggle = (id, to) => setSel((s) => { const n = new Set(s); to ? n.add(id) : n.delete(id); return n; });
+  const selDown = (it) => () => {
+    const to = !sel.has(it.id);
+    dragSel.current = { to, seen: new Set([it.id]) };
+    selToggle(it.id, to);
+    try { navigator.vibrate && navigator.vibrate(8); } catch {}
+  };
+  const selMove = (e) => {
+    const d = dragSel.current;
+    if (!d) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const cell = el && el.closest && el.closest(".memcell[data-id]");
+    const id = cell && cell.dataset.id;
+    if (id && !d.seen.has(id)) { d.seen.add(id); selToggle(id, d.to); try { navigator.vibrate && navigator.vibrate(4); } catch {} }
+  };
+  const selUp = () => { dragSel.current = null; };
+  const dayToggle = (g) => () => {
+    const all = g.items.every((i) => sel.has(i.id));
+    setSel((s) => { const n = new Set(s); g.items.forEach((i) => (all ? n.delete(i.id) : n.add(i.id))); return n; });
+    try { navigator.vibrate && navigator.vibrate(8); } catch {}
+  };
+
+  const bulkDelete = async () => {
+    const its = (items || []).filter((it) => sel.has(it.id));
+    if (!its.length) return;
+    if (!confirm(`Delete ${its.length === 1 ? "this memory" : `these ${its.length} memories`} for both of you?`)) return;
+    setBusy(true);
+    try {
+      try { await client.storage.from("memories").remove(its.map((i) => i.path)); } catch {}
+      const { error } = await client.from("memories").delete().in("id", its.map((i) => i.id));
+      if (error) throw error;
+      flash(`Deleted ${its.length}`);
+      setSel(null);
+      load();
+    } catch (err) { flash("⚠️ " + (err.message || "delete failed")); }
+    setBusy(false);
+  };
+
+  const editorDefault = () => {
+    const first = (items || []).find((i) => editor.ids.includes(i.id));
+    return editor.type === "date" ? (first ? first.taken_on : "") : ((first && first.place) || "");
+  };
+  const applyEditor = async (clear) => {
+    const ids = editor.ids;
+    let patch;
+    if (editor.type === "date") {
+      const v = edInput.current && edInput.current.value;
+      if (!v) return;
+      patch = { taken_on: v };
+    } else {
+      const v = clear === true ? "" : ((edInput.current && edInput.current.value) || "").trim();
+      patch = { place: v || null, lat: null, lng: null };   // hand-set place ≠ the photo's GPS
+    }
+    setBusy(true);
+    try {
+      const { error } = await client.from("memories").update(patch).in("id", ids);
+      if (error) throw error;
+      flash(`${editor.type === "date" ? "📅" : "📍"} ${ids.length} updated`);
+      setEditor(null); setSheet(null); setSel(null);
+      load();
+    } catch (err) { flash("⚠️ " + (err.message || "update failed")); }
+    setBusy(false);
+  };
+
   const saveItem = async (it) => {
     try {
       const res = await fetch(pubUrl(it.path));
@@ -283,13 +354,15 @@ export function MemoriesTab({ client, me, flash }) {
       <div class="shead">
         <h2>Memories</h2>
         <div class="shead-actions">
-          <div class="seg" style="padding:3px">
+          ${sel ? html`<button class="btn sm" onClick=${() => setSel(null)}>Done</button>`
+          : html`<div class="seg" style="padding:3px">
             <button class=${view === "gallery" ? "on" : ""} onClick=${() => setView("gallery")}>Gallery</button>
             <button class=${view === "game" ? "on" : ""} onClick=${() => setView("game")}>Match</button>
           </div>
+          ${view === "gallery" && items && items.length > 0 && html`<button class="linkbtn micro" onClick=${() => setSel(new Set())}>Select</button>`}
           <button class="btn sm" disabled=${!!uploads} onClick=${() => fileInput.current && fileInput.current.click()}>
             ${uploads ? `${uploads.done}/${uploads.total}…` : "＋ Add"}
-          </button>
+          </button>`}
         </div>
       </div>
       <input ref=${fileInput} type="file" accept="image/*,video/*" multiple style="display:none" onChange=${onPick} />
@@ -301,11 +374,13 @@ export function MemoriesTab({ client, me, flash }) {
       ${items !== null && items.length === 0 && html`<div class="empty"><span class="big">📸</span>No memories yet — add your first.</div>`}
 
       ${view === "gallery" && groups.map((g) => html`<div key=${g.date}>
-        <div class="memday">${dayHead(g.date)}</div>
+        <div class="memday">${dayHead(g.date)}
+          ${sel && html`<button class=${`dayall ${g.items.every((i) => sel.has(i.id)) ? "on" : ""}`} onClick=${dayToggle(g)}>✓</button>`}
+        </div>
         <div class="memgrid">
-          ${g.items.map((it) => html`<button class="memcell" key=${it.id}
-            onPointerDown=${holdStart(it)} onPointerUp=${holdEnd(it)}
-            onPointerMove=${holdCancel} onPointerCancel=${holdCancel}
+          ${g.items.map((it) => html`<button class=${`memcell ${sel ? "selble" : ""} ${sel && sel.has(it.id) ? "selon" : ""}`} key=${it.id} data-id=${it.id}
+            onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}
+            onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selUp : holdCancel}
             onContextMenu=${(e) => e.preventDefault()}>
             ${it.kind === "video"
               ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline
@@ -314,6 +389,7 @@ export function MemoriesTab({ client, me, flash }) {
               : html`<img src=${pubUrl(it.path)} loading="lazy" alt=""
                   onLoad=${(e) => e.target.classList.add("ld")}
                   ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
+            ${sel && html`<span class="selbadge">${sel.has(it.id) ? "✓" : ""}</span>`}
           </button>`)}
         </div>
       </div>`)}
@@ -334,8 +410,32 @@ export function MemoriesTab({ client, me, flash }) {
           <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}${sheet.place ? " · 📍 " + sheet.place : ""}</div>
         </div>
         <button class="btn ghost block mt" onClick=${() => saveItem(sheet)}>📥 Save to device</button>
+        <div class="sheetduo mt">
+          <button class="btn ghost" onClick=${() => setEditor({ type: "date", ids: [sheet.id] })}>📅 Date</button>
+          <button class="btn ghost" onClick=${() => setEditor({ type: "place", ids: [sheet.id] })}>📍 Place</button>
+        </div>
         <button class="btn ghost block mt" style="color:var(--bad);border-color:var(--bad)" onClick=${() => deleteItem(sheet)}>🗑 Delete for both</button>
         <button class="linkbtn block mt" style="width:100%" onClick=${() => setSheet(null)}>Cancel</button>
+      </div>
+    </div>`}
+
+    ${sel && html`<div class="selbar">
+      <span class="selcount">${sel.size}</span>
+      <button class="selact" disabled=${!sel.size || busy} onClick=${() => setEditor({ type: "date", ids: [...sel] })}>📅</button>
+      <button class="selact" disabled=${!sel.size || busy} onClick=${() => setEditor({ type: "place", ids: [...sel] })}>📍</button>
+      <button class="selact" disabled=${!sel.size || busy} onClick=${bulkDelete}>🗑</button>
+    </div>`}
+
+    ${editor && html`<div class="modal-bg asheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setEditor(null); }}>
+      <div class="modal">
+        <div class="handle"></div>
+        <div class="eyebrow" style="margin-bottom:10px">${editor.type === "date" ? "📅 date" : "📍 place"} · ${editor.ids.length} ${editor.ids.length === 1 ? "memory" : "memories"}</div>
+        ${editor.type === "date"
+          ? html`<input ref=${edInput} type="date" value=${editorDefault()} style="width:100%" />`
+          : html`<input ref=${edInput} type="text" value=${editorDefault()} placeholder="City, ST" style="width:100%" />`}
+        <button class="btn block mt" disabled=${busy} onClick=${applyEditor}>${busy ? "…" : "Apply"}</button>
+        ${editor.type === "place" && html`<button class="btn ghost block mt" disabled=${busy} onClick=${() => applyEditor(true)}>Remove place</button>`}
+        <button class="linkbtn block mt" style="width:100%" onClick=${() => setEditor(null)}>Cancel</button>
       </div>
     </div>`}
   </div>`;
