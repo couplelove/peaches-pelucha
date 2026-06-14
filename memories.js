@@ -382,25 +382,39 @@ export function MemoriesTab({ client, me, flash }) {
     else if (ok) flash(`Added ${ok} ${ok === 1 ? "memory" : "memories"} 📸`);
   };
 
-  // tap & hold a memory → options (save / delete)
-  const [sheet, setSheet] = useState(null);          // a memory item
+  // tap & hold ANY memory → start multi-select (and grab that one). Quick tap →
+  // lightbox. Single-item options (save/date/place/delete) live on the
+  // lightbox's ⋯ button.
+  const [sheet, setSheet] = useState(null);          // single-item options sheet
   const press = useRef(null);
-  const holdStart = (it) => (e) => {
-    press.current = { t: setTimeout(() => { press.current = { fired: true }; try { navigator.vibrate && navigator.vibrate(30); } catch {} setSheet(it); }, 480), fired: false };
-  };
   const origin = useRef(null);                       // where the tap landed → lightbox zooms from there
+  const holdStart = (it) => (e) => {
+    const sx = e.clientX, sy = e.clientY;
+    press.current = { sx, sy, fired: false, t: setTimeout(() => {
+      press.current = { fired: true };
+      try { navigator.vibrate && navigator.vibrate(30); } catch {}
+      setSel((s) => { const n = new Set(s || []); n.add(it.id); return n; });   // enter select mode + select this one
+    }, 420) };
+  };
   const holdEnd = (it) => (e) => {
     const p = press.current;
     if (p && p.t) clearTimeout(p.t);
     const fired = p && p.fired;
     press.current = null;
-    if (!fired) {                                    // normal tap → lightbox
+    if (!fired) {                                    // quick tap → lightbox
       const r = e.currentTarget && e.currentTarget.getBoundingClientRect ? e.currentTarget.getBoundingClientRect() : null;
       origin.current = r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
       setLightbox(flat.indexOf(it));
     }
   };
-  const holdCancel = () => { const p = press.current; if (p && p.t) clearTimeout(p.t); press.current = null; };
+  // any real movement before the timer fires = a scroll/drag, not a hold → cancel
+  const holdCancel = (e) => {
+    const p = press.current;
+    if (!p || !p.t) return;
+    const moved = e && e.clientX != null && p.sx != null
+      ? Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 10 : true;
+    if (moved) { clearTimeout(p.t); press.current = null; }
+  };
 
   /* ---- select mode: tap to toggle, drag across cells to sweep-select ----
      (cells get touch-action: pan-y, so vertical scrolling still works) */
@@ -410,21 +424,33 @@ export function MemoriesTab({ client, me, flash }) {
   const edInput = useRef(null);
   const dragSel = useRef(null);
   const selToggle = (id, to) => setSel((s) => { const n = new Set(s); to ? n.add(id) : n.delete(id); return n; });
-  const selDown = (it) => () => {
-    const to = !sel.has(it.id);
-    dragSel.current = { to, seen: new Set([it.id]) };
-    selToggle(it.id, to);
-    try { navigator.vibrate && navigator.vibrate(8); } catch {}
+  // Deliberate gesture: we do NOT toggle on touch-down. A stationary release is
+  // a tap (toggle one). A HORIZONTAL drag engages sweep-select. A VERTICAL drag
+  // is a scroll and selects nothing — fixes accidental selection while scrolling.
+  const selDown = (it) => (e) => {
+    dragSel.current = { id: it.id, sx: e.clientX, sy: e.clientY, mode: "pending", to: !sel.has(it.id), seen: new Set() };
   };
   const selMove = (e) => {
     const d = dragSel.current;
-    if (!d) return;
+    if (!d || d.mode === "scroll") return;
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (d.mode === "pending") {
+      if (Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { d.mode = "scroll"; return; }   // vertical → let the page scroll
+      if (Math.abs(dx) > 12) {                                  // horizontal → deliberate sweep
+        d.mode = "sweep"; d.seen.add(d.id); selToggle(d.id, d.to);
+        try { navigator.vibrate && navigator.vibrate(10); } catch {}
+      } else return;
+    }
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const cell = el && el.closest && el.closest(".memcell[data-id]");
     const id = cell && cell.dataset.id;
     if (id && !d.seen.has(id)) { d.seen.add(id); selToggle(id, d.to); try { navigator.vibrate && navigator.vibrate(4); } catch {} }
   };
-  const selUp = () => { dragSel.current = null; };
+  const selUp = () => {
+    const d = dragSel.current; dragSel.current = null;
+    if (d && d.mode === "pending") { selToggle(d.id, d.to); try { navigator.vibrate && navigator.vibrate(6); } catch {} }  // tap → toggle one
+  };
+  const selCancel = () => { dragSel.current = null; };       // scroll began → make no selection
   const dayToggle = (g) => () => {
     const all = g.items.every((i) => sel.has(i.id));
     setSel((s) => { const n = new Set(s); g.items.forEach((i) => (all ? n.delete(i.id) : n.add(i.id))); return n; });
@@ -543,7 +569,7 @@ export function MemoriesTab({ client, me, flash }) {
         <div class="memgrid">
           ${g.items.map((it) => html`<button class=${`memcell ${sel ? "selble" : ""} ${sel && sel.has(it.id) ? "selon" : ""}`} key=${it.id} data-id=${it.id}
             onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}
-            onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selUp : holdCancel}
+            onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selCancel : holdCancel}
             onContextMenu=${(e) => e.preventDefault()}>
             ${it.blur && html`<span class="memblur" style=${`background-image:url(${it.blur})`}></span>`}
             ${it.kind === "video" && !it.thumb_path
