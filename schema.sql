@@ -288,6 +288,8 @@ create table if not exists memories (
   place       text,
   lat         double precision,
   lng         double precision,
+  thumb_path  text,                             -- ~400px WebP/JPEG (poster for video)
+  blur        text,                             -- tiny data-URL blur-up placeholder
   uploaded_by uuid references players(id) on delete set null,
   created_at  timestamptz not null default now()
 );

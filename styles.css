@@ -407,11 +407,15 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   overflow: hidden; aspect-ratio: 1; cursor: pointer;
   box-shadow: 0 1px 2px rgba(43,37,33,.07);
   transition: transform .28s cubic-bezier(.22,.9,.3,1.02), box-shadow .28s ease; }
-.memcell img, .memcell video { width: 100%; height: 100%; object-fit: cover; display: block;
+.memcell img, .memcell video { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block;
   opacity: 0; transform: scale(1.045); transition: opacity .45s ease, transform .65s cubic-bezier(.22,.9,.3,1); }
 .memcell img.ld, .memcell video.ld { opacity: 1; transform: none; }
+/* blur-up: the tiny data-URL paints instantly behind the thumb, which fades
+   in over it — no white flash, no layout shift while the grid streams in. */
+.memblur { position: absolute; inset: 0; z-index: 0; background-size: cover; background-position: center;
+  filter: blur(10px) saturate(1.15); transform: scale(1.1); }
 .memcell:active { transform: scale(.95); box-shadow: 0 1px 1px rgba(43,37,33,.12); }
-.memplay { position: absolute; inset: 0; display: grid; place-content: center; color: #fff;
+.memplay { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; color: #fff;
   font-size: 22px; text-shadow: 0 1px 8px rgba(0,0,0,.55); pointer-events: none; }
 
 /* select mode: drag across cells to sweep-select; pan-y keeps scrolling alive */
@@ -461,6 +465,14 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .lb-pane { width: 100vw; flex: 0 0 100vw; display: grid; place-content: center; min-height: 0; padding: 12px; }
 .lb-pane img, .lb-pane video { max-width: 94vw; max-height: 80vh; border-radius: 12px; object-fit: contain;
   box-shadow: 0 18px 60px rgba(0,0,0,.5); }
+/* full-res develops in over the blur placeholder */
+.lb-frame { position: relative; display: grid; place-content: center; }
+.lb-frame img { position: relative; z-index: 1; opacity: 0; transition: opacity .35s ease; }
+.lb-frame img.ld { opacity: 1; }
+.lb-blur { position: absolute; inset: 0; z-index: 0; background-size: contain; background-position: center;
+  background-repeat: no-repeat; filter: blur(22px) saturate(1.2); transform: scale(.96); border-radius: 12px; }
+.lb-play { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; color: #fff;
+  font-size: 40px; text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; }
 .lb-close { position: absolute; top: calc(var(--safe-top) + 10px); right: 14px; z-index: 2; width: 38px; height: 38px;
   border-radius: 50%; border: none; background: rgba(255,255,255,.14); color: #fff; font-size: 17px; cursor: pointer;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: transform .15s ease, background .15s ease; }
@@ -470,7 +482,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: transform .15s ease, background .15s ease; }
 .lb-opts:active { transform: scale(.88); background: rgba(255,255,255,.26); }
 .asheet-preview { text-align: center; }
+.apv-media { position: relative; display: inline-block; }
 .asheet-preview img, .asheet-preview video { max-width: 60%; max-height: 200px; border-radius: 12px; object-fit: cover; }
+.apv-media img { max-width: 160px; }
 .lb-meta { text-align: center; color: rgba(255,255,255,.65); font-size: 12.5px; padding: 0 0 calc(16px + var(--safe-bottom)); }
 @media (prefers-reduced-motion: reduce) {
   .lbx { transform: none; }

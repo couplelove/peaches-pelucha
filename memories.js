@@ -25,19 +25,78 @@ async function decodeImage(file) {
     img.src = url;
   });
 }
-async function shrinkPhoto(file) {
-  const src = await decodeImage(file);            // throws if truly undecodable
-  const w0 = src.naturalWidth || src.width, h0 = src.naturalHeight || src.height;
-  const scale = Math.min(1, 1600 / Math.max(w0, h0));
-  const w = Math.round(w0 * scale), hh = Math.round(h0 * scale);
+// Draw any decoded source (ImageBitmap, <img>, or <video>) into a canvas
+// downscaled so its longest edge is `maxDim`. object-fit:cover crop optional.
+function canvasOf(src, maxDim, square) {
+  const w0 = src.videoWidth || src.naturalWidth || src.width;
+  const h0 = src.videoHeight || src.naturalHeight || src.height;
   const cv = document.createElement("canvas");
-  cv.width = w; cv.height = hh;
-  cv.getContext("2d").drawImage(src, 0, 0, w, hh);
-  if (src.close) try { src.close(); } catch {}
-  if (src.src) try { URL.revokeObjectURL(src.src); } catch {}
-  const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.82));
-  if (!blob) throw new Error("couldn’t encode image");
-  return blob;
+  const ctx = cv.getContext("2d");
+  if (square) {
+    cv.width = cv.height = maxDim;
+    const s = Math.max(maxDim / w0, maxDim / h0);
+    const dw = w0 * s, dh = h0 * s;
+    ctx.drawImage(src, (maxDim - dw) / 2, (maxDim - dh) / 2, dw, dh);
+  } else {
+    const s = Math.min(1, maxDim / Math.max(w0, h0));
+    cv.width = Math.round(w0 * s); cv.height = Math.round(h0 * s);
+    ctx.drawImage(src, 0, 0, cv.width, cv.height);
+  }
+  return cv;
+}
+// Encode a canvas, preferring WebP but honestly falling back to JPEG when the
+// browser can't encode WebP (iOS < 16). Reports the real type so paths/CT match.
+async function encodeCanvas(cv, q, preferWebp = true) {
+  if (preferWebp) {
+    const w = await new Promise((r) => cv.toBlob(r, "image/webp", q));
+    if (w && w.type === "image/webp") return { blob: w, ext: "webp", ct: "image/webp" };
+  }
+  const j = await new Promise((r) => cv.toBlob(r, "image/jpeg", q));
+  if (!j) throw new Error("couldn’t encode image");
+  return { blob: j, ext: "jpg", ct: "image/jpeg" };
+}
+// tiny blurred placeholder as a data-URL (~20px). Stretched + blurred in CSS.
+function blurDataURL(src) {
+  const cv = canvasOf(src, 20, true);
+  try { const u = cv.toDataURL("image/webp", 0.5); if (u.startsWith("data:image/webp")) return u; } catch {}
+  try { return cv.toDataURL("image/jpeg", 0.4); } catch { return null; }
+}
+// One decode → full (1600 JPEG), thumb (400 WebP/JPEG), blur (20px data-URL).
+async function processPhoto(file) {
+  const src = await decodeImage(file);            // throws if truly undecodable
+  try {
+    const full = await encodeCanvas(canvasOf(src, 1600), 0.82, false);   // keep full as JPEG
+    const thumb = await encodeCanvas(canvasOf(src, 400, true), 0.8);
+    const blur = blurDataURL(src);
+    return { full: full.blob, thumb, blur };
+  } finally {
+    if (src.close) try { src.close(); } catch {}
+    if (src.src) try { URL.revokeObjectURL(src.src); } catch {}
+  }
+}
+// Capture a poster frame + blur from a video, on-device. Returns null on any
+// hiccup (the grid then falls back to a neutral tile). Watchdog-guarded — a
+// video that never fires loadeddata/seeked won't hang the upload.
+function videoPoster(file) {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.muted = true; v.playsInline = true; v.preload = "auto";
+    const url = URL.createObjectURL(file);
+    let done = false;
+    const finish = (val) => { if (done) return; done = true; clearTimeout(wd); try { URL.revokeObjectURL(url); } catch {} resolve(val); };
+    const grab = async () => {
+      try {
+        const thumb = await encodeCanvas(canvasOf(v, 400, true), 0.8);
+        const blur = blurDataURL(v);
+        finish({ thumb, blur });
+      } catch { finish(null); }
+    };
+    v.onloadeddata = () => { try { v.currentTime = Math.min(0.1, (v.duration || 1) / 2); } catch { grab(); } };
+    v.onseeked = grab;
+    v.onerror = () => finish(null);
+    const wd = setTimeout(() => finish(null), 6000);
+    v.src = url;
+  });
 }
 
 /* ---- capture metadata: the photo knows when and where it was taken -------
@@ -145,6 +204,9 @@ export function MemoriesTab({ client, me, flash }) {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
     catch { return ""; }
   }, [client]);
+  // the grid/game load the small thumb; fall back to the full image for legacy
+  // rows that predate thumbnails (thumb_path null).
+  const thumbUrl = useCallback((it) => pubUrl(it.thumb_path || it.path), [pubUrl]);
 
   const load = useCallback(async () => {
     const { data, error } = await client.from("memories").select("*")
@@ -181,13 +243,29 @@ export function MemoriesTab({ client, me, flash }) {
         const isVideo = f.type.startsWith("video/");
         if (isVideo && f.size > 49 * 1024 * 1024) throw new Error("video over 50MB — trim it first");
         j.status = "working"; paint();
-        let blob, ext, ct;
-        if (isVideo) { blob = f; ext = f.name.toLowerCase().endsWith(".mov") ? "mov" : "mp4"; ct = f.type || "video/mp4"; }
-        else { blob = await shrinkPhoto(f); ext = "jpg"; ct = "image/jpeg"; }
-        const path = `u${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        // real capture metadata from the ORIGINAL file bytes (before shrink)
+        const base = `u${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        // real capture metadata comes from the ORIGINAL file bytes (before shrink)
         const meta = isVideo ? { taken_on: await mp4Date(f) } : await exifMeta(f);
+        let blob, ext, ct, thumb = null, blur = null;
+        if (isVideo) {
+          blob = f; ext = f.name.toLowerCase().endsWith(".mov") ? "mov" : "mp4"; ct = f.type || "video/mp4";
+          const poster = await videoPoster(f);                 // best-effort; null is fine
+          if (poster) { thumb = poster.thumb; blur = poster.blur; }
+        } else {
+          const out = await processPhoto(f);
+          blob = out.full; ext = "jpg"; ct = "image/jpeg";
+          thumb = out.thumb; blur = out.blur;
+        }
+        const path = `${base}.${ext}`;
         await uploadWithRetry(client, path, blob, ct);
+        // thumbnail/poster is a separate small object; failure here is non-fatal
+        // (grid falls back to the full image), so don't sink the whole upload.
+        let thumb_path = null;
+        if (thumb) {
+          thumb_path = `t${base.slice(1)}.${thumb.ext}`;
+          try { await uploadWithRetry(client, thumb_path, thumb.blob, thumb.ct); }
+          catch { thumb_path = null; }
+        }
         let taken_on = meta.taken_on;
         if (!taken_on) {
           const taken = new Date(f.lastModified || Date.now());
@@ -196,7 +274,7 @@ export function MemoriesTab({ client, me, flash }) {
         const place = meta.lat != null ? await placeFor(meta.lat, meta.lng) : null;
         const { error: rowErr } = await client.from("memories")
           .insert({ path, kind: isVideo ? "video" : "photo", taken_on, uploaded_by: me.id,
-                    place, lat: meta.lat ?? null, lng: meta.lng ?? null });
+                    place, lat: meta.lat ?? null, lng: meta.lng ?? null, thumb_path, blur });
         if (rowErr) throw rowErr;
         j.status = "done";
       } catch (err) {
@@ -276,7 +354,7 @@ export function MemoriesTab({ client, me, flash }) {
     if (!confirm(`Delete ${its.length === 1 ? "this memory" : `these ${its.length} memories`} for both of you?`)) return;
     setBusy(true);
     try {
-      try { await client.storage.from("memories").remove(its.map((i) => i.path)); } catch {}
+      try { await client.storage.from("memories").remove(its.flatMap((i) => i.thumb_path ? [i.path, i.thumb_path] : [i.path])); } catch {}
       const { error } = await client.from("memories").delete().in("id", its.map((i) => i.id));
       if (error) throw error;
       flash(`Deleted ${its.length}`);
@@ -328,7 +406,7 @@ export function MemoriesTab({ client, me, flash }) {
   const deleteItem = async (it) => {
     if (!confirm("Delete this memory for both of you?")) return;
     try {
-      await client.storage.from("memories").remove([it.path]);
+      await client.storage.from("memories").remove([it.path, ...(it.thumb_path ? [it.thumb_path] : [])]);
       await client.from("memories").delete().eq("id", it.id);
       flash("Deleted");
       setSheet(null);
@@ -382,19 +460,21 @@ export function MemoriesTab({ client, me, flash }) {
             onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}
             onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selUp : holdCancel}
             onContextMenu=${(e) => e.preventDefault()}>
-            ${it.kind === "video"
+            ${it.blur && html`<span class="memblur" style=${`background-image:url(${it.blur})`}></span>`}
+            ${it.kind === "video" && !it.thumb_path
               ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline
                   onLoadedData=${(e) => e.target.classList.add("ld")}
-                  ref=${(el) => { if (el && el.readyState >= 2) el.classList.add("ld"); }}></video><span class="memplay">▶</span>`
-              : html`<img src=${pubUrl(it.path)} loading="lazy" alt=""
+                  ref=${(el) => { if (el && el.readyState >= 2) el.classList.add("ld"); }}></video>`
+              : html`<img src=${thumbUrl(it)} loading="lazy" decoding="async" alt=""
                   onLoad=${(e) => e.target.classList.add("ld")}
                   ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
+            ${it.kind === "video" && html`<span class="memplay">▶</span>`}
             ${sel && html`<span class="selbadge">${sel.has(it.id) ? "✓" : ""}</span>`}
           </button>`)}
         </div>
       </div>`)}
 
-      ${view === "game" && items !== null && html`<${MatchGame} items=${items} pubUrl=${pubUrl} />`}
+      ${view === "game" && items !== null && html`<${MatchGame} items=${items} pubUrl=${pubUrl} thumbUrl=${thumbUrl} />`}
     </div>
 
     ${lightbox !== null && html`<${Lightbox} items=${flat} index=${lightbox} pubUrl=${pubUrl} origin=${origin.current}
@@ -404,9 +484,12 @@ export function MemoriesTab({ client, me, flash }) {
       <div class="modal">
         <div class="handle"></div>
         <div class="asheet-preview">
-          ${sheet.kind === "video"
-            ? html`<video src=${pubUrl(sheet.path) + "#t=0.1"} preload="metadata" muted playsinline></video>`
-            : html`<img src=${pubUrl(sheet.path)} alt="" />`}
+          <span class="apv-media">
+            ${sheet.kind === "video" && !sheet.thumb_path
+              ? html`<video src=${pubUrl(sheet.path) + "#t=0.1"} preload="metadata" muted playsinline></video>`
+              : html`<img src=${thumbUrl(sheet)} alt="" />`}
+            ${sheet.kind === "video" && html`<span class="memplay" style="font-size:30px">▶</span>`}
+          </span>
           <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}${sheet.place ? " · 📍 " + sheet.place : ""}</div>
         </div>
         <button class="btn ghost block mt" onClick=${() => saveItem(sheet)}>📥 Save to device</button>
@@ -533,10 +616,22 @@ function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions, origin }) {
   }, [index, items.length, dismiss]);
 
   if (!it) return null;
+  // Neighbour panes load only their POSTER/blur — the heavy full image or video
+  // streams in only for the pane you're actually on. Full-res images develop in
+  // over the blur (no white flash, no layout pop).
   const pane = (item, current) => item ? html`<div class="lb-pane" key=${item.id}>
     ${item.kind === "video"
-      ? html`<video src=${pubUrl(item.path)} controls playsinline autoplay=${current} muted=${!current}></video>`
-      : html`<img src=${pubUrl(item.path)} alt="" />`}
+      ? (current
+          ? html`<video src=${pubUrl(item.path)} poster=${item.thumb_path ? pubUrl(item.thumb_path) : undefined} controls playsinline autoplay muted=${false}></video>`
+          : item.thumb_path
+            ? html`<img src=${pubUrl(item.thumb_path)} alt="" /><span class="lb-play">▶</span>`
+            : html`<video src=${pubUrl(item.path) + "#t=0.1"} preload="metadata" muted playsinline></video><span class="lb-play">▶</span>`)
+      : html`<span class="lb-frame">
+          ${item.blur && html`<span class="lb-blur" style=${`background-image:url(${item.blur})`}></span>`}
+          <img src=${current ? pubUrl(item.path) : (item.thumb_path ? pubUrl(item.thumb_path) : pubUrl(item.path))} alt=""
+            onLoad=${(e) => e.target.classList.add("ld")}
+            ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />
+        </span>`}
   </div>` : html`<div class="lb-pane"></div>`;
 
   const ox = origin ? origin.x : W() / 2;
@@ -557,7 +652,7 @@ function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions, origin }) {
 }
 
 /* ---- memory match: find the two photos from the same day ---- */
-function MatchGame({ items, pubUrl }) {
+function MatchGame({ items, pubUrl, thumbUrl }) {
   const buildDeck = useCallback(() => {
     const byDay = {};
     for (const it of items) if (it.kind === "photo") (byDay[it.taken_on] = byDay[it.taken_on] || []).push(it);
@@ -610,7 +705,7 @@ function MatchGame({ items, pubUrl }) {
         return html`<button class=${`mcard ${faceUp ? "up" : ""} ${done ? "done" : ""}`} key=${c.key} onClick=${() => tap(c)}>
           <div class="mcard-inner">
             <div class="mcard-back">🍑🧸</div>
-            <div class="mcard-face"><img src=${pubUrl(c.it.path)} loading="lazy" alt="" /></div>
+            <div class="mcard-face"><img src=${thumbUrl(c.it)} loading="lazy" decoding="async" alt="" /></div>
           </div>
         </button>`;
       })}
