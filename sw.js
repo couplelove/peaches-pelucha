@@ -1,7 +1,12 @@
 // Service worker for Peaches & Pelucha.
 // Strategy: cache the app shell so it installs and opens instantly / offline.
 // (Live data still needs a connection — that's Supabase, never cached.)
-const CACHE = "pp-v37";
+const CACHE = "pp-v38";
+// Separate, long-lived cache for memory IMAGE media (thumbnails + full photos).
+// Survives shell-version bumps; self-evicts oldest entries past the cap so it
+// never blows the device quota. Videos are NOT cached here — they stream.
+const MEDIA_CACHE = "pp-media-v1";
+const MEDIA_MAX = 450;
 const SHELL = [
   "./",
   "./index.html",
@@ -31,10 +36,18 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      // keep the current shell AND the media cache; drop stale shells
+      Promise.all(keys.filter((k) => k !== CACHE && k !== MEDIA_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
+
+// FIFO trim: keep the media cache under MEDIA_MAX (oldest puts evicted first).
+async function trimMedia() {
+  const cache = await caches.open(MEDIA_CACHE);
+  const keys = await cache.keys();
+  for (let i = 0; i < keys.length - MEDIA_MAX; i++) await cache.delete(keys[i]);
+}
 
 // ---- Push notifications ("Your turn" alerts) ----
 self.addEventListener("push", (e) => {
@@ -63,9 +76,36 @@ self.addEventListener("notificationclick", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  // Never touch Supabase / API traffic — always go to the network.
-  if (url.origin !== self.location.origin) return;
   if (e.request.method !== "GET") return;
+
+  // CacheFirst for memory IMAGE media (thumbnails + full photos), including
+  // cross-origin Supabase Storage. Immutable, content-addressed paths → safe to
+  // cache forever; repeat views and offline are instant. Videos fall through to
+  // the network (Range streaming; never cached here).
+  const isMediaImage =
+    /\/storage\/v1\/object\/public\/memories\//.test(url.pathname) &&
+    e.request.destination !== "video" &&
+    !/\.(mp4|mov|m4v|webm)$/i.test(url.pathname);
+  if (isMediaImage) {
+    e.respondWith((async () => {
+      const cache = await caches.open(MEDIA_CACHE);
+      const hit = await cache.match(e.request);
+      if (hit) return hit;
+      try {
+        const res = await fetch(e.request);
+        if (res && (res.ok || res.type === "opaque")) {
+          cache.put(e.request, res.clone()).then(trimMedia).catch(() => {});
+        }
+        return res;
+      } catch {
+        return hit || Response.error();
+      }
+    })());
+    return;
+  }
+
+  // Never touch other cross-origin / API traffic — always go to the network.
+  if (url.origin !== self.location.origin) return;
 
   // Network-first for our own files so updates show up; fall back to cache.
   e.respondWith(

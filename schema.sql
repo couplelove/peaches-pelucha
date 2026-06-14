@@ -293,6 +293,7 @@ create table if not exists memories (
   uploaded_by uuid references players(id) on delete set null,
   created_at  timestamptz not null default now()
 );
+create index if not exists memories_gallery_order on memories (taken_on desc, created_at desc);
 alter table memories enable row level security;
 drop policy if exists anon_all on memories;
 create policy anon_all on memories

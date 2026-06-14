@@ -97,6 +97,7 @@ function query(db, table) {
     in(col, vals) { state.filters.push({ col, vals, op: "in" }); return builder; },
     order(col, opts) { state.orders.push({ col, asc: !opts || opts.ascending !== false }); return builder; },
     limit(n) { state.limitN = n; return builder; },
+    range(from, to) { state.rangeFrom = from; state.rangeTo = to; return builder; },
     single() { state.single = true; return builder; },
     insert(payload) { state.op = "insert"; state.payload = payload; return builder; },
     update(payload) { state.op = "update"; state.payload = payload; return builder; },
@@ -142,7 +143,8 @@ function run(db, table, s) {
     if (/round_entries\(\*\)/.test(s.selectStr) && table === "rounds") {
       out = out.map((r) => ({ ...r, round_entries: db.round_entries.filter((e) => e.round_id === r.id).map((e) => ({ ...e })) }));
     }
-    if (s.limitN != null) out = out.slice(0, s.limitN);
+    if (s.rangeFrom != null) out = out.slice(s.rangeFrom, s.rangeTo + 1);
+    else if (s.limitN != null) out = out.slice(0, s.limitN);
     if (s.single) return { data: out[0] || null, error: null };
     return { data: out, error: null };
   } catch (e) {

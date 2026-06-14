@@ -193,12 +193,26 @@ async function uploadWithRetry(client, path, blob, contentType) {
   throw lastErr || new Error("upload failed");
 }
 
+// the grid needs only these columns — never pull the (large, unused) lat/lng or
+// any future heavy column into the list query. blur is a tiny inline data-URL.
+const SELECT_COLS = "id,path,thumb_path,blur,kind,taken_on,place,created_at";
+const PAGE = 60;                                     // rows per infinite-scroll page
+// gallery order: newest-taken first, then newest-uploaded — the comparator that
+// keeps the in-memory list sorted as realtime rows merge in.
+const memCmp = (a, b) =>
+  a.taken_on < b.taken_on ? 1 : a.taken_on > b.taken_on ? -1
+  : a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0;
+
 export function MemoriesTab({ client, me, flash }) {
-  const [items, setItems] = useState(null);          // null = loading
+  const [items, setItems] = useState(null);          // null = loading; else loaded window (paged)
   const [view, setView] = useState("gallery");       // 'gallery' | 'game'
   const [lightbox, setLightbox] = useState(null);    // index into items
   const [uploads, setUploads] = useState(null);      // {done, total} | null
   const fileInput = useRef(null);
+  // pagination cursor lives in a ref (no re-render churn): how many rows we've
+  // pulled via range(), whether the tail is reached, and an in-flight guard.
+  const more = useRef({ offset: 0, done: false, loading: false });
+  const sentinel = useRef(null);                     // IntersectionObserver target
 
   const pubUrl = useCallback((path) => {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
@@ -208,25 +222,94 @@ export function MemoriesTab({ client, me, flash }) {
   // rows that predate thumbnails (thumb_path null).
   const thumbUrl = useCallback((it) => pubUrl(it.thumb_path || it.path), [pubUrl]);
 
+  const pageQuery = useCallback((from, to) =>
+    client.from("memories").select(SELECT_COLS)
+      .order("taken_on", { ascending: false }).order("created_at", { ascending: false })
+      .range(from, to), [client]);
+
+  // initial page (also used to reset after a hard refresh)
   const load = useCallback(async () => {
-    const { data, error } = await client.from("memories").select("*")
-      .order("taken_on", { ascending: false }).order("created_at", { ascending: false });
-    if (!error) setItems(data || []);
-    else setItems([]);
-  }, [client]);
+    const m = more.current; m.loading = true;
+    const { data, error } = await pageQuery(0, PAGE - 1);
+    m.loading = false;
+    m.offset = (data || []).length;
+    m.done = !data || data.length < PAGE;
+    setItems(error ? [] : (data || []));
+  }, [pageQuery]);
+
+  // next page — keyset would be ideal at huge scale, but offset+dedupe is robust
+  // here: a realtime insert above the window just makes range() re-read one seen
+  // row, which the id-dedupe drops (no gap, no dupe).
+  const loadMore = useCallback(async () => {
+    const m = more.current;
+    if (m.loading || m.done) return;
+    m.loading = true;
+    const { data, error } = await pageQuery(m.offset, m.offset + PAGE - 1);
+    m.loading = false;
+    if (error) return;
+    const rows = data || [];
+    m.offset += rows.length;
+    if (rows.length < PAGE) m.done = true;
+    setItems((cur) => {
+      const seen = new Set((cur || []).map((r) => r.id));
+      const add = rows.filter((r) => !seen.has(r.id));
+      return [...(cur || []), ...add];
+    });
+  }, [pageQuery]);
+
+  // re-pull page 0 and upsert — catches anything realtime missed while the phone
+  // was asleep, without discarding the pages already scrolled into view.
+  const refresh = useCallback(async () => {
+    const { data } = await pageQuery(0, PAGE - 1);
+    if (!data) return;
+    setItems((cur) => {
+      if (!cur) return data;
+      const map = new Map(cur.map((r) => [r.id, r]));
+      for (const r of data) map.set(r.id, r);
+      return [...map.values()].sort(memCmp);
+    });
+  }, [pageQuery]);
+
+  // merge ONE realtime row instead of refetching the whole library.
+  const mergeRow = useCallback((payload) => {
+    setItems((cur) => {
+      if (!cur) return cur;
+      if (payload.eventType === "DELETE") {
+        const id = payload.old && payload.old.id;
+        return id ? cur.filter((r) => r.id !== id) : cur;
+      }
+      const row = payload.new;
+      if (!row) return cur;
+      const without = cur.filter((r) => r.id !== row.id);
+      // if it sorts older than our last loaded row and there are still unloaded
+      // pages, let pagination surface it later rather than stranding it mid-list.
+      const last = without[without.length - 1];
+      if (!more.current.done && last && memCmp(row, last) > 0) return without;
+      return [...without, row].sort(memCmp);
+    });
+  }, []);
 
   useEffect(() => {
     load();
     let ch = null;
     try {
       ch = client.channel("pp-memories")
-        .on("postgres_changes", { event: "*", schema: "public", table: "memories" }, () => load())
+        .on("postgres_changes", { event: "*", schema: "public", table: "memories" }, mergeRow)
         .subscribe();
     } catch {}
-    const wake = () => { if (document.visibilityState === "visible") load(); };
+    const wake = () => { if (document.visibilityState === "visible") refresh(); };
     document.addEventListener("visibilitychange", wake);
     return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
-  }, [client, load]);
+  }, [client, load, refresh, mergeRow]);
+
+  // infinite scroll: a sentinel below the grid pulls the next page as it nears.
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || view !== "gallery") return;
+    const io = new IntersectionObserver((es) => { if (es[0].isIntersecting) loadMore(); }, { rootMargin: "800px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loadMore, view, items === null]);
 
   // Concurrent upload queue (3 lanes) with per-file status — photos shrink
   // on-device first; videos go as-is (50MB storage cap surfaced honestly).
@@ -294,7 +377,7 @@ export function MemoriesTab({ client, me, flash }) {
     const ok = jobs.filter((j) => j.status === "done").length;
     const failed = jobs.filter((j) => j.status === "failed");
     setUploads(null);
-    if (ok) load();
+    if (ok) refresh();                                // merge new uploads at the top
     if (failed.length) flash(`⚠️ ${failed.length} failed (${failed[0].err})${ok ? ` · ${ok} added` : ""}`);
     else if (ok) flash(`Added ${ok} ${ok === 1 ? "memory" : "memories"} 📸`);
   };
@@ -357,9 +440,10 @@ export function MemoriesTab({ client, me, flash }) {
       try { await client.storage.from("memories").remove(its.flatMap((i) => i.thumb_path ? [i.path, i.thumb_path] : [i.path])); } catch {}
       const { error } = await client.from("memories").delete().in("id", its.map((i) => i.id));
       if (error) throw error;
+      const gone = new Set(its.map((i) => i.id));
+      setItems((cur) => (cur || []).filter((r) => !gone.has(r.id)));
       flash(`Deleted ${its.length}`);
       setSel(null);
-      load();
     } catch (err) { flash("⚠️ " + (err.message || "delete failed")); }
     setBusy(false);
   };
@@ -383,9 +467,10 @@ export function MemoriesTab({ client, me, flash }) {
     try {
       const { error } = await client.from("memories").update(patch).in("id", ids);
       if (error) throw error;
+      const idset = new Set(ids);
+      setItems((cur) => (cur || []).map((r) => idset.has(r.id) ? { ...r, ...patch } : r).sort(memCmp));
       flash(`${editor.type === "date" ? "📅" : "📍"} ${ids.length} updated`);
       setEditor(null); setSheet(null); setSel(null);
-      load();
     } catch (err) { flash("⚠️ " + (err.message || "update failed")); }
     setBusy(false);
   };
@@ -408,9 +493,9 @@ export function MemoriesTab({ client, me, flash }) {
     try {
       await client.storage.from("memories").remove([it.path, ...(it.thumb_path ? [it.thumb_path] : [])]);
       await client.from("memories").delete().eq("id", it.id);
+      setItems((cur) => (cur || []).filter((r) => r.id !== it.id));
       flash("Deleted");
       setSheet(null);
-      load();
     } catch (err) { flash("⚠️ " + (err.message || "delete failed")); }
   };
 
@@ -473,6 +558,9 @@ export function MemoriesTab({ client, me, flash }) {
           </button>`)}
         </div>
       </div>`)}
+
+      ${view === "gallery" && items !== null && items.length > 0 && html`
+        <div ref=${sentinel} class="memsentinel">${!more.current.done ? html`<span class="memspin"></span>` : ""}</div>`}
 
       ${view === "game" && items !== null && html`<${MatchGame} items=${items} pubUrl=${pubUrl} thumbUrl=${thumbUrl} />`}
     </div>
