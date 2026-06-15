@@ -1,4 +1,4 @@
-import { h, render, Fragment } from "https://esm.sh/preact@10.23.2";
+import { h, render, Fragment, Component } from "https://esm.sh/preact@10.23.2";
 import {
   useState, useEffect, useMemo, useRef, useCallback,
 } from "https://esm.sh/preact@10.23.2/hooks";
@@ -24,6 +24,22 @@ const PokerTab = lazyTab(() => import("./poker.js"), "PokerTab");
 const MemoriesTab = lazyTab(() => import("./memories.js"), "MemoriesTab");
 const WatchTab = lazyTab(() => import("./watch.js"), "WatchTab");
 const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
+
+// One tab crashing shouldn't blank the whole app. Keyed by tab so it resets on
+// navigation (a crashed section recovers when you leave and come back).
+class ErrorBoundary extends Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  componentDidCatch(err) { this.setState({ err }); }
+  render() {
+    if (this.state.err) return html`<div class="card center">
+      <div style="font-size:40px">😵‍💫</div>
+      <h2 style="margin:.2em 0">This bit hiccuped</h2>
+      <p class="sub">The rest of the app is fine. Try again, or switch tabs.</p>
+      <button class="btn" onClick=${() => this.setState({ err: null })}>Try again</button>
+    </div>`;
+    return this.props.children;
+  }
+}
 
 /* ============================================================ helpers ===== */
 
@@ -187,21 +203,44 @@ function App({ client, onResetCreds }) {
 
   // initial load + realtime sync + catch-up when the phone wakes/reconnects
   useEffect(() => { loadAll(); }, [loadAll]);
+  // Realtime for the shell's own data only. The old version reloaded EVERYTHING
+  // on any change to any table (a poker bet, a reaction, a memory backfill all
+  // triggered 6+ queries). Now it (a) ignores tables the shell doesn't read,
+  // (b) debounces bursts into one reload, and (c) resubscribes if the socket
+  // drops — phones kill it on sleep.
+  const SHELL_TABLES = useMemo(() => new Set([
+    "players", "games", "game_players", "rounds", "round_entries",
+    "transactions", "earn_rules", "rewards", "bets",
+  ]), []);
+  const reloadTimer = useRef(null);
+  const scheduleLoad = useCallback(() => {
+    clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(loadAll, 250);
+  }, [loadAll]);
   useEffect(() => {
-    const ch = client.channel("pp-sync")
-      .on("postgres_changes", { event: "*", schema: "public" }, () => loadAll())
-      .subscribe();
+    let alive = true, ch = null;
+    const subscribe = () => {
+      ch = client.channel("pp-sync-" + Math.random().toString(36).slice(2, 7))
+        .on("postgres_changes", { event: "*", schema: "public" }, (p) => { if (SHELL_TABLES.has(p.table)) scheduleLoad(); })
+        .subscribe((status) => {
+          if (alive && (status === "CHANNEL_ERROR" || status === "TIMED_OUT")) {
+            setTimeout(() => { if (alive) { try { client.removeChannel(ch); } catch {} subscribe(); loadAll(); } }, 1500);
+          }
+        });
+    };
+    subscribe();
     const wake = () => { if (document.visibilityState === "visible") loadAll(); };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
     window.addEventListener("online", wake);
     return () => {
-      client.removeChannel(ch);
+      alive = false; clearTimeout(reloadTimer.current);
+      try { client.removeChannel(ch); } catch {}
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("focus", wake);
       window.removeEventListener("online", wake);
     };
-  }, [client, loadAll]);
+  }, [client, loadAll, scheduleLoad, SHELL_TABLES]);
 
   const me = players.find((p) => p.id === meId) || null;
 
@@ -285,16 +324,18 @@ function App({ client, onResetCreds }) {
 
       ${err && html`<div class="banner" style="background:#ffeef1;color:#b00020">⚠️ ${err}</div>`}
 
-      ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
-      ${tab === "watch" && html`<${WatchTab} client=${client} me=${me} players=${players} flash=${flash} />`}
-      ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
-      ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
-      ${tab === "schmoney" && html`<${Fragment}>
-        <${WalletTab} ...${ctx} />
-        <${BetsTab} ...${ctx} />
-        <${ShopTab} ...${ctx} />
-      <//>`}
-      ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
+      <${ErrorBoundary} key=${tab}>
+        ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
+        ${tab === "watch" && html`<${WatchTab} client=${client} me=${me} players=${players} flash=${flash} />`}
+        ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
+        ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
+        ${tab === "schmoney" && html`<${Fragment}>
+          <${WalletTab} ...${ctx} />
+          <${BetsTab} ...${ctx} />
+          <${ShopTab} ...${ctx} />
+        <//>`}
+        ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
+      <//>
 
       <nav class="nav">
         ${[["score", "🏆", "Score"], ["watch", "📺", "Watch"], ["plans", "📅", "Plans"], ["memories", "📸", "Memories"], ["schmoney", "💸", "Schmoney"], ["more", "⚙️", "More"]].map(
