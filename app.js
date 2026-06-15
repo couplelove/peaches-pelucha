@@ -3,17 +3,27 @@ import {
   useState, useEffect, useMemo, useRef, useCallback,
 } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2?bundle";
 import { PlayTab } from "./game.js";
-import { PokerTab } from "./poker.js";
 import { DateRoulette } from "./roulette.js";
 import { HoroscopeCard, ScriptureCard } from "./home.js";
-import { MemoriesTab } from "./memories.js";
-import { WatchTab } from "./watch.js";
-import { PlansTab } from "./events.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 
 const html = htm.bind(h);
+
+// Lazy-load the heavier per-tab modules so boot only parses the shell + the
+// Score tab. Each loads (from the SW cache) the instant its tab is opened.
+function lazyTab(loader, name) {
+  return function LazyTab(props) {
+    const [C, setC] = useState(null);
+    useEffect(() => { let live = true; loader().then((m) => { if (live) setC(() => m[name]); }).catch(() => {}); return () => { live = false; }; }, []);
+    return C ? h(C, props) : html`<div class="card center"><div class="muted">Loading…</div></div>`;
+  };
+}
+const PokerTab = lazyTab(() => import("./poker.js"), "PokerTab");
+const MemoriesTab = lazyTab(() => import("./memories.js"), "MemoriesTab");
+const WatchTab = lazyTab(() => import("./watch.js"), "WatchTab");
+const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
 
 /* ============================================================ helpers ===== */
 

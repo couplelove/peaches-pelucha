@@ -1,12 +1,16 @@
 // Service worker for Peaches & Pelucha.
 // Strategy: cache the app shell so it installs and opens instantly / offline.
 // (Live data still needs a connection — that's Supabase, never cached.)
-const CACHE = "pp-v44";
+const CACHE = "pp-v45";
 // Separate, long-lived cache for memory IMAGE media (thumbnails + full photos).
 // Survives shell-version bumps; self-evicts oldest entries past the cap so it
 // never blows the device quota. Videos are NOT cached here — they stream.
 const MEDIA_CACHE = "pp-media-v1";
 const MEDIA_MAX = 450;
+// Runtime deps (Preact/htm/supabase-js) load from esm.sh at version-pinned,
+// immutable URLs. CacheFirst them in their own long-lived cache so cold starts
+// after the first never wait on esm.sh — and the deps work offline too.
+const DEPS_CACHE = "pp-deps-v1";
 const SHELL = [
   "./",
   "./index.html",
@@ -38,8 +42,8 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      // keep the current shell AND the media cache; drop stale shells
-      Promise.all(keys.filter((k) => k !== CACHE && k !== MEDIA_CACHE).map((k) => caches.delete(k)))
+      // keep the current shell + the long-lived media & deps caches; drop stale shells
+      Promise.all(keys.filter((k) => k !== CACHE && k !== MEDIA_CACHE && k !== DEPS_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -79,6 +83,21 @@ self.addEventListener("notificationclick", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
+
+  // CacheFirst for runtime deps from esm.sh (immutable, version-pinned URLs).
+  if (url.hostname === "esm.sh") {
+    e.respondWith((async () => {
+      const cache = await caches.open(DEPS_CACHE);
+      const hit = await cache.match(e.request);
+      if (hit) return hit;
+      try {
+        const res = await fetch(e.request);
+        if (res && (res.ok || res.type === "opaque")) cache.put(e.request, res.clone()).catch(() => {});
+        return res;
+      } catch { return hit || Response.error(); }
+    })());
+    return;
+  }
 
   // CacheFirst for memory IMAGE media (thumbnails + full photos), including
   // cross-origin Supabase Storage. Immutable, content-addressed paths → safe to

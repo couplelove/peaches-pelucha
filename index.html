@@ -23,6 +23,12 @@
 
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://esm.sh" crossorigin />
+  <!-- warm the runtime module graph in parallel during HTML parse (deps are
+       version-pinned + immutable; the service worker also CacheFirsts them) -->
+  <link rel="modulepreload" href="https://esm.sh/preact@10.23.2" crossorigin />
+  <link rel="modulepreload" href="https://esm.sh/preact@10.23.2/hooks" crossorigin />
+  <link rel="modulepreload" href="https://esm.sh/htm@3.1.1" crossorigin />
+  <link rel="modulepreload" href="https://esm.sh/@supabase/supabase-js@2?bundle" crossorigin />
   <script src="config.js"></script>
 </head>
 <body>
