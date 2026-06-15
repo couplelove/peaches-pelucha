@@ -43,6 +43,10 @@ function seed() {
     world_messages: [
       { id: "wm1", world_slug: "the-commons", player_id: null, name: "The Commons", emoji: "🌍", text: "Welcome to The Commons — the first public world. Say hi 👋", created_at: nowISO() },
     ],
+    world_events: [
+      { id: "we1", world_slug: "the-commons", title: "Movie night", place: "my place", when_txt: "Friday 8pm", emoji: "🍿", created_by: null, creator_name: "Collide", creator_emoji: "🌍", joined: [], created_at: nowISO() },
+      { id: "we2", world_slug: "the-commons", title: "Coffee & catch-up", place: "anywhere cozy", when_txt: "this week", emoji: "☕", created_by: null, creator_name: "Collide", creator_emoji: "🌍", joined: [], created_at: nowISO() },
+    ],
     trash_talk: [],
     memories: [],
     todos: [],

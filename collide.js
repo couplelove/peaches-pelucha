@@ -170,6 +170,8 @@ function WorldRoom({ client, me, world, demo, crowd, floats, onReact, onBack }) 
       <div class="wr-here">${faces.map((p, i) => html`<span class=${`cav ${i === 0 ? "me" : ""}`} key=${i} title=${p.name || ""}>${p.emoji || "👤"}</span>`)}</div>
     </div>
 
+    <${CommonsEvents} client=${client} me=${me} world=${world} />
+
     <div class="wr-msgs" ref=${listRef}>
       ${msgs === null ? html`<div class="cloading">Loading the square…</div>`
         : msgs.length === 0 ? html`<div class="cloading">Quiet here. Say the first thing 👋</div>`
@@ -210,6 +212,96 @@ function GameRoom({ client, me, players, flash, api, world, crowd, onBack }) {
       ${game === "phase10"
         ? html`<${PlayTab} client=${client} players=${players} me=${me} api=${api} flash=${flash} room="game-room" />`
         : html`<${PokerTab} client=${client} me=${me} players=${players} flash=${flash} room="game-room" />`}
+    </div>
+  </div>`;
+}
+
+/* ---- happenings carousel: anyone drops an event; one-tap RSVP + who's in ---- */
+const EV_EMOJI = ["🎉", "🍿", "☕", "🍻", "🥾", "🏖️", "🎮", "🍽️", "🎶", "🛍️", "💪", "✨"];
+function CommonsEvents({ client, me, world }) {
+  const [events, setEvents] = useState(null);
+  const [idx, setIdx] = useState(0);
+  const [composing, setComposing] = useState(false);
+  const [f, setF] = useState({ title: "", place: "", when_txt: "", emoji: "🎉" });
+  const paused = useRef(0);
+
+  const load = useCallback(async () => {
+    const { data } = await client.from("world_events").select("*").eq("world_slug", world.slug).order("created_at", { ascending: false }).limit(30);
+    setEvents(data || []);
+  }, [client, world.slug]);
+
+  useEffect(() => {
+    load();
+    let ch = null;
+    try { ch = client.channel("we-" + world.slug).on("postgres_changes", { event: "*", schema: "public", table: "world_events", filter: `world_slug=eq.${world.slug}` }, () => load()).subscribe(); } catch {}
+    return () => { try { ch && client.removeChannel(ch); } catch {} };
+  }, [client, world.slug, load]);
+
+  // auto-rotate the carousel (paused briefly after you interact)
+  useEffect(() => {
+    if (!events || events.length < 2 || composing) return;
+    const t = setInterval(() => { if (Date.now() - paused.current > 6000) setIdx((i) => (i + 1) % events.length); }, 4500);
+    return () => clearInterval(t);
+  }, [events, composing]);
+
+  const go = (n) => { paused.current = Date.now(); setIdx(((n % (events.length || 1)) + (events.length || 1)) % (events.length || 1)); };
+
+  const post = async () => {
+    const title = f.title.trim(); if (!title) return;
+    setComposing(false); setIdx(0); paused.current = Date.now();
+    await client.from("world_events").insert({ world_slug: world.slug, title, place: f.place.trim() || null, when_txt: f.when_txt.trim() || null, emoji: f.emoji, created_by: me.id, creator_name: me.name, creator_emoji: me.emoji });
+    setF({ title: "", place: "", when_txt: "", emoji: "🎉" });
+    load();
+  };
+  const toggleJoin = async (ev) => {
+    paused.current = Date.now();
+    const list = ev.joined || [];
+    const mine = list.find((j) => j.id === me.id);
+    const next = mine ? list.filter((j) => j.id !== me.id) : [...list, { id: me.id, name: me.name, emoji: me.emoji, at: new Date().toISOString() }];
+    setEvents((es) => (es || []).map((x) => x.id === ev.id ? { ...x, joined: next } : x));   // optimistic
+    await client.from("world_events").update({ joined: next }).eq("id", ev.id);
+  };
+  const remove = async (ev) => { setEvents((es) => (es || []).filter((x) => x.id !== ev.id)); await client.from("world_events").delete().eq("id", ev.id); };
+
+  if (events === null) return null;
+  if (composing) {
+    return html`<div class="we-wrap">
+      <div class="we-compose">
+        <div class="we-emojis">${EV_EMOJI.map((e) => html`<button key=${e} class=${f.emoji === e ? "on" : ""} onClick=${() => setF({ ...f, emoji: e })}>${e}</button>`)}</div>
+        <input class="we-in" value=${f.title} placeholder="What's happening? (e.g. beach day)" maxlength="60" onInput=${(e) => setF({ ...f, title: e.target.value })} />
+        <div class="we-row">
+          <input class="we-in" value=${f.place} placeholder="where (optional)" maxlength="40" onInput=${(e) => setF({ ...f, place: e.target.value })} />
+          <input class="we-in" value=${f.when_txt} placeholder="when (optional)" maxlength="30" onInput=${(e) => setF({ ...f, when_txt: e.target.value })} />
+        </div>
+        <div class="we-row">
+          <button class="btn ghost" onClick=${() => setComposing(false)}>Cancel</button>
+          <button class="btn" disabled=${!f.title.trim()} onClick=${post}>Share it</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  if (!events.length) {
+    return html`<div class="we-wrap"><button class="we-empty" onClick=${() => setComposing(true)}>＋ Share something to do — anyone can join</button></div>`;
+  }
+  const ev = events[Math.min(idx, events.length - 1)];
+  const joined = ev.joined || [];
+  const mineIn = joined.some((j) => j.id === me.id);
+  return html`<div class="we-wrap">
+    <div class="we-card" style=${`--wc:${world.color}`} key=${ev.id}>
+      <button class="we-x" title="remove" onClick=${() => remove(ev)}>✕</button>
+      <div class="we-emoji">${ev.emoji}</div>
+      <div class="we-main">
+        <div class="we-title">${ev.title}</div>
+        <div class="we-meta">${[ev.place && `📍 ${ev.place}`, ev.when_txt && `🕒 ${ev.when_txt}`].filter(Boolean).join(" · ") || `by ${ev.creator_name || "someone"}`}</div>
+        <div class="we-join">
+          <div class="we-faces">${joined.slice(0, 5).map((j) => html`<span key=${j.id} title=${j.name}>${j.emoji || "👤"}</span>`)}${joined.length ? html`<span class="we-count">${joined.length} going</span>` : html`<span class="we-count">be the first</span>`}</div>
+          <button class=${`we-rsvp ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "Going ✓" : "Join"}</button>
+        </div>
+      </div>
+    </div>
+    <div class="we-foot">
+      <div class="we-dots">${events.map((_, i) => html`<span key=${i} class=${i === idx ? "on" : ""} onClick=${() => go(i)}></span>`)}</div>
+      <button class="we-add" onClick=${() => setComposing(true)}>＋ Share</button>
     </div>
   </div>`;
 }
