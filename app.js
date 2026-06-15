@@ -5,6 +5,7 @@ import {
 import htm from "https://esm.sh/htm@3.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PlayTab } from "./game.js";
+import { PokerTab } from "./poker.js";
 import { DateRoulette } from "./roulette.js";
 import { HoroscopeCard, ScriptureCard } from "./home.js";
 import { MemoriesTab } from "./memories.js";
@@ -407,8 +408,19 @@ function Login({ players, onPick, onAdd, modal, setModal, api }) {
 // The home screen: current game (prominent) → lifetime line → his & hers
 // Cancer horoscopes → daily scripture → Date Night Roulette.
 function ScoreTab(ctx) {
+  // Two games share the home screen: Phase 10 (live, in Supabase) and Poker
+  // (local practice chips). Each keeps its own state, so you can switch freely
+  // and pick either back up where you left it.
+  const [activeGame, setActiveGame] = useState(() => localStorage.getItem("pp.activeGame") || "phase10");
+  const pickGame = (g) => { localStorage.setItem("pp.activeGame", g); setActiveGame(g); };
   return html`<${Fragment}>
-    <${PlayTab} ...${ctx} />
+    <div class="gameswitch">
+      <button class=${activeGame === "phase10" ? "on" : ""} onClick=${() => pickGame("phase10")}>🎴 Phase 10</button>
+      <button class=${activeGame === "poker" ? "on" : ""} onClick=${() => pickGame("poker")}>🃏 Poker</button>
+    </div>
+    ${activeGame === "phase10"
+      ? html`<${PlayTab} ...${ctx} />`
+      : html`<${PokerTab} me=${ctx.me} flash=${ctx.flash} />`}
     <${LifetimeCard} ...${ctx} />
     <${HoroscopeCard} players=${ctx.players} />
     <${ScriptureCard} />
