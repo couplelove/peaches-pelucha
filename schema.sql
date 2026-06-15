@@ -383,3 +383,28 @@ create index if not exists social_links_sender     on social_links (sender_id);
 create index if not exists transactions_player      on transactions (player_id);
 create index if not exists matches_status           on matches (status);
 create index if not exists games_status             on games (status, created_at desc);
+
+-- Collide 🌌 — worlds are the circle-portals on the public map
+create table if not exists worlds (
+  id          uuid primary key default gen_random_uuid(),
+  slug        text unique not null,
+  name        text not null,
+  kind        text not null default 'public',
+  emoji       text not null default '🌍',
+  color       text not null default '#c15f3c',
+  x           real not null default 0.5,
+  y           real not null default 0.5,
+  blurb       text,
+  owner_label text,
+  created_at  timestamptz not null default now()
+);
+alter table worlds enable row level security;
+drop policy if exists anon_all on worlds;
+create policy anon_all on worlds for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table worlds; exception when duplicate_object then null; end $$;
+insert into worlds (slug, name, kind, emoji, color, x, y, blurb, owner_label)
+select * from (values
+  ('peaches-pelucha', 'Peaches & Pelucha', 'private', '🍑', '#c15f3c', 0.30, 0.40, 'Your private world', 'Peaches & Pelucha'),
+  ('the-commons',     'The Commons',       'public',  '🌍', '#356b8c', 0.66, 0.58, 'The first public square — more worlds are forming', 'Collide')
+) as v(slug, name, kind, emoji, color, x, y, blurb, owner_label)
+where not exists (select 1 from worlds);
