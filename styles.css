@@ -713,7 +713,10 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pkcard.back { background: linear-gradient(135deg, #3a322c, #2b2521); border-color: #2b2521; color: #c79a78; }
 .pk-mono { text-align: center; font-size: 13px; line-height: 1.05; letter-spacing: 2px; opacity: .7; }
 .pkcard.sm .pk-mono { font-size: 8px; letter-spacing: 1px; }
-@keyframes pkdeal { from { opacity: 0; transform: translateY(-12px) scale(.9) rotate(-3deg); } to { opacity: 1; transform: none; } }
+/* cards deal in from the top of the table with a little flip + settle */
+@keyframes pkdeal { 0% { opacity: 0; transform: translateY(-46px) scale(.78) rotate(-9deg); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+.pkcard:not(.slot):not(.back) { animation: pkdeal .42s cubic-bezier(.2,.8,.3,1.1) both; }
+.pkcard.back { animation: pkdeal .34s cubic-bezier(.2,.8,.3,1.1) both; }
 
 .pk-controls { margin-top: 14px; }
 .pk-antes { display: flex; align-items: center; gap: 7px; justify-content: center; margin-bottom: 10px; }
@@ -725,7 +728,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pk-chipbtn:disabled { opacity: .35; }
 .pk-deal { font-weight: 700; }
 .pk-decide { display: flex; gap: 10px; }
-.pk-decide .btn { flex: 1; }
+.pk-decide .btn { flex: 1; padding: 12px 8px; }
+.pk-decide.three .btn { font-size: 13px; padding: 12px 4px; }
+.pk-wager { font-size: 11px; color: var(--ink-3); }
 .btn.pk-call { background: var(--good); border-color: var(--good); color: #fff8f3; }
 
 .pk-result { margin-top: 14px; text-align: center; border-radius: var(--r); padding: 14px;

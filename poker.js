@@ -75,29 +75,40 @@ function handName(sc) {
     default: return "—";
   }
 }
-function anteBonus(sc) {
+/* Ultimate Texas Hold'em settlement. Each hand you post Ante + Blind (equal),
+   then make ONE Play bet across the streets — 3×/4× preflop, 2× on the flop,
+   1× on the river (or fold). Dealer qualifies with a pair or better. */
+const QUALIFY = [1, 2];     // dealer plays its hand if it has a pair or better
+// Blind paytable — pays on a WIN with a straight or better.
+function blindPay(sc) {
   switch (sc[0]) {
-    case 8: return sc[1] === 14 ? 50 : 20;
-    case 7: return 10; case 6: return 3; case 5: return 2; case 4: return 1; default: return 0;
+    case 8: return sc[1] === 14 ? 500 : 50;   // royal / straight flush
+    case 7: return 10;                          // quads
+    case 6: return 3;                           // full house
+    case 5: return 1.5;                         // flush
+    case 4: return 1;                           // straight
+    default: return 0;                          // less than a straight → push
   }
 }
-const QUALIFY = [1, 4];     // dealer needs a pair of fours or better
-function settle(ante, call, ps, ds) {
+// ante = the unit (ante = blind = A). play = the Play wager already posted.
+// returns chips to RETURN (ante+blind+play were escrowed when bet).
+function settleUTH(A, play, ps, ds) {
   const qualifies = cmp(ds, QUALIFY) >= 0;
   const c = cmp(ps, ds);
-  const bonus = anteBonus(ps);
+  const bp = blindPay(ps);
   const lines = []; let ret = 0, outcome;
-  if (!qualifies) {
-    ret = ante * 2 + ante * bonus + call; outcome = "win";
-    lines.push("Dealer didn't qualify — ante pays, call returned.");
-    if (bonus) lines.push(`Ante bonus ×${bonus}.`);
-  } else if (c > 0) {
-    ret = ante * 2 + ante * bonus + call * 2; outcome = "win";
-    lines.push("Beat the dealer!");
-    if (bonus) lines.push(`Ante bonus ×${bonus}.`);
+  if (c > 0) {
+    outcome = "win";
+    ret += play * 2;                            // Play pays 1:1
+    ret += qualifies ? A * 2 : A;               // Ante: 1:1 if dealer qualifies, else push
+    ret += A + Math.round(A * bp);              // Blind: returned + paytable bonus (rounded to a whole chip)
+    lines.push(qualifies ? "You beat the dealer!" : "Win — dealer didn't qualify (ante pushes).");
+    if (bp) lines.push(`Blind bonus ${bp % 1 ? bp.toFixed(1) : bp}×.`);
   } else if (c === 0) {
-    ret = ante + call; outcome = "push"; lines.push("Tie — bets returned.");
-  } else { ret = 0; outcome = "lose"; lines.push("Dealer wins."); }
+    outcome = "push"; ret = play + A + A; lines.push("Tie — all bets push.");
+  } else {
+    outcome = "lose"; ret = 0; lines.push("Dealer wins.");
+  }
   return { ret, outcome, qualifies, lines };
 }
 
@@ -105,13 +116,12 @@ function settle(ante, call, ps, ds) {
 const START_CHIPS = 1000;
 const ANTES = [10, 25, 50, 100];
 
-const newSeat = () => ({ chips: START_CHIPS, ante: 25, ready: false, hole: null, decision: "pending", result: null, handStart: START_CHIPS });
+const newSeat = () => ({ chips: START_CHIPS, ante: 25, ready: false, hole: null, play: 0, folded: false, acted: null, result: null, handStart: START_CHIPS });
 function initState(players) {
   const seats = {};
   for (const p of players) seats[p.id] = newSeat();
-  return { status: "betting", handNo: 0, deck: [], board: null, dealer: null, revealed: 0, dealerName: null, seats };
+  return { status: "betting", handNo: 0, street: null, board: null, dealer: null, revealed: 0, dealerName: null, seats };
 }
-// make sure every current player has a seat (handles a player added later)
 function ensureSeats(state, players) {
   let changed = false; const seats = { ...state.seats };
   for (const p of players) if (!seats[p.id]) { seats[p.id] = newSeat(); changed = true; }
@@ -120,54 +130,83 @@ function ensureSeats(state, players) {
 
 function dealMut(state) {
   if (state.status !== "betting") return null;
-  const ready = Object.entries(state.seats).filter(([, s]) => s.ready && s.ante > 0 && s.chips >= s.ante);
+  const ready = Object.entries(state.seats).filter(([, s]) => s.ready && s.ante > 0 && s.chips >= s.ante * 2);
   if (!ready.length) return null;
   const d = freshDeck();
   const seats = {};
   for (const [id, s] of Object.entries(state.seats)) {
-    if (s.ready && s.ante > 0 && s.chips >= s.ante) {
-      seats[id] = { ...s, hole: [d.pop(), d.pop()], decision: "pending", result: null, handStart: s.chips, chips: s.chips - s.ante };
+    if (s.ready && s.ante > 0 && s.chips >= s.ante * 2) {
+      // post Ante + Blind (= 2× the unit)
+      seats[id] = { ...s, hole: [d.pop(), d.pop()], play: 0, folded: false, acted: null, result: null, handStart: s.chips, chips: s.chips - s.ante * 2 };
     } else {
-      seats[id] = { ...s, hole: null, decision: "out", ready: false, result: null };
+      seats[id] = { ...s, hole: null, play: 0, folded: false, acted: null, ready: false, result: null };
     }
   }
   const board = [d.pop(), d.pop(), d.pop(), d.pop(), d.pop()];
   const dealer = [d.pop(), d.pop()];
-  return { ...state, status: "decision", board, dealer, revealed: 3, dealerName: null, handNo: (state.handNo || 0) + 1, seats };
+  return { ...state, status: "play", street: "preflop", board, dealer, revealed: 0, dealerName: null, handNo: (state.handNo || 0) + 1, seats };
 }
-function decisionMut(state, pid, choice) {
+
+// action: 'check' | 'fold' | a number = the Play multiplier (4,3,2,1)
+function actMut(state, pid, action) {
+  if (state.status !== "play") return null;
   const s = state.seats[pid];
-  if (!s || !s.hole || s.decision !== "pending") return null;
+  if (!s || !s.hole || s.folded || s.play > 0) return null;     // not in, or already locked in
+  if (s.acted === state.street) return null;                    // already acted this street
   const seats = { ...state.seats };
-  if (choice === "call") {
-    if (s.chips < s.ante * 2) return null;
-    seats[pid] = { ...s, decision: "call", chips: s.chips - s.ante * 2 };
-  } else seats[pid] = { ...s, decision: "fold" };
+  if (action === "check") {
+    if (state.street === "river") return null;                  // can't check the river
+    seats[pid] = { ...s, acted: state.street };
+  } else if (action === "fold") {
+    if (state.street !== "river") return null;                  // fold only on the river
+    seats[pid] = { ...s, folded: true, acted: state.street };
+  } else {                                                       // a Play bet
+    const mult = action;
+    const ok = (state.street === "preflop" && (mult === 4 || mult === 3))
+      || (state.street === "flop" && mult === 2)
+      || (state.street === "river" && mult === 1);
+    if (!ok) return null;
+    const cost = mult * s.ante;
+    if (s.chips < cost) return null;
+    seats[pid] = { ...s, play: cost, chips: s.chips - cost, acted: state.street };
+  }
   return { ...state, seats };
 }
+
+// advance the table once everyone in the hand has acted for the current street
+function advanceMut(state) {
+  if (state.status !== "play") return null;
+  const inhand = Object.entries(state.seats).filter(([, s]) => s.hole && !s.folded);
+  const pending = inhand.filter(([, s]) => s.play === 0 && s.acted !== state.street);
+  if (pending.length) return null;                              // someone still to act
+  if (state.street === "preflop") return { ...state, street: "flop", revealed: 3 };
+  if (state.street === "flop") return { ...state, street: "river", revealed: 5 };
+  return showdownMut(state);                                    // river done
+}
+
 function showdownMut(state) {
-  if (state.status !== "decision") return null;
-  const inhand = Object.entries(state.seats).filter(([, s]) => s.hole);
-  if (!inhand.length || !inhand.every(([, s]) => s.decision === "call" || s.decision === "fold")) return null;
+  if (state.status !== "play") return null;
   const ds = evaluate([...state.dealer, ...state.board]);
   const seats = { ...state.seats };
-  for (const [id, s] of inhand) {
-    if (s.decision === "fold") {
-      seats[id] = { ...s, result: { outcome: "fold", net: s.chips - s.handStart, lines: ["Folded — ante forfeited."] } };
+  for (const [id, s] of Object.entries(state.seats)) {
+    if (!s.hole) continue;
+    if (s.folded) {
+      seats[id] = { ...s, result: { outcome: "fold", net: s.chips - s.handStart, lines: ["Folded — ante & blind forfeited."] } };
     } else {
       const ps = evaluate([...s.hole, ...state.board]);
-      const set = settle(s.ante, s.ante * 2, ps.score, ds.score);
+      const set = settleUTH(s.ante, s.play, ps.score, ds.score);
       const chipsAfter = s.chips + set.ret;
       seats[id] = { ...s, chips: chipsAfter, result: { outcome: set.outcome, net: chipsAfter - s.handStart, lines: set.lines, playerName: ps.name, qualifies: set.qualifies } };
     }
   }
-  return { ...state, status: "showdown", revealed: 5, dealerName: ds.name, seats };
+  return { ...state, status: "showdown", street: null, revealed: 5, dealerName: ds.name, seats };
 }
+
 function nextMut(state) {
   if (state.status !== "showdown") return null;
   const seats = {};
-  for (const [id, s] of Object.entries(state.seats)) seats[id] = { ...s, hole: null, decision: "pending", result: null, ready: false };
-  return { ...state, status: "betting", board: null, dealer: null, revealed: 0, dealerName: null, seats };
+  for (const [id, s] of Object.entries(state.seats)) seats[id] = { ...s, hole: null, play: 0, folded: false, acted: null, result: null, ready: false };
+  return { ...state, status: "betting", street: null, board: null, dealer: null, revealed: 0, dealerName: null, seats };
 }
 
 /* --------------------------------------------------- sync hook ------------ */
@@ -284,16 +323,17 @@ export function PokerTab({ client, me, players, flash, room = null }) {
 
   const st = row && row.state;
 
-  // auto-reveal: once everyone in the hand has folded/called, run the showdown.
-  // fired by whichever phone notices; the status + version guards make a double
-  // fire harmless. `firing` just avoids re-applying while one write is in flight.
+  // auto-advance the table: when everyone in the hand has acted for the current
+  // street, deal the next street (or run showdown after the river). Fired by
+  // whichever phone notices; status/street + version guards make a double-fire
+  // harmless. `firing` avoids re-applying while one write is in flight.
   useEffect(() => {
-    if (!st || st.status !== "decision") { firing.current = false; return; }
-    const inhand = Object.values(st.seats).filter((s) => s.hole);
-    const allIn = inhand.length && inhand.every((s) => s.decision !== "pending");
-    if (allIn && !firing.current) {
+    if (!st || st.status !== "play") { firing.current = false; return; }
+    const inhand = Object.values(st.seats).filter((s) => s.hole && !s.folded);
+    const pending = inhand.filter((s) => s.play === 0 && s.acted !== st.street);
+    if (pending.length === 0 && !firing.current) {
       firing.current = true;
-      Promise.resolve(apply(showdownMut)).finally(() => { firing.current = false; });
+      Promise.resolve(apply(advanceMut)).finally(() => { firing.current = false; });
     }
   }, [st, apply]);
 
@@ -311,14 +351,12 @@ export function PokerTab({ client, me, players, flash, room = null }) {
   const setAnte = (a) => apply((s) => ({ ...s, seats: { ...s.seats, [me.id]: { ...s.seats[me.id], ante: a } } }));
   const toggleReady = () => apply((s) => { const seat = s.seats[me.id]; return { ...s, seats: { ...s.seats, [me.id]: { ...seat, ready: !seat.ready } } }; });
   const deal = () => apply(dealMut);
-  const decide = (choice) => {
-    if (choice === "call" && mySeat.chips < mySeat.ante * 2) { flash("Not enough chips to call"); return; }
-    apply((s) => decisionMut(s, me.id, choice));
-  };
+  const act = (action) => apply((s) => actMut(s, me.id, action));   // 'check' | 'fold' | multiplier
   const next = () => apply(nextMut);
   const rebuy = () => apply((s) => ({ ...s, seats: { ...s.seats, [me.id]: { ...s.seats[me.id], chips: s.seats[me.id].chips + START_CHIPS } } }));
 
-  const readyCount = Object.values(st.seats).filter((s) => s.ready && s.ante > 0 && s.chips >= s.ante).length;
+  const readyCount = Object.values(st.seats).filter((s) => s.ready && s.ante > 0 && s.chips >= s.ante * 2).length;
+  const myPending = mySeat.hole && !mySeat.folded && mySeat.play === 0 && mySeat.acted !== st.street;
 
   // live "what you have" for my seat during the hand
   const myLive = useMemo(() => {
@@ -332,23 +370,25 @@ export function PokerTab({ client, me, players, flash, room = null }) {
     const r = s.result;
     const showCards = !!s.hole;     // both players see each other's hole cards at this shared table
     const statusTag =
-      phase === "betting" ? (s.ready && s.ante > 0 ? `ready · ${s.ante}` : s.ante === 0 ? "sitting out" : "choosing…")
-      : phase === "decision" ? (s.decision === "out" ? "sitting out" : s.decision === "pending" ? "deciding…" : s.decision.toUpperCase())
+      phase === "betting" ? (s.ready && s.ante > 0 ? `ready · ante ${s.ante}` : s.ante === 0 ? "sitting out" : "choosing…")
+      : phase === "play" ? (!s.hole ? "sitting out" : s.folded ? "FOLDED" : s.play > 0 ? `PLAY ${s.play}` : (s.acted === st.street ? "checked" : "to act…"))
       : r ? "" : (s.hole ? "" : "sat out");
-    return html`<div class=${`pk-seat ${meSeat ? "me" : ""} ${r ? r.outcome : ""}`} key=${p.id}>
+    const wager = s.hole && !r ? `Ante+Blind ${s.ante * 2}${s.play ? ` · Play ${s.play}` : ""}` : null;
+    return html`<div class=${`pk-seat ${meSeat ? "me" : ""} ${r ? r.outcome : ""} ${s.folded ? "folded" : ""}`} key=${p.id}>
       <div class="pk-seathead">
         <span class="pk-seatname">${p.emoji} ${p.name}${meSeat ? " (you)" : ""}</span>
         <span class="pk-seatchips">🪙 ${s.chips}</span>
       </div>
       <div class="pk-seatbody">
         <div class="pk-row sm">
-          ${showCards ? s.hole.map((c, i) => html`<${PCard} sm=${true} card=${c} dealDelay=${i * 60} />`)
-            : [0, 1].map(() => html`<div class="pkcard sm slot"></div>`)}
+          ${showCards ? s.hole.map((c, i) => html`<${PCard} key=${`${p.id}-h${i}-${c.r}${c.s}`} sm=${true} card=${c} dealDelay=${i * 90} />`)
+            : [0, 1].map((i) => html`<div class="pkcard sm slot" key=${i}></div>`)}
         </div>
         <div class="pk-seatinfo">
           ${r && r.playerName ? html`<span class="pk-hname ${r.outcome === "win" ? "win" : ""}">${r.playerName}</span>`
-            : (meSeat && myLive && myLive.score[0] >= 0 && phase === "decision") ? html`<span class="pk-hname you">${myLive.name}</span>`
+            : (meSeat && myLive && myLive.score[0] >= 0 && phase === "play") ? html`<span class="pk-hname you">${myLive.name}</span>`
             : html`<span class="pk-tag">${statusTag}</span>`}
+          ${wager ? html`<span class="pk-wager">${wager}</span>` : ""}
           ${r && html`<span class=${`pk-net ${r.net >= 0 ? "pos" : "neg"}`}>${r.net >= 0 ? "+" : ""}${r.net} 🪙</span>`}
         </div>
       </div>
@@ -358,11 +398,11 @@ export function PokerTab({ client, me, players, flash, room = null }) {
   // ---- compact home card (Phase 10-style): status + chips + Open game ----
   let cardStatus;
   if (phase === "betting") cardStatus = mySeat.ready ? "Ready — waiting to deal 🍿" : "Ante up to play";
-  else if (phase === "decision") cardStatus = (mySeat.hole && mySeat.decision === "pending") ? "Your move — fold or call" : (mySeat.hole ? "Waiting for the table…" : "Sitting this hand out");
+  else if (phase === "play") cardStatus = myPending ? `Your move — the ${st.street}` : (mySeat.hole ? "Waiting for the table…" : "Sitting this hand out");
   else cardStatus = "Hand over — see the results";
   if (!immersive) {
     return html`<div class="card gamehero" onClick=${() => setImmersive(true)}>
-      <div class="eyebrow">Poker <span class="muted-glyph">♠</span> · Casino Hold'em</div>
+      <div class="eyebrow">Poker <span class="muted-glyph">♠</span> · Ultimate Hold'em</div>
       <div class="gamehero-title">${cardStatus}</div>
       <div class="gamehero-meta tnum">${players.map((p) => `${p.emoji} 🪙${(st.seats[p.id] || {}).chips ?? "—"}`).join("   ·   ")}</div>
       <button class="btn gamehero-btn" onClick=${(e) => { e.stopPropagation(); setImmersive(true); }}>Open game</button>
@@ -377,19 +417,23 @@ export function PokerTab({ client, me, players, flash, room = null }) {
       <button class="iconbtn" title="Poker hands" onClick=${() => setShowKey(true)}>📖</button>
     </div>
     <div class="gamefs-body"><div class="pk-room">
-    <div class="tiny muted" style="margin:2px 0 14px">Casino Hold'em · you & ${others.map((o) => o.name).join(" & ") || "the table"} vs the dealer</div>
+    <div class="tiny muted" style="margin:2px 0 14px">Ultimate Texas Hold'em · you & ${others.map((o) => o.name).join(" & ") || "the table"} vs the dealer${phase === "play" ? ` · ${st.street}` : ""}</div>
 
     <!-- dealer + community -->
     <div class="pk-zone center">
       <div class="pk-zlabel">Dealer ${st.dealerName ? html`· <span class="pk-hname">${st.dealerName}</span>` : ""}</div>
       <div class="pk-row">
-        ${phase === "betting" ? [0, 1].map(() => html`<div class="pkcard slot"></div>`)
-          : st.dealer.map((c, i) => html`<${PCard} card=${c} back=${phase !== "showdown"} dealDelay=${i * 70} />`)}
+        ${phase === "betting" ? [0, 1].map((i) => html`<div class="pkcard slot" key=${i}></div>`)
+          : st.dealer.map((c, i) => phase === "showdown"
+              ? html`<${PCard} key=${`d${i}f`} card=${c} dealDelay=${i * 80} />`
+              : html`<${PCard} key=${`d${i}b`} back=${true} />`)}
       </div>
       <div class="pk-zlabel" style="margin-top:12px">Community</div>
       <div class="pk-row">
-        ${phase === "betting" ? [0, 1, 2, 3, 4].map(() => html`<div class="pkcard slot"></div>`)
-          : st.board.map((c, i) => i < st.revealed ? html`<${PCard} card=${c} dealDelay=${i * 70} />` : html`<${PCard} back=${true} />`)}
+        ${phase === "betting" ? [0, 1, 2, 3, 4].map((i) => html`<div class="pkcard slot" key=${i}></div>`)
+          : st.board.map((c, i) => i < st.revealed
+              ? html`<${PCard} key=${`c${i}-${c.r}${c.s}`} card=${c} dealDelay=${(i % 3) * 90} />`
+              : html`<${PCard} key=${`c${i}b`} back=${true} />`)}
       </div>
     </div>
 
@@ -403,8 +447,9 @@ export function PokerTab({ client, me, players, flash, room = null }) {
     ${phase === "betting" && html`<div class="pk-controls">
       <div class="pk-antes">
         <span class="tiny muted">Your ante</span>
-        ${ANTES.map((a) => html`<button class=${`pk-chipbtn ${mySeat.ante === a ? "on" : ""}`} disabled=${a > mySeat.chips || mySeat.ready} onClick=${() => setAnte(a)}>${a}</button>`)}
+        ${ANTES.map((a) => html`<button class=${`pk-chipbtn ${mySeat.ante === a ? "on" : ""}`} disabled=${a * 2 > mySeat.chips || mySeat.ready} onClick=${() => setAnte(a)}>${a}</button>`)}
       </div>
+      <div class="tiny muted center" style="margin:-2px 0 10px">Each hand posts Ante + Blind (<b>${mySeat.ante * 2}</b>), then you bet Play across the streets.</div>
       ${mySeat.chips < ANTES[0]
         ? html`<button class="btn block" onClick=${rebuy}>Rebuy +${START_CHIPS} 🪙</button>`
         : html`<div class="pk-decide">
@@ -416,14 +461,30 @@ export function PokerTab({ client, me, players, flash, room = null }) {
           </div>`}
     </div>`}
 
-    ${phase === "decision" && html`<div class="pk-controls">
-      ${mySeat.hole && mySeat.decision === "pending"
-        ? html`<div class="tiny muted center" style="margin-bottom:8px">Call costs <b>${mySeat.ante * 2}</b> (2× ante), or fold your ${mySeat.ante} ante.</div>
-            <div class="pk-decide">
-              <button class="btn ghost" onClick=${() => decide("fold")}>Fold</button>
-              <button class="btn pk-call" disabled=${mySeat.chips < mySeat.ante * 2} onClick=${() => decide("call")}>Call ${mySeat.ante * 2} 🪙</button>
+    ${phase === "play" && html`<div class="pk-controls">
+      ${!mySeat.hole ? html`<div class="tiny muted center">You sat this one out.</div>`
+        : mySeat.folded ? html`<div class="tiny muted center">You folded — waiting for the table…</div>`
+        : mySeat.play > 0 ? html`<div class="tiny muted center">You're in for <b>${mySeat.play}</b> 🪙 — waiting for the table…</div>`
+        : !myPending ? html`<div class="tiny muted center">Checked — waiting for the next card…</div>`
+        : st.street === "preflop" ? html`
+            <div class="tiny muted center" style="margin-bottom:8px">Bet now, or check to see the flop. Earlier bets are bigger.</div>
+            <div class="pk-decide three">
+              <button class="btn ghost" onClick=${() => act("check")}>Check</button>
+              <button class="btn" disabled=${mySeat.chips < 3 * mySeat.ante} onClick=${() => act(3)}>Bet 3× · ${3 * mySeat.ante}</button>
+              <button class="btn pk-call" disabled=${mySeat.chips < 4 * mySeat.ante} onClick=${() => act(4)}>Bet 4× · ${4 * mySeat.ante}</button>
             </div>`
-        : html`<div class="tiny muted center">${mySeat.hole ? `You ${mySeat.decision === "call" ? "called" : "folded"} — waiting for the table…` : "You sat this one out."}</div>`}
+        : st.street === "flop" ? html`
+            <div class="tiny muted center" style="margin-bottom:8px">Bet 2× now, or check to the river.</div>
+            <div class="pk-decide">
+              <button class="btn ghost" onClick=${() => act("check")}>Check</button>
+              <button class="btn pk-call" disabled=${mySeat.chips < 2 * mySeat.ante} onClick=${() => act(2)}>Bet 2× · ${2 * mySeat.ante}</button>
+            </div>`
+        : html`
+            <div class="tiny muted center" style="margin-bottom:8px">Last call — make your Play bet or fold.</div>
+            <div class="pk-decide">
+              <button class="btn ghost" onClick=${() => act("fold")}>Fold</button>
+              <button class="btn pk-call" disabled=${mySeat.chips < mySeat.ante} onClick=${() => act(1)}>Bet 1× · ${mySeat.ante}</button>
+            </div>`}
     </div>`}
 
     ${phase === "showdown" && html`<div class="pk-controls">
