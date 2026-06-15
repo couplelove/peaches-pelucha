@@ -750,3 +750,25 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pk-keytext { text-align: right; }
 .pk-keytext b { display: block; font-size: 13px; }
 .pk-keytext .tiny { display: block; max-width: 150px; }
+
+/* poker — two-seat shared table */
+.pk-seats { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.pk-seat { border: 1px solid var(--line-2); border-radius: var(--r); padding: 10px 12px; background: var(--paper-2); transition: border-color .2s ease, background .2s ease; }
+.pk-seat.me { border-color: var(--line); background: var(--surface); }
+.pk-seat.win { border-color: var(--good); background: #eef4ef; }
+.pk-seat.lose { border-color: var(--bad); background: #f8eeec; }
+.pk-seat.fold { opacity: .72; }
+.pk-seathead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pk-seatname { font-weight: 600; font-size: 13.5px; }
+.pk-seatchips { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13.5px; }
+.pk-seatbody { display: flex; align-items: center; gap: 12px; }
+.pk-row.sm { gap: 5px; }
+.pk-seatinfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pk-tag { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.pk-seat .pk-net { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pk-net.pos { color: var(--good); }
+.pk-net.neg { color: var(--bad); }
+
+/* a touch more room in the 6-tab nav */
+.nav button { font-size: 10px; padding: 6px 1px; }
+.nav button span:last-child { white-space: nowrap; }
