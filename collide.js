@@ -216,18 +216,13 @@ function GameRoom({ client, me, players, flash, api, world, crowd, onBack }) {
   </div>`;
 }
 
-/* ---- happenings: a "this week" carousel you can swipe, + an Upcoming list.
-   Anyone drops an event; one-tap RSVP shows who's in. ---- */
+/* ---- happenings: an Upcoming list — anyone drops an event, one-tap RSVP ---- */
 const EV_EMOJI = ["🎉", "🍿", "☕", "🍻", "🥾", "🏖️", "🎮", "🍽️", "🎶", "🛍️", "💪", "✨"];
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function CommonsEvents({ client, me, world }) {
   const [events, setEvents] = useState(null);
-  const [idx, setIdx] = useState(0);
-  const [dx, setDx] = useState(0);
   const [composing, setComposing] = useState(false);
   const [f, setF] = useState({ title: "", place: "", when_txt: "", when_at: "", emoji: "🎉" });
-  const paused = useRef(0);
-  const drag = useRef(null);
 
   const load = useCallback(async () => {
     const { data } = await client.from("world_events").select("*").eq("world_slug", world.slug).order("created_at", { ascending: false }).limit(40);
@@ -241,38 +236,20 @@ function CommonsEvents({ client, me, world }) {
     return () => { try { ch && client.removeChannel(ch); } catch {} };
   }, [client, world.slug, load]);
 
-  // date buckets: carousel = THIS WEEK (or undated/"anytime"); list = all upcoming
   const today = ymd(new Date());
-  const weekEnd = ymd(new Date(Date.now() + 7 * 864e5));
   const dayDiff = (w) => Math.round((new Date(w + "T00:00") - new Date(today + "T00:00")) / 864e5);
   const dateLabel = (w) => { if (!w) return "anytime"; const n = dayDiff(w); if (n === 0) return "today"; if (n === 1) return "tomorrow"; return new Date(w + "T00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); };
   const sortFn = (a, b) => ((a.when_at || "9999") < (b.when_at || "9999") ? -1 : 1);
   const live = (events || []).filter((e) => !e.when_at || e.when_at >= today).sort(sortFn);
-  const week = live.filter((e) => !e.when_at || e.when_at <= weekEnd);
-  const ci = Math.min(idx, Math.max(0, week.length - 1));
-
-  // auto-rotate this week's carousel (paused after you touch it)
-  useEffect(() => {
-    if (week.length < 2 || composing) return;
-    const t = setInterval(() => { if (Date.now() - paused.current > 6000) setIdx((i) => (i + 1) % week.length); }, 4500);
-    return () => clearInterval(t);
-  }, [week.length, composing]);
-
-  // finger-attached swipe
-  const onDown = (e) => { drag.current = { x: e.clientX, t: Date.now(), off: 0 }; paused.current = Date.now(); };
-  const onMove = (e) => { const d = drag.current; if (!d) return; let off = e.clientX - d.x; if ((ci === 0 && off > 0) || (ci >= week.length - 1 && off < 0)) off *= 0.35; d.off = off; setDx(off); };
-  const onUp = () => { const d = drag.current; drag.current = null; setDx(0); if (!d) return; const off = d.off; const v = off / Math.max(Date.now() - d.t, 1); let ni = ci; if ((off < -48 || v < -0.45) && ci < week.length - 1) ni = ci + 1; else if ((off > 48 || v > 0.45) && ci > 0) ni = ci - 1; setIdx(ni); };
-  const go = (n) => { paused.current = Date.now(); setIdx(n); };
 
   const post = async () => {
     const title = f.title.trim(); if (!title) return;
-    setComposing(false); setIdx(0); paused.current = Date.now();
+    setComposing(false);
     await client.from("world_events").insert({ world_slug: world.slug, title, place: f.place.trim() || null, when_txt: f.when_txt.trim() || null, when_at: f.when_at || null, emoji: f.emoji, created_by: me.id, creator_name: me.name, creator_emoji: me.emoji });
     setF({ title: "", place: "", when_txt: "", when_at: "", emoji: "🎉" });
     load();
   };
   const toggleJoin = async (ev) => {
-    paused.current = Date.now();
     const list = ev.joined || [];
     const mine = list.find((j) => j.id === me.id);
     const next = mine ? list.filter((j) => j.id !== me.id) : [...list, { id: me.id, name: me.name, emoji: me.emoji, at: new Date().toISOString() }];
@@ -298,45 +275,20 @@ function CommonsEvents({ client, me, world }) {
     </div></div>`;
   }
 
-  const joinRow = (ev) => {
-    const joined = ev.joined || [];
-    const mineIn = joined.some((j) => j.id === me.id);
-    return html`<div class="we-join">
-      <div class="we-faces">${joined.slice(0, 5).map((j) => html`<span key=${j.id} title=${j.name}>${j.emoji || "👤"}</span>`)}<span class="we-count">${joined.length ? `${joined.length} going` : "be the first"}</span></div>
-      <button class=${`we-rsvp ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "Going ✓" : "Join"}</button>
-    </div>`;
-  };
-
   return html`<div class="we-wrap">
-    <div class="we-head"><span>This week</span><button class="we-add" onClick=${() => setComposing(true)}>＋ Share</button></div>
-    ${week.length === 0
-      ? html`<button class="we-empty" onClick=${() => setComposing(true)}>Nothing this week yet — ＋ share something</button>`
-      : html`<div class="we-vp">
-          <div class="we-track" style=${`width:${week.length * 100}%;transform:translateX(calc(${-ci * (100 / week.length)}% + ${dx}px));transition:${drag.current ? "none" : "transform .3s cubic-bezier(.2,.8,.3,1.05)"}`}
-            onPointerDown=${onDown} onPointerMove=${onMove} onPointerUp=${onUp} onPointerCancel=${onUp}>
-            ${week.map((ev) => html`<div class="we-pane" key=${ev.id} style=${`width:${100 / week.length}%`}>
-              <div class="we-card" style=${`--wc:${world.color}`}>
-                <button class="we-x" title="remove" onClick=${() => remove(ev)}>✕</button>
-                <div class="we-emoji">${ev.emoji}</div>
-                <div class="we-main">
-                  <div class="we-title">${ev.title}</div>
-                  <div class="we-meta">${[ev.place && `📍 ${ev.place}`, `🗓 ${dateLabel(ev.when_at)}${ev.when_txt ? ` · ${ev.when_txt}` : ""}`].filter(Boolean).join(" · ")}</div>
-                  ${joinRow(ev)}
-                </div>
-              </div>
-            </div>`)}
-          </div>
-          ${week.length > 1 && html`<div class="we-dots">${week.map((_, i) => html`<span key=${i} class=${i === ci ? "on" : ""} onClick=${() => go(i)}></span>`)}</div>`}
+    <div class="we-head"><span>Upcoming</span><button class="we-add" onClick=${() => setComposing(true)}>＋ Share</button></div>
+    ${live.length === 0
+      ? html`<button class="we-empty" onClick=${() => setComposing(true)}>Nothing planned — ＋ share something to do</button>`
+      : html`<div class="we-up">
+          ${live.map((ev) => { const joined = ev.joined || []; const mineIn = joined.some((j) => j.id === me.id); return html`<div class="we-up-row" key=${ev.id}>
+            <span class="we-up-emoji">${ev.emoji}</span>
+            <div class="we-up-main">
+              <div class="we-up-title">${ev.title}</div>
+              <div class="we-up-meta">${[dateLabel(ev.when_at), ev.place, ev.when_txt].filter(Boolean).join(" · ")}${joined.length ? ` · ${joined.length} going` : ""}</div>
+            </div>
+            <button class=${`we-up-join ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "Going ✓" : "Join"}</button>
+            <button class="we-up-x" title="remove" onClick=${() => remove(ev)}>✕</button>
+          </div>`; })}
         </div>`}
-
-    ${live.length > 0 && html`<div class="we-up">
-      <div class="we-up-head">Upcoming</div>
-      ${live.map((ev) => { const joined = ev.joined || []; const mineIn = joined.some((j) => j.id === me.id); return html`<div class="we-up-row" key=${ev.id}>
-        <span class="we-up-emoji">${ev.emoji}</span>
-        <div class="we-up-main"><div class="we-up-title">${ev.title}</div>
-          <div class="we-up-meta">${[dateLabel(ev.when_at), ev.place].filter(Boolean).join(" · ")}${joined.length ? ` · ${joined.length} going` : ""}</div></div>
-        <button class=${`we-up-join ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "✓" : "Join"}</button>
-      </div>`; })}
-    </div>`}
   </div>`;
 }

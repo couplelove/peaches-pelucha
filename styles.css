@@ -1004,3 +1004,57 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .we-row { display: flex; gap: 8px; }
 .we-row .we-in { flex: 1; }
 .we-row .btn { flex: 1; }
+
+/* ============================================================================
+   The Commons — LIGHT BRUTALIST interior (overrides the cosmic .collide just
+   for the chat room: paper, hard square edges, thick black rules, hard offset
+   shadows, mono labels). The Collide map stays cosmic.
+   ========================================================================== */
+.collide.wr { background: #f1efe7; color: #16130d; }
+.collide.wr .wr-bar { border-bottom: 2px solid #16130d; padding-bottom: 10px; }
+.collide.wr .wr-title { color: #16130d; font-family: var(--sans); font-weight: 800; letter-spacing: -.01em; }
+.collide.wr .cback { background: #fff; border: 2px solid #16130d; color: #16130d; border-radius: 0; backdrop-filter: none; font-weight: 700; }
+.collide.wr .cback:active { background: #16130d; color: #f1efe7; }
+.collide.wr .wr-here .cav { background: #fff; border: 2px solid #16130d; border-radius: 0; box-shadow: none; }
+.collide.wr .wr-here .cav.me { background: #ffe2b0; }
+
+/* chat — flat bordered bubbles */
+.collide.wr .wr-bub { background: #fff; color: #16130d; border: 2px solid #16130d; border-radius: 0; }
+.collide.wr .wr-msg.mine .wr-bub { background: #16130d; color: #f1efe7; border-color: #16130d; }
+.collide.wr .wr-who { color: #6f675a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; }
+.collide.wr .wr-msg.sys { align-self: stretch; }
+.collide.wr .wr-msg.sys .wr-bub { background: #e7e3d8; color: #16130d; border-style: dashed; text-align: left; }
+.collide.wr .wr-react button { background: #fff; border: 2px solid #16130d; border-radius: 0; }
+.collide.wr .wr-react button:active { background: #16130d; }
+.collide.wr .wr-compose { border-top: 2px solid #16130d; }
+.collide.wr .wr-compose input { background: #fff; border: 2px solid #16130d; border-radius: 0; color: #16130d; }
+.collide.wr .wr-compose input::placeholder { color: #9c948a; }
+.collide.wr .wr-compose input:focus { box-shadow: 3px 3px 0 #16130d; }
+.collide.wr .wr-compose .btn { border-radius: 0; background: #16130d; color: #f1efe7; border: 2px solid #16130d; box-shadow: 3px 3px 0 #c9a25e; font-weight: 800; }
+.collide.wr .wr-compose .btn:active { box-shadow: none; transform: translate(3px, 3px); }
+
+/* happenings — blocks with hard offset shadows */
+.collide.wr .we-wrap { border-bottom: 2px solid #16130d; padding: 12px; }
+.collide.wr .we-head span { color: #6f675a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.collide.wr .we-add { background: #fff; border: 2px solid #16130d; color: #16130d; border-radius: 0; font-weight: 700; }
+.collide.wr .we-add:active { background: #16130d; color: #f1efe7; }
+.collide.wr .we-empty { background: #fff; border: 2px dashed #16130d; color: #16130d; border-radius: 0; font-weight: 600; }
+.collide.wr .we-up-row { display: flex; align-items: center; gap: 10px; background: #fff; border: 2px solid #16130d; border-radius: 0;
+  box-shadow: 3px 3px 0 #16130d; margin-bottom: 10px; padding: 10px 11px; }
+.collide.wr .we-up-emoji { font-size: 21px; flex: 0 0 auto; }
+.collide.wr .we-up-main { flex: 1; min-width: 0; }
+.collide.wr .we-up-title { color: #16130d; font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.collide.wr .we-up-meta { color: #6f675a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.collide.wr .we-up-join { flex: 0 0 auto; background: #16130d; color: #f1efe7; border: 2px solid #16130d; border-radius: 0; font-weight: 800; font-size: 12px; padding: 6px 13px; cursor: pointer; }
+.collide.wr .we-up-join.in { background: #ffe2b0; color: #16130d; }
+.collide.wr .we-up-x { flex: 0 0 auto; background: none; border: none; color: #b6ab9b; font-size: 13px; cursor: pointer; padding: 2px 4px; }
+
+/* compose sheet (light) */
+.collide.wr .we-compose { background: #fff; border: 2px solid #16130d; border-radius: 0; box-shadow: 4px 4px 0 #16130d; }
+.collide.wr .we-emojis button { background: #f1efe7; border: 2px solid transparent; border-radius: 0; }
+.collide.wr .we-emojis button.on { border-color: #16130d; background: #ffe2b0; }
+.collide.wr .we-in { background: #fff; border: 2px solid #16130d; border-radius: 0; color: #16130d; }
+.collide.wr .we-in::placeholder { color: #9c948a; }
+.collide.wr .we-in[type="date"] { color-scheme: light; }
+.collide.wr .we-row .btn { border-radius: 0; font-weight: 800; }
+.collide.wr .we-row .btn.ghost { background: #fff; border: 2px solid #16130d; color: #16130d; }
