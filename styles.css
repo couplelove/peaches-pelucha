@@ -933,3 +933,16 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 .cfloat { position: fixed; bottom: 90px; font-size: 30px; z-index: 5; pointer-events: none; animation: cfloatrise 2.4s ease-out forwards; }
 @keyframes cfloatrise { 0% { opacity: 0; transform: translateY(0) scale(.5); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-46vh) scale(1.3); } }
+
+/* ---- 🎲 the Game Room interior (paper, so the reused game UI looks native) ---- */
+.gr { position: fixed; inset: 0; z-index: 80; background: var(--paper); color: var(--ink); display: flex; flex-direction: column; }
+.gr-bar { display: flex; align-items: center; gap: 10px; padding: calc(var(--safe-top) + 12px) 14px 8px; border-bottom: 1px solid var(--line-2); }
+.cback.dark { background: var(--paper-2); border-color: var(--line); color: var(--ink); backdrop-filter: none; }
+.gr-title { font-family: var(--serif); font-weight: 500; font-size: 16px; color: var(--ink); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-here { display: flex; flex: 0 0 auto; }
+.gr-av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-content: center; font-size: 14px;
+  background: var(--paper-2); border: 1px solid var(--line); margin-left: -6px; box-shadow: 0 0 0 2px var(--paper); }
+.gr-av:first-child { margin-left: 0; }
+.gr-av.me { background: var(--accent-soft); border-color: var(--accent); }
+.gr-switch { margin: 12px 14px 0; }
+.gr-body { flex: 1; overflow-y: auto; padding: 8px 16px calc(16px + var(--safe-bottom)); max-width: var(--maxw); width: 100%; margin: 0 auto; }

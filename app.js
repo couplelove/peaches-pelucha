@@ -336,7 +336,7 @@ function App({ client, onResetCreds }) {
   // Stepping OUT of the private world into Collide replaces the whole shell —
   // it's a different space, not a tab. The private world stays the anchor.
   if (space === "collide") {
-    return html`<${Collide} client=${client} me=${me} players=${players} flash=${flash} onEnterHome=${() => { setTab("score"); setSpace("home"); }} />`;
+    return html`<${Collide} client=${client} me=${me} players=${players} flash=${flash} api=${api} onEnterHome=${() => { setTab("score"); setSpace("home"); }} />`;
   }
 
   return html`

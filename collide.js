@@ -1,6 +1,8 @@
 import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useMemo, useRef, useCallback } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
+import { PlayTab } from "./game.js";
+import { PokerTab } from "./poker.js";
 
 const html = htm.bind(h);
 
@@ -10,7 +12,7 @@ const html = htm.bind(h);
    public squares, friends' worlds, seeing one another. Presence is wired so two
    phones in Collide already see each other; avatars/movement come later. */
 
-export function Collide({ client, me, players, onEnterHome, flash }) {
+export function Collide({ client, me, players, onEnterHome, flash, api }) {
   const demo = !!client._db;
   const [worlds, setWorlds] = useState(null);
   const [room, setRoom] = useState(null);        // a public world you've entered
@@ -72,10 +74,15 @@ export function Collide({ client, me, players, onEnterHome, flash }) {
     setRoom(w);
   };
 
-  // ---- inside a public world: a real, live town square ----
+  // ---- inside a public world ----
   if (room) {
+    const crowd = peopleAt(`world:${room.slug}`);
+    if (room.slug === "game-room") {
+      return html`<${GameRoom} client=${client} me=${me} players=${players} flash=${flash} api=${api}
+        world=${room} crowd=${crowd} onBack=${() => setRoom(null)} />`;
+    }
     return html`<${WorldRoom} client=${client} me=${me} world=${room} demo=${demo}
-      crowd=${peopleAt(`world:${room.slug}`)} floats=${floats} onReact=${sendReact} onBack=${() => setRoom(null)} />`;
+      crowd=${crowd} floats=${floats} onReact=${sendReact} onBack=${() => setRoom(null)} />`;
   }
 
   // ---- the map ----
@@ -180,5 +187,29 @@ function WorldRoom({ client, me, world, demo, crowd, floats, onReact, onBack }) 
     </div>
 
     ${floats.map((f) => html`<span key=${f.id} class="cfloat" style=${`left:${f.x}%`}>${f.emoji}</span>`)}
+  </div>`;
+}
+
+/* ---- the Game Room: pull up a seat for Phase 10 or Poker (reuses the exact
+   private-game code, scoped to room="game-room"). Poker seats up to 4. ---- */
+function GameRoom({ client, me, players, flash, api, world, crowd, onBack }) {
+  const [game, setGame] = useState(() => localStorage.getItem("pp.roomGame") || "phase10");
+  const pick = (g) => { localStorage.setItem("pp.roomGame", g); setGame(g); };
+  const faces = [me, ...crowd.filter((p) => p.id !== me.id)].slice(0, 6);
+  return html`<div class="gr">
+    <div class="gr-bar">
+      <button class="cback dark" onClick=${onBack}>‹ Map</button>
+      <div class="gr-title">${world.emoji} ${world.name}</div>
+      <div class="gr-here">${faces.map((p, i) => html`<span class=${`gr-av ${i === 0 ? "me" : ""}`} key=${i} title=${p.name || ""}>${p.emoji || "👤"}</span>`)}</div>
+    </div>
+    <div class="gameswitch gr-switch">
+      <button class=${game === "phase10" ? "on" : ""} onClick=${() => pick("phase10")}>🎴 Phase 10</button>
+      <button class=${game === "poker" ? "on" : ""} onClick=${() => pick("poker")}>🃏 Poker · up to 4</button>
+    </div>
+    <div class="gr-body">
+      ${game === "phase10"
+        ? html`<${PlayTab} client=${client} players=${players} me=${me} api=${api} flash=${flash} room="game-room" />`
+        : html`<${PokerTab} client=${client} me=${me} players=${players} flash=${flash} room="game-room" />`}
+    </div>
   </div>`;
 }

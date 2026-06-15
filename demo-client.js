@@ -38,6 +38,7 @@ function seed() {
     worlds: [
       { id: "w1", slug: "peaches-pelucha", name: "Peaches & Pelucha", kind: "private", emoji: "🍑", color: "#c15f3c", x: 0.30, y: 0.40, blurb: "Your private world", owner_label: "Peaches & Pelucha", created_at: nowISO() },
       { id: "w2", slug: "the-commons", name: "The Commons", kind: "public", emoji: "🌍", color: "#356b8c", x: 0.66, y: 0.58, blurb: "The first public square — more worlds are forming", owner_label: "Collide", created_at: nowISO() },
+      { id: "w3", slug: "game-room", name: "The Game Room", kind: "public", emoji: "🎲", color: "#3e7a58", x: 0.52, y: 0.30, blurb: "Pull up a seat — Phase 10 & Poker", owner_label: "Collide", created_at: nowISO() },
     ],
     world_messages: [
       { id: "wm1", world_slug: "the-commons", player_id: null, name: "The Commons", emoji: "🌍", text: "Welcome to The Commons — the first public world. Say hi 👋", created_at: nowISO() },
@@ -94,7 +95,7 @@ const DEFAULTS = {
 };
 
 function matches(row, filters) {
-  return filters.every((f) => f.op === "gte" ? row[f.col] >= f.val : f.op === "lt" ? row[f.col] < f.val : f.op === "in" ? f.vals.includes(row[f.col]) : row[f.col] === f.val);
+  return filters.every((f) => f.op === "gte" ? row[f.col] >= f.val : f.op === "lt" ? row[f.col] < f.val : f.op === "in" ? f.vals.includes(row[f.col]) : f.op === "is" ? (f.val === null ? row[f.col] == null : row[f.col] === f.val) : row[f.col] === f.val);
 }
 
 // Minimal thenable query builder mirroring the bits of supabase-js the app uses.
@@ -106,6 +107,7 @@ function query(db, table) {
     gte(col, val) { state.filters.push({ col, val, op: "gte" }); return builder; },
     lt(col, val) { state.filters.push({ col, val, op: "lt" }); return builder; },
     in(col, vals) { state.filters.push({ col, vals, op: "in" }); return builder; },
+    is(col, val) { state.filters.push({ col, val, op: "is" }); return builder; },
     order(col, opts) { state.orders.push({ col, asc: !opts || opts.ascending !== false }); return builder; },
     limit(n) { state.limitN = n; return builder; },
     range(from, to) { state.rangeFrom = from; state.rangeTo = to; return builder; },

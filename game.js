@@ -13,23 +13,27 @@ const CARD_BG = { red: "#bf4a3c", blue: "#356b8c", green: "#3e7a58", yellow: "#b
 // Live sync with belt-and-braces: realtime websocket for instant updates,
 // reload on wake/focus/reconnect (phones kill the socket when locked), a
 // gentle heartbeat while visible, and auto-resubscribe if the channel drops.
-function useMatch(client) {
+function useMatch(client, room = null) {
   const [match, setMatch] = useState(undefined); // undefined=loading, null=none
   const matchRef = useRef(undefined);
   useEffect(() => { matchRef.current = match; }, [match]);
+  // room === null → the couple's private game (unchanged). A slug → a public
+  // Game Room instance. Both live in `matches`, told apart by the room column.
+  const sameScope = (r) => (r && (r.room ?? null) === (room ?? null));
 
   const load = useCallback(async () => {
     // never yank cards mid-drag — but self-expire the guard so a drag that died
     // without cleanup can't freeze sync forever (the old refresh-to-fix bug)
     if (window.__ppDragging && Date.now() - (window.__ppDragSince || 0) < 4000) return;
     window.__ppDragging = false;
-    const { data } = await client.from("matches").select("*")
-      .eq("status", "playing").order("created_at", { ascending: false }).limit(1);
+    let q = client.from("matches").select("*").eq("status", "playing");
+    q = room ? q.eq("room", room) : q.is("room", null);
+    const { data } = await q.order("created_at", { ascending: false }).limit(1);
     const row = (data && data[0]) || null;
     const cur = matchRef.current;
     if (row && cur && row.id === cur.id && row.version === cur.version) return; // unchanged
     setMatch(row);
-  }, [client]);
+  }, [client, room]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -40,6 +44,7 @@ function useMatch(client) {
         .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (p) => {
           if (p.eventType === "DELETE") { load(); return; }
           const row = p.new;
+          if (!sameScope(row)) return;                                   // ignore other rooms' matches
           if (window.__ppDragging) { setTimeout(load, 1200); return; }   // catch up right after the drag
           if (row.status === "playing") setMatch(row);
           else load();
@@ -75,7 +80,8 @@ function useMatch(client) {
 /* ----------------------------------------------------------- PlayTab ------ */
 export function PlayTab(ctx) {
   const { client, players, me, api, flash } = ctx;
-  const [match, setMatch, reload] = useMatch(client);
+  const room = ctx.room || null;                       // null = private game; slug = Game Room instance
+  const [match, setMatch, reload] = useMatch(client, room);
   // Home shows a compact Resume card by default — tapping the Score tab should
   // land on the home page, NOT jump straight into the full-screen hand. The
   // board opens full-screen only when you choose to (Open game / Play turn).
@@ -242,7 +248,7 @@ export function PlayTab(ctx) {
     return html`<div class="card center"><div class="muted">Loading game…</div></div>`;
   }
   if (match === null) {
-    return html`<${StartMatch} players=${players} client=${client} onStarted=${(row) => { setMatch(row); setImmersive(true); }} flash=${flash} />`;
+    return html`<${StartMatch} players=${players} client=${client} room=${room} onStarted=${(row) => { setMatch(row); setImmersive(true); }} flash=${flash} />`;
   }
   // The live hand plays full-screen. "‹" pops back to the tabbed app, where
   // this tab shows a compact Resume card. "🏳" requests ending the match —
@@ -326,13 +332,13 @@ async function recordWin(client, api, winnerId) {
   await client.from("games").insert({ name: "Phase 10", status: "finished", winner_id: winnerId, finished_at: new Date().toISOString() });
 }
 
-function StartMatch({ players, client, onStarted, flash }) {
+function StartMatch({ players, client, onStarted, flash, room = null }) {
   const [sel, setSel] = useState(players.slice(0, 2).map((p) => p.id));
   const toggle = (id) => setSel((s) => s.includes(id) ? s.filter((x) => x !== id) : (s.length < 2 ? [...s, id] : s));
   const start = async () => {
     if (sel.length !== 2) { flash("Pick exactly two players"); return; }
     const state = E.startMatch(sel);
-    const { data, error } = await client.from("matches").insert({ state, version: 0, status: "playing" }).select().single();
+    const { data, error } = await client.from("matches").insert({ state, version: 0, status: "playing", room }).select().single();
     if (error) { flash("⚠️ " + error.message); return; }
     onStarted(data);
   };
@@ -923,13 +929,13 @@ function HandOver({ match, commit, pinfo, oppId, me }) {
 }
 
 /* ----------------------------------------------------------- MatchOver ---- */
-function MatchOver({ match, setMatch, players, me, pinfo, client, flash }) {
+function MatchOver({ match, setMatch, players, me, pinfo, client, flash, room = null }) {
   const s = match.state;
   const w = pinfo(s.winner);
   const newMatch = async () => {
     const state = E.startMatch(s.players);
     await client.from("matches").update({ status: "finished" }).eq("id", match.id);
-    const { data, error } = await client.from("matches").insert({ state, version: 0, status: "playing" }).select().single();
+    const { data, error } = await client.from("matches").insert({ state, version: 0, status: "playing", room }).select().single();
     if (error) { flash("⚠️ " + error.message); return; }
     setMatch(data); // realtime swaps the other phone to the fresh match too
   };

@@ -171,39 +171,41 @@ function nextMut(state) {
 }
 
 /* --------------------------------------------------- sync hook ------------ */
-function usePokerTable(client, players) {
+function usePokerTable(client, players, room = null) {
   const [row, setRowState] = useState(undefined);   // undefined=loading, {id,state,version}
   const ref = useRef(undefined);
   // keep the ref in lockstep with state SYNCHRONOUSLY — apply() reads it, and a
   // lagging ref would make rapid taps mutate stale state and silently decline.
   const setRow = useCallback((r) => { ref.current = r; setRowState(r); }, []);
   const creating = useRef(false);
+  // room === null → the couple's private table; a slug → a Game Room table.
+  const scoped = useCallback(() => { const q = client.from("poker_table").select("*"); return room ? q.eq("room", room) : q.is("room", null); }, [client, room]);
 
   const load = useCallback(async () => {
-    const { data } = await client.from("poker_table").select("*").order("updated_at", { ascending: false }).limit(1);
+    const { data } = await scoped().order("updated_at", { ascending: false }).limit(1);
     let r = data && data[0];
     if (!r && !creating.current) {
       creating.current = true;
-      const { data: made } = await client.from("poker_table").insert({ state: initState(players), version: 0 }).select().single();
+      const { data: made } = await client.from("poker_table").insert({ state: initState(players), version: 0, room }).select().single();
       r = made; creating.current = false;
     }
     if (r) { const fixed = ensureSeats(r.state, players); r = { ...r, state: fixed }; }
     setRow(r || null);
-  }, [client, players]);
+  }, [scoped, players, room, client]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     let ch = null;
     try {
-      ch = client.channel("pp-poker")
+      ch = client.channel("pp-poker-" + (room || "private"))
         .on("postgres_changes", { event: "*", schema: "public", table: "poker_table" }, (p) => {
-          if (p.new && p.new.state) setRow({ id: p.new.id, state: p.new.state, version: p.new.version });
+          if (p.new && p.new.state && (p.new.room ?? null) === (room ?? null)) setRow({ id: p.new.id, state: p.new.state, version: p.new.version });
         }).subscribe();
     } catch {}
     const wake = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", wake);
     return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
-  }, [client, load]);
+  }, [client, load, room]);
 
   // read-modify-write with version guard + retry (two players act concurrently)
   const apply = useCallback(async (mutator) => {
@@ -216,12 +218,12 @@ function usePokerTable(client, players) {
         .update({ state: next, version: cur.version + 1, updated_at: new Date().toISOString() })
         .eq("id", cur.id).eq("version", cur.version).select();
       if (!error && data && data.length) { setRow(data[0]); return data[0]; }
-      const { data: fresh } = await client.from("poker_table").select("*").order("updated_at", { ascending: false }).limit(1);
+      const { data: fresh } = await scoped().order("updated_at", { ascending: false }).limit(1);
       const fr = fresh && fresh[0];
       if (fr) { ref.current = fr; setRow(fr); }
     }
     return null;
-  }, [client]);
+  }, [client, scoped]);
 
   return [row, apply];
 }
@@ -271,8 +273,8 @@ function HandKey({ onClose }) {
 }
 
 /* ------------------------------------------------------------ table ------- */
-export function PokerTab({ client, me, players, flash }) {
-  const [row, apply] = usePokerTable(client, players);
+export function PokerTab({ client, me, players, flash, room = null }) {
+  const [row, apply] = usePokerTable(client, players, room);
   const [showKey, setShowKey] = useState(false);
   // Like Phase 10: the home shows a compact card; the table opens full-screen
   // in its own game room. Tapping the Poker toggle lands on the card, not the
