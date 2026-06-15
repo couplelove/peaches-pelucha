@@ -768,3 +768,61 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pk-seat .pk-net { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .pk-net.pos { color: var(--good); }
 .pk-net.neg { color: var(--bad); }
+
+/* ---- 📺 watch: shared social queue ---- */
+/* 6-tab nav: a touch tighter */
+.nav button { font-size: 10px; padding: 6px 1px; }
+.nav button span:last-child { white-space: nowrap; }
+
+.watch-paste { display: flex; flex-direction: column; gap: 8px; }
+.watch-paste input { width: 100%; }
+.watch-actions { display: flex; align-items: center; gap: 8px; }
+.wchip { font-size: 12px; font-weight: 700; color: var(--ink-2); background: var(--paper-2); border-radius: var(--r-pill); padding: 5px 11px; margin-right: auto; }
+.watch-actions .btn { flex: 0 0 auto; }
+
+.wsec { margin-top: 14px; }
+.weyebrow { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 4px 0 8px; }
+
+.wcard { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: var(--r); padding: 9px; margin-bottom: 8px; cursor: pointer;
+  position: relative; transition: border-color .15s ease, transform .08s ease; }
+.wcard:active { transform: scale(.99); }
+.wthumb { position: relative; width: 62px; height: 62px; flex: 0 0 auto; border-radius: 10px; overflow: hidden;
+  background: var(--paper-2); display: grid; place-content: center; }
+.wthumb img { width: 100%; height: 100%; object-fit: cover; }
+.wthumb .wicon { font-size: 26px; }
+.wthumb.tiktok { background: #f1f1f3; } .wthumb.instagram { background: #fbeef4; } .wthumb.youtube { background: #fbe9e7; }
+.wplay { position: absolute; inset: 0; display: grid; place-content: center; color: #fff; font-size: 18px; text-shadow: 0 1px 6px rgba(0,0,0,.5); pointer-events: none; }
+.wmeta { flex: 1; min-width: 0; }
+.wtitle { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+.wdot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.wnote { font-size: 13px; color: var(--ink); font-style: italic; margin: 1px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsub { margin-top: 1px; }
+.wrx { display: flex; gap: 3px; margin-top: 4px; font-size: 15px; }
+.wdel { position: absolute; top: 6px; right: 8px; color: var(--ink-3); font-size: 13px; padding: 4px; }
+
+.wgate { text-align: center; border: 1px solid var(--line); border-radius: var(--r); padding: 22px 16px; background: var(--paper-2); }
+.wgate-icon { font-size: 38px; }
+.wgate-count { font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 6px 0 4px; }
+
+/* viewer */
+.viewer { position: fixed; inset: 0; z-index: 90; background: rgba(20,17,15,.97); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: calc(var(--safe-top) + 8px) 12px calc(16px + var(--safe-bottom)); animation: fade .15s ease; }
+.vw-x { position: absolute; top: calc(var(--safe-top) + 10px); right: 14px; z-index: 3; width: 38px; height: 38px; border-radius: 50%;
+  border: none; background: rgba(255,255,255,.14); color: #fff; font-size: 17px; cursor: pointer; }
+.vw-count { position: absolute; top: calc(var(--safe-top) + 18px); left: 16px; color: rgba(255,255,255,.7); font-size: 13px; font-variant-numeric: tabular-nums; }
+.vw-stage { width: 100%; max-width: 440px; flex: 0 1 auto; display: grid; place-content: center; }
+.vw-embed { width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: #000; }
+.vw-embed.tall { aspect-ratio: 9/16; max-height: 64vh; margin: 0 auto; }
+.vw-embed iframe, .vw-embed div { width: 100%; height: 100%; border: 0; }
+.vw-openpane { text-align: center; color: #fff; display: grid; gap: 8px; place-items: center; padding: 30px 18px; }
+.vw-bigicon { font-size: 54px; }
+.vw-pl { font-family: var(--serif); font-size: 20px; }
+.vw-openpane .tiny { max-width: 260px; color: rgba(255,255,255,.6); }
+.vw-note { color: #fff; font-style: italic; text-align: center; max-width: 440px; font-size: 14px; }
+.vw-react { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 440px; }
+.vw-react button { width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(255,255,255,.12); font-size: 20px; cursor: pointer; transition: transform .12s ease, background .15s ease; }
+.vw-react button:active { transform: scale(.85); }
+.vw-react button.on { background: var(--accent); }
+.vw-nav { display: flex; gap: 10px; width: 100%; max-width: 440px; }
+.vw-nav .btn { flex: 1; }
