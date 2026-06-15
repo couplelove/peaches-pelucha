@@ -223,6 +223,10 @@ function CommonsEvents({ client, me, world }) {
   const [events, setEvents] = useState(null);
   const [composing, setComposing] = useState(false);
   const [f, setF] = useState({ title: "", place: "", when_txt: "", when_at: "", emoji: "🎉" });
+  const [view, setView] = useState("week");          // 'week' | 'calendar'
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [selDay, setSelDay] = useState(() => ymd(new Date()));
+  const [guestId, setGuestId] = useState(null);      // which event's guest list is open
 
   const load = useCallback(async () => {
     const { data } = await client.from("world_events").select("*").eq("world_slug", world.slug).order("created_at", { ascending: false }).limit(40);
@@ -237,10 +241,14 @@ function CommonsEvents({ client, me, world }) {
   }, [client, world.slug, load]);
 
   const today = ymd(new Date());
+  const weekEnd = ymd(new Date(Date.now() + 7 * 864e5));
   const dayDiff = (w) => Math.round((new Date(w + "T00:00") - new Date(today + "T00:00")) / 864e5);
   const dateLabel = (w) => { if (!w) return "anytime"; const n = dayDiff(w); if (n === 0) return "today"; if (n === 1) return "tomorrow"; return new Date(w + "T00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); };
   const sortFn = (a, b) => ((a.when_at || "9999") < (b.when_at || "9999") ? -1 : 1);
-  const live = (events || []).filter((e) => !e.when_at || e.when_at >= today).sort(sortFn);
+  const all = (events || []).slice().sort(sortFn);
+  const week = all.filter((e) => !e.when_at || (e.when_at >= today && e.when_at <= weekEnd)).sort(sortFn);
+  const undated = all.filter((e) => !e.when_at);
+  const byDay = {}; all.forEach((e) => { if (e.when_at) (byDay[e.when_at] = byDay[e.when_at] || []).push(e); });
 
   const post = async () => {
     const title = f.title.trim(); if (!title) return;
@@ -275,20 +283,77 @@ function CommonsEvents({ client, me, world }) {
     </div></div>`;
   }
 
+  const eventRow = (ev) => {
+    const joined = ev.joined || [];
+    const mineIn = joined.some((j) => j.id === me.id);
+    return html`<div class="we-up-row" key=${ev.id}>
+      <span class="we-up-emoji">${ev.emoji}</span>
+      <div class="we-up-main">
+        <div class="we-up-title">${ev.title}</div>
+        <div class="we-up-meta">${[dateLabel(ev.when_at), ev.place, ev.when_txt].filter(Boolean).join(" · ")}</div>
+        <button class="we-guests" onClick=${() => setGuestId(ev.id)}>👥 ${joined.length ? `${joined.length} going — see who` : "no one yet"}</button>
+      </div>
+      <button class=${`we-up-join ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "Going ✓" : "Join"}</button>
+      <button class="we-up-x" title="remove" onClick=${() => remove(ev)}>✕</button>
+    </div>`;
+  };
+
+  // calendar grid for the viewed month
+  const y = month.getFullYear(), m = month.getMonth();
+  const firstWd = new Date(y, m, 1).getDay();
+  const dim = new Date(y, m + 1, 0).getDate();
+  const cells = []; for (let i = 0; i < firstWd; i++) cells.push(null); for (let d = 1; d <= dim; d++) cells.push(d);
+  const cellStr = (d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const monthLabel = month.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const guest = guestId ? all.find((e) => e.id === guestId) : null;
+
   return html`<div class="we-wrap">
-    <div class="we-head"><span>Upcoming</span><button class="we-add" onClick=${() => setComposing(true)}>＋ Share</button></div>
-    ${live.length === 0
-      ? html`<button class="we-empty" onClick=${() => setComposing(true)}>Nothing planned — ＋ share something to do</button>`
-      : html`<div class="we-up">
-          ${live.map((ev) => { const joined = ev.joined || []; const mineIn = joined.some((j) => j.id === me.id); return html`<div class="we-up-row" key=${ev.id}>
-            <span class="we-up-emoji">${ev.emoji}</span>
-            <div class="we-up-main">
-              <div class="we-up-title">${ev.title}</div>
-              <div class="we-up-meta">${[dateLabel(ev.when_at), ev.place, ev.when_txt].filter(Boolean).join(" · ")}${joined.length ? ` · ${joined.length} going` : ""}</div>
-            </div>
-            <button class=${`we-up-join ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "Going ✓" : "Join"}</button>
-            <button class="we-up-x" title="remove" onClick=${() => remove(ev)}>✕</button>
-          </div>`; })}
+    <div class="we-head">
+      <div class="we-toggle">
+        <button class=${view === "week" ? "on" : ""} onClick=${() => setView("week")}>This week</button>
+        <button class=${view === "calendar" ? "on" : ""} onClick=${() => setView("calendar")}>Calendar</button>
+      </div>
+      <button class="we-add" onClick=${() => setComposing(true)}>＋ Share</button>
+    </div>
+
+    ${view === "week"
+      ? (week.length === 0
+          ? html`<button class="we-empty" onClick=${() => setComposing(true)}>Nothing this week — ＋ share something to do</button>`
+          : html`<div class="we-up">${week.map(eventRow)}</div>`)
+      : html`<div class="we-cal">
+          <div class="we-cal-head">
+            <button class="we-cal-nav" onClick=${() => setMonth(new Date(y, m - 1, 1))}>‹</button>
+            <span>${monthLabel}</span>
+            <button class="we-cal-nav" onClick=${() => setMonth(new Date(y, m + 1, 1))}>›</button>
+          </div>
+          <div class="we-cal-grid">
+            ${["S", "M", "T", "W", "T", "F", "S"].map((w, i) => html`<div class="we-cal-wd" key=${"wd" + i}>${w}</div>`)}
+            ${cells.map((d, i) => d === null
+              ? html`<div class="we-cal-cell empty" key=${"c" + i}></div>`
+              : (() => { const ds = cellStr(d); const evs = byDay[ds] || []; return html`<button key=${"c" + i} class=${`we-cal-cell ${ds === today ? "today" : ""} ${ds === selDay ? "sel" : ""} ${evs.length ? "has" : ""}`} onClick=${() => setSelDay(ds)}>
+                  <span class="we-cal-d">${d}</span>${evs.length ? html`<span class="we-cal-dot">${evs.length > 1 ? evs.length : evs[0].emoji}</span>` : ""}
+                </button>`; })())}
+          </div>
+          <div class="we-day-events">
+            <div class="we-up-head2">${dateLabel(selDay) === "anytime" ? selDay : dateLabel(selDay)}</div>
+            ${(byDay[selDay] || []).length
+              ? (byDay[selDay]).map(eventRow)
+              : html`<div class="we-day-empty">Nothing planned · <button class="we-dayadd" onClick=${() => { setF({ ...f, when_at: selDay }); setComposing(true); }}>＋ add an event</button></div>`}
+            ${undated.length ? html`<div class="we-up-head2" style="margin-top:12px">Anytime</div>${undated.map(eventRow)}` : ""}
+          </div>
         </div>`}
+
+    ${guest && html`<div class="modal-bg" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setGuestId(null); }}>
+      <div class="we-guestsheet">
+        <div class="wg-title">${guest.emoji} ${guest.title}</div>
+        <div class="wg-sub">${[dateLabel(guest.when_at), guest.place, guest.when_txt].filter(Boolean).join(" · ")}</div>
+        <div class="wg-head">Going · ${(guest.joined || []).length}</div>
+        ${(guest.joined || []).length
+          ? html`<div class="wg-list">${(guest.joined || []).map((j) => html`<div class="wg-row" key=${j.id}><span class="wg-em">${j.emoji || "👤"}</span><span class="wg-nm">${j.name || "Someone"}</span></div>`)}</div>`
+          : html`<div class="wg-empty">No one's in yet — be the first to join.</div>`}
+        <button class="btn block mt" onClick=${() => { toggleJoin(guest); }}>${(guest.joined || []).some((j) => j.id === me.id) ? "Leave" : "Join"}</button>
+        <button class="linkbtn block" style="width:100%" onClick=${() => setGuestId(null)}>Close</button>
+      </div>
+    </div>`}
   </div>`;
 }
