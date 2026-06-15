@@ -768,7 +768,3 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .pk-seat .pk-net { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .pk-net.pos { color: var(--good); }
 .pk-net.neg { color: var(--bad); }
-
-/* a touch more room in the 6-tab nav */
-.nav button { font-size: 10px; padding: 6px 1px; }
-.nav button span:last-child { white-space: nowrap; }

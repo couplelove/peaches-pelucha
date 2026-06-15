@@ -76,7 +76,10 @@ function useMatch(client) {
 export function PlayTab(ctx) {
   const { client, players, me, api, flash } = ctx;
   const [match, setMatch, reload] = useMatch(client);
-  const [immersive, setImmersive] = useState(true);  // live hand plays full-screen
+  // Home shows a compact Resume card by default — tapping the Score tab should
+  // land on the home page, NOT jump straight into the full-screen hand. The
+  // board opens full-screen only when you choose to (Open game / Play turn).
+  const [immersive, setImmersive] = useState(false);
   const busy = useRef(false);
 
   const commit = useCallback(async (newState) => {

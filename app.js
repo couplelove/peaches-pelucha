@@ -275,7 +275,6 @@ function App({ client, onResetCreds }) {
       ${err && html`<div class="banner" style="background:#ffeef1;color:#b00020">⚠️ ${err}</div>`}
 
       ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
-      ${tab === "poker" && html`<${PokerTab} client=${client} me=${me} players=${players} flash=${flash} />`}
       ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
       ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
       ${tab === "schmoney" && html`<${Fragment}>
@@ -286,7 +285,7 @@ function App({ client, onResetCreds }) {
       ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
 
       <nav class="nav">
-        ${[["score", "🏆", "Score"], ["poker", "🃏", "Poker"], ["plans", "📅", "Plans"], ["memories", "📸", "Memories"], ["schmoney", "💸", "Schmoney"], ["more", "⚙️", "More"]].map(
+        ${[["score", "🏆", "Score"], ["plans", "📅", "Plans"], ["memories", "📸", "Memories"], ["schmoney", "💸", "Schmoney"], ["more", "⚙️", "More"]].map(
           ([k, ic, label]) => html`
           <button class=${tab === k ? "active" : ""} onClick=${() => setTab(k)}>
             <span class="ic">${ic}</span>${label}
@@ -409,8 +408,19 @@ function Login({ players, onPick, onAdd, modal, setModal, api }) {
 // The home screen: current game (prominent) → lifetime line → his & hers
 // Cancer horoscopes → daily scripture → Date Night Roulette.
 function ScoreTab(ctx) {
+  // The home page. A Phase 10 / Poker toggle swaps ONLY the game section at the
+  // top — the rest of the home page (lifetime, horoscopes, scripture, roulette)
+  // stays put. Switching games never navigates away or goes full-screen.
+  const [activeGame, setActiveGame] = useState(() => localStorage.getItem("pp.activeGame") || "phase10");
+  const pickGame = (g) => { localStorage.setItem("pp.activeGame", g); setActiveGame(g); };
   return html`<${Fragment}>
-    <${PlayTab} ...${ctx} />
+    <div class="gameswitch">
+      <button class=${activeGame === "phase10" ? "on" : ""} onClick=${() => pickGame("phase10")}>🎴 Phase 10</button>
+      <button class=${activeGame === "poker" ? "on" : ""} onClick=${() => pickGame("poker")}>🃏 Poker</button>
+    </div>
+    ${activeGame === "phase10"
+      ? html`<${PlayTab} ...${ctx} />`
+      : html`<${PokerTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />`}
     <${LifetimeCard} ...${ctx} />
     <${HoroscopeCard} players=${ctx.players} />
     <${ScriptureCard} />
