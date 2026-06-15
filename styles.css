@@ -826,3 +826,6 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .vw-react button.on { background: var(--accent); }
 .vw-nav { display: flex; gap: 10px; width: 100%; max-width: 440px; }
 .vw-nav .btn { flex: 1; }
+
+/* poker full-screen room: side padding (gamefs-body is full-bleed for Phase 10) */
+.pk-room { padding: 2px 18px 20px; max-width: var(--maxw); margin: 0 auto; }

@@ -274,6 +274,10 @@ function HandKey({ onClose }) {
 export function PokerTab({ client, me, players, flash }) {
   const [row, apply] = usePokerTable(client, players);
   const [showKey, setShowKey] = useState(false);
+  // Like Phase 10: the home shows a compact card; the table opens full-screen
+  // in its own game room. Tapping the Poker toggle lands on the card, not the
+  // room — you open the room deliberately and ‹ returns home.
+  const [immersive, setImmersive] = useState(false);
   const firing = useRef(false);
 
   const st = row && row.state;
@@ -349,14 +353,29 @@ export function PokerTab({ client, me, players, flash }) {
     </div>`;
   };
 
-  return html`<div class="card pk-table">
-    <div class="shead">
-      <h2>Poker <span class="muted-glyph">♠</span></h2>
-      <div class="shead-actions">
-        <button class="linkbtn micro" onClick=${() => setShowKey(true)}>📖 Hands</button>
-      </div>
+  // ---- compact home card (Phase 10-style): status + chips + Open game ----
+  let cardStatus;
+  if (phase === "betting") cardStatus = mySeat.ready ? "Ready — waiting to deal 🍿" : "Ante up to play";
+  else if (phase === "decision") cardStatus = (mySeat.hole && mySeat.decision === "pending") ? "Your move — fold or call" : (mySeat.hole ? "Waiting for the table…" : "Sitting this hand out");
+  else cardStatus = "Hand over — see the results";
+  if (!immersive) {
+    return html`<div class="card gamehero" onClick=${() => setImmersive(true)}>
+      <div class="eyebrow">Poker <span class="muted-glyph">♠</span> · Casino Hold'em</div>
+      <div class="gamehero-title">${cardStatus}</div>
+      <div class="gamehero-meta tnum">${players.map((p) => `${p.emoji} 🪙${(st.seats[p.id] || {}).chips ?? "—"}`).join("   ·   ")}</div>
+      <button class="btn gamehero-btn" onClick=${(e) => { e.stopPropagation(); setImmersive(true); }}>Open game</button>
+    </div>`;
+  }
+
+  // ---- full-screen game room (its own space, like Phase 10) ----
+  return html`<div class="gamefs">
+    <div class="gamefs-bar">
+      <button class="iconbtn" onClick=${() => setImmersive(false)}>‹</button>
+      <div class="gamefs-title">Poker ♠${st.handNo ? ` · Hand ${st.handNo}` : ""}</div>
+      <button class="iconbtn" title="Poker hands" onClick=${() => setShowKey(true)}>📖</button>
     </div>
-    <div class="tiny muted" style="margin:-4px 0 14px">Casino Hold'em · you & ${others.map((o) => o.name).join(" & ") || "the table"} vs the dealer</div>
+    <div class="gamefs-body"><div class="pk-room">
+    <div class="tiny muted" style="margin:2px 0 14px">Casino Hold'em · you & ${others.map((o) => o.name).join(" & ") || "the table"} vs the dealer</div>
 
     <!-- dealer + community -->
     <div class="pk-zone center">
@@ -408,6 +427,7 @@ export function PokerTab({ client, me, players, flash }) {
     ${phase === "showdown" && html`<div class="pk-controls">
       <button class="btn block" onClick=${next}>Next hand 🎴</button>
     </div>`}
+    </div></div>
 
     ${showKey && html`<${HandKey} onClose=${() => setShowKey(false)} />`}
   </div>`;
