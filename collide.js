@@ -192,27 +192,114 @@ function WorldRoom({ client, me, world, demo, crowd, floats, onReact, onBack }) 
   </div>`;
 }
 
-/* ---- the Game Room: pull up a seat for Phase 10 or Poker (reuses the exact
-   private-game code, scoped to room="game-room"). Poker seats up to 4. ---- */
-function GameRoom({ client, me, players, flash, api, world, crowd, onBack }) {
-  const [game, setGame] = useState(() => localStorage.getItem("pp.roomGame") || "phase10");
-  const pick = (g) => { localStorage.setItem("pp.roomGame", g); setGame(g); };
-  const faces = [me, ...crowd.filter((p) => p.id !== me.id)].slice(0, 6);
+/* ---- the Game Room: a LOBBY you opt into. See who's here + what they're up
+   for, invite a player to a game, set yourself available/unavailable, leave.
+   Accepting an invite drops you both into the shared room-scoped game. ---- */
+const GR_GAMES = { phase10: { emoji: "🎴", name: "Phase 10" }, poker: { emoji: "🃏", name: "Poker" } };
+function GameRoom({ client, me, players, flash, api, world, onBack }) {
+  const demo = !!client._db;
+  const [available, setAvailable] = useState(true);
+  const [myGame, setMyGame] = useState(() => localStorage.getItem("pp.roomGame") || "phase10");
+  const [inGame, setInGame] = useState(null);        // 'phase10'|'poker' while playing
+  const [here, setHere] = useState({});              // lobby presence
+  const [invite, setInvite] = useState(null);        // incoming {from,name,emoji,game}
+  const [waiting, setWaiting] = useState(null);      // outgoing {to,name,game}
+  const chRef = useRef(null);
+  const meRef = useRef({});
+  meRef.current = { name: me.name, emoji: me.emoji, game: myGame, available, inGame };
+
+  const pickGame = (g) => { localStorage.setItem("pp.roomGame", g); setMyGame(g); };
+
+  useEffect(() => {
+    if (demo) { setHere({ [me.id]: [meRef.current] }); return; }
+    let ch = null;
+    try {
+      ch = client.channel("gameroom", { config: { presence: { key: me.id } } });
+      chRef.current = ch;
+      ch.on("presence", { event: "sync" }, () => setHere({ ...ch.presenceState() }))
+        .on("broadcast", { event: "gr" }, ({ payload }) => {
+          if (!payload || payload.to !== me.id) return;
+          if (payload.kind === "invite") setInvite({ from: payload.from, name: payload.name, emoji: payload.emoji, game: payload.game });
+          else if (payload.kind === "accept") { setWaiting(null); setInGame(payload.game); }
+          else if (payload.kind === "decline") { setWaiting(null); flash(`${payload.name} can't right now`); }
+          else if (payload.kind === "cancel") setInvite((iv) => (iv && iv.from === payload.from ? null : iv));
+        })
+        .subscribe(async (s) => { if (s === "SUBSCRIBED" && ch.track) { try { await ch.track(meRef.current); } catch {} } });
+    } catch {}
+    return () => { chRef.current = null; try { ch && client.removeChannel(ch); } catch {} };
+  }, [client, me.id, demo]);
+  // keep my presence fresh as I toggle game/availability/playing
+  useEffect(() => { const ch = chRef.current; if (ch && ch.track) ch.track(meRef.current).catch(() => {}); }, [myGame, available, inGame, me]);
+
+  const send = (kind, to, extra = {}) => { const ch = chRef.current; if (ch && ch.send) ch.send({ type: "broadcast", event: "gr", payload: { kind, from: me.id, to, name: me.name, emoji: me.emoji, ...extra } }); };
+  const invitePlayer = (p) => { setWaiting({ to: p.id, name: p.name, game: myGame }); send("invite", p.id, { game: myGame }); };
+  const acceptInvite = () => { send("accept", invite.from, { game: invite.game }); setInGame(invite.game); setInvite(null); };
+  const declineInvite = () => { send("decline", invite.from); setInvite(null); };
+  const cancelWaiting = () => { if (waiting) send("cancel", waiting.to); setWaiting(null); };
+
+  const others = players.filter((p) => p.id !== me.id);
+  const presOf = (id) => { const m = here[id]; return m && m[0]; };
+
+  // ---- in a game: render it (shared, room-scoped), with a ‹ back to lobby ----
+  if (inGame) {
+    return html`<div class="gr">
+      <div class="gr-bar">
+        <button class="cback dark" onClick=${() => setInGame(null)}>‹ Lobby</button>
+        <div class="gr-title">${GR_GAMES[inGame].emoji} ${GR_GAMES[inGame].name}</div>
+        <div style="width:64px"></div>
+      </div>
+      <div class="gr-body">
+        ${inGame === "phase10"
+          ? html`<${PlayTab} client=${client} players=${players} me=${me} api=${api} flash=${flash} room="game-room" />`
+          : html`<${PokerTab} client=${client} me=${me} players=${players} flash=${flash} room="game-room" />`}
+      </div>
+    </div>`;
+  }
+
+  // ---- the lobby ----
   return html`<div class="gr">
     <div class="gr-bar">
-      <button class="cback dark" onClick=${onBack}>‹ Map</button>
-      <div class="gr-title">${world.emoji} ${world.name}</div>
-      <div class="gr-here">${faces.map((p, i) => html`<span class=${`gr-av ${i === 0 ? "me" : ""}`} key=${i} title=${p.name || ""}>${p.emoji || "👤"}</span>`)}</div>
+      <button class="cback dark" onClick=${onBack}>‹ Leave</button>
+      <div class="gr-title">🎲 Game Room</div>
+      <div style="width:64px"></div>
     </div>
-    <div class="gameswitch gr-switch">
-      <button class=${game === "phase10" ? "on" : ""} onClick=${() => pick("phase10")}>🎴 Phase 10</button>
-      <button class=${game === "poker" ? "on" : ""} onClick=${() => pick("poker")}>🃏 Poker · up to 4</button>
+    <div class="gr-lobby">
+      <div class="lobby-me">
+        <div class="lm-head">${me.emoji} ${me.name} <span class="lm-you">you</span></div>
+        <div class="lm-row"><span class="tiny muted">Up for</span>
+          ${Object.entries(GR_GAMES).map(([g, info]) => html`<button class=${`gchip ${myGame === g ? "on" : ""}`} key=${g} onClick=${() => pickGame(g)}>${info.emoji} ${info.name}</button>`)}
+        </div>
+        <div class="lm-row">
+          <button class=${`avail ${available ? "on" : ""}`} onClick=${() => setAvailable((a) => !a)}>${available ? "🟢 Available for invites" : "⚪️ Unavailable"}</button>
+          <button class="btn sm ghost" onClick=${() => setInGame(myGame)}>Open ${GR_GAMES[myGame].emoji} →</button>
+        </div>
+      </div>
+
+      <div class="weyebrow2">Who's here</div>
+      ${others.length === 0
+        ? html`<div class="lobby-empty">It's just you for now. Invite friends to Collide and they'll show up here.</div>`
+        : others.map((p) => { const pr = presOf(p.id); const present = !!pr; const av = present && pr.available && !pr.inGame; const sub = !present ? "not in the room" : pr.inGame ? `playing ${GR_GAMES[pr.inGame]?.name || "a game"}` : pr.available ? `up for ${GR_GAMES[pr.game]?.name || "a game"}` : "unavailable"; return html`<div class=${`lobby-row ${present ? "" : "off"}`} key=${p.id}>
+            <span class="lr-emoji">${p.emoji}</span>
+            <div class="lr-main"><div class="lr-name">${p.name}</div><div class="lr-sub">${sub}</div></div>
+            <button class="btn sm lr-invite" disabled=${!av || !!waiting} onClick=${() => invitePlayer(p)}>Invite</button>
+          </div>`; })}
+      ${demo ? html`<div class="tiny muted" style="margin-top:10px">Invites light up when your partner is in the room too. Tap “Open” to play now.</div>` : ""}
     </div>
-    <div class="gr-body">
-      ${game === "phase10"
-        ? html`<${PlayTab} client=${client} players=${players} me=${me} api=${api} flash=${flash} room="game-room" />`
-        : html`<${PokerTab} client=${client} me=${me} players=${players} flash=${flash} room="game-room" />`}
-    </div>
+
+    ${waiting && html`<div class="modal-bg gr-modal" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) cancelWaiting(); }}>
+      <div class="modal gr-sheet"><div class="handle"></div>
+        <div class="gs-wait">Waiting for <b>${waiting.name}</b> to accept <b>${GR_GAMES[waiting.game].name}</b>…</div>
+        <button class="btn ghost block mt" onClick=${cancelWaiting}>Cancel invite</button>
+      </div>
+    </div>`}
+    ${invite && html`<div class="modal-bg gr-modal">
+      <div class="modal gr-sheet"><div class="handle"></div>
+        <div class="gs-title">${invite.emoji} ${invite.name}</div>
+        <div class="gs-sub">invites you to play <b>${GR_GAMES[invite.game].name}</b></div>
+        <button class="btn block mt" onClick=${acceptInvite}>Join ${GR_GAMES[invite.game].emoji}</button>
+        <button class="linkbtn block" style="width:100%" onClick=${declineInvite}>Not now</button>
+      </div>
+    </div>`}
   </div>`;
 }
 

@@ -1102,3 +1102,29 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .wg-empty { color: #6f675a; padding: 8px 2px; }
 .collide.wr .we-guestsheet .btn { border-radius: 0; background: #16130d; color: #f1efe7; border: 2px solid #16130d; font-weight: 800; }
 .collide.wr .we-guestsheet .linkbtn { color: #6f675a; }
+
+/* ---- 🎲 Game Room lobby ---- */
+.gr-lobby { padding: 14px 16px calc(20px + var(--safe-bottom)); max-width: var(--maxw); margin: 0 auto; width: 100%; }
+.lobby-me { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 16px; }
+.lm-head { font-family: var(--serif); font-weight: 500; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.lm-you { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 7px; }
+.lm-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.gchip { border: 1.5px solid var(--line); background: var(--paper-2); border-radius: var(--r-pill); padding: 7px 13px; font: inherit; font-weight: 600; font-size: 13px; color: var(--ink-2); cursor: pointer; transition: all .15s ease; }
+.gchip.on { background: var(--accent); border-color: var(--accent); color: #fff8f3; }
+.avail { border: 1.5px solid var(--line); background: var(--paper-2); border-radius: var(--r-pill); padding: 7px 13px; font: inherit; font-weight: 600; font-size: 13px; color: var(--ink-2); cursor: pointer; flex: 1; }
+.avail.on { background: #eef4ef; border-color: var(--good); color: var(--good); }
+.weyebrow2 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 0 2px 10px; }
+.lobby-empty { color: var(--ink-2); font-size: 13.5px; padding: 8px 2px; }
+.lobby-row { display: flex; align-items: center; gap: 12px; padding: 11px; border: 1px solid var(--line-2); border-radius: var(--r); margin-bottom: 8px; background: var(--surface); }
+.lobby-row.off { opacity: .55; }
+.lr-emoji { font-size: 26px; width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-content: center; background: var(--paper-2); border-radius: 50%; }
+.lr-main { flex: 1; min-width: 0; }
+.lr-name { font-weight: 600; font-size: 14.5px; }
+.lr-sub { font-size: 12px; color: var(--ink-2); }
+.lr-invite { flex: 0 0 auto; }
+/* invite / waiting sheets above the room (z 80) */
+.gr-modal { z-index: 90; }
+.gr-sheet { text-align: center; }
+.gs-title { font-size: 34px; }
+.gs-sub { color: var(--ink-2); margin: 4px 0 4px; }
+.gs-wait { font-size: 15px; color: var(--ink); padding: 6px 0; }
