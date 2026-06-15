@@ -375,3 +375,11 @@ do $$ declare t text; begin
     begin execute format('alter publication supabase_realtime add table %I;', t); exception when duplicate_object then null; end;
   end loop;
 end $$;
+
+-- perf indexes (014): keep growing queries fast
+create index if not exists social_links_feed      on social_links (status, created_at desc);
+create index if not exists social_links_recipient on social_links (recipient_id);
+create index if not exists social_links_sender     on social_links (sender_id);
+create index if not exists transactions_player      on transactions (player_id);
+create index if not exists matches_status           on matches (status);
+create index if not exists games_status             on games (status, created_at desc);

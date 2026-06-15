@@ -8,6 +8,7 @@ import { PlayTab } from "./game.js";
 import { DateRoulette } from "./roulette.js";
 import { HoroscopeCard, ScriptureCard } from "./home.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
+import { get as idbGet, set as idbSet } from "https://esm.sh/idb-keyval@6";
 
 const html = htm.bind(h);
 
@@ -155,6 +156,7 @@ function App({ client, onResetCreds }) {
   const [modal, setModal] = useState(null);       // {type, ...props}
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
+  const netDone = useRef(false);   // first network load won → don't let cached data overwrite
 
   const flash = useCallback((msg) => {
     setToast(msg);
@@ -169,7 +171,7 @@ function App({ client, onResetCreds }) {
         client.from("games").select("*").eq("status", "active").order("created_at", { ascending: false }).limit(1),
         client.from("earn_rules").select("*").order("sort"),
         client.from("rewards").select("*").order("sort"),
-        client.from("transactions").select("*").order("created_at", { ascending: false }),
+        client.from("transactions").select("*").order("created_at", { ascending: false }).limit(400),
         client.from("bets").select("*").order("created_at", { ascending: false }),
       ]);
       for (const r of [pRes, gRes, erRes, rwRes, txRes, btRes]) if (r.error) throw r.error;
@@ -180,6 +182,7 @@ function App({ client, onResetCreds }) {
       setTxns(txRes.data || []);
       setBets(btRes.data || []);
 
+      let gameObj = null;
       const g = (gRes.data || [])[0];
       if (g) {
         const [gpRes, rdRes] = await Promise.all([
@@ -188,13 +191,15 @@ function App({ client, onResetCreds }) {
         ]);
         if (gpRes.error) throw gpRes.error;
         if (rdRes.error) throw rdRes.error;
-        setGame({ ...g, gamePlayers: gpRes.data || [], rounds: rdRes.data || [] });
-      } else {
-        setGame(null);
+        gameObj = { ...g, gamePlayers: gpRes.data || [], rounds: rdRes.data || [] };
       }
+      setGame(gameObj);
       setErr("");
       setEverOk(true);
       setLoaded(true);
+      netDone.current = true;
+      // cache the shell for instant reopen next time (live only)
+      if (!DEMO) idbSet("pp.shell", { players: pRes.data || [], earnRules: erRes.data || [], rewards: rwRes.data || [], txns: txRes.data || [], bets: btRes.data || [], game: gameObj }).catch(() => {});
     } catch (e) {
       setErr(e.message || String(e));
       setLoaded(true);
@@ -203,6 +208,20 @@ function App({ client, onResetCreds }) {
 
   // initial load + realtime sync + catch-up when the phone wakes/reconnects
   useEffect(() => { loadAll(); }, [loadAll]);
+  // Instant reopen: paint the last-known shell from IndexedDB while loadAll
+  // refreshes in the background (stale-while-revalidate). Skipped in demo, and
+  // skipped if the network already won the race.
+  useEffect(() => {
+    if (DEMO) return;
+    let live = true;
+    idbGet("pp.shell").then((c) => {
+      if (!live || !c || netDone.current) return;
+      setPlayers(c.players || []); setEarnRules(c.earnRules || []); setRewards(c.rewards || []);
+      setTxns(c.txns || []); setBets(c.bets || []); setGame(c.game || null);
+      setLoaded(true);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
   // Realtime for the shell's own data only. The old version reloaded EVERYTHING
   // on any change to any table (a poker bet, a reaction, a memory backfill all
   // triggered 6+ queries). Now it (a) ignores tables the shell doesn't read,
