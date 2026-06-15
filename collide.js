@@ -216,17 +216,21 @@ function GameRoom({ client, me, players, flash, api, world, crowd, onBack }) {
   </div>`;
 }
 
-/* ---- happenings carousel: anyone drops an event; one-tap RSVP + who's in ---- */
+/* ---- happenings: a "this week" carousel you can swipe, + an Upcoming list.
+   Anyone drops an event; one-tap RSVP shows who's in. ---- */
 const EV_EMOJI = ["🎉", "🍿", "☕", "🍻", "🥾", "🏖️", "🎮", "🍽️", "🎶", "🛍️", "💪", "✨"];
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function CommonsEvents({ client, me, world }) {
   const [events, setEvents] = useState(null);
   const [idx, setIdx] = useState(0);
+  const [dx, setDx] = useState(0);
   const [composing, setComposing] = useState(false);
-  const [f, setF] = useState({ title: "", place: "", when_txt: "", emoji: "🎉" });
+  const [f, setF] = useState({ title: "", place: "", when_txt: "", when_at: "", emoji: "🎉" });
   const paused = useRef(0);
+  const drag = useRef(null);
 
   const load = useCallback(async () => {
-    const { data } = await client.from("world_events").select("*").eq("world_slug", world.slug).order("created_at", { ascending: false }).limit(30);
+    const { data } = await client.from("world_events").select("*").eq("world_slug", world.slug).order("created_at", { ascending: false }).limit(40);
     setEvents(data || []);
   }, [client, world.slug]);
 
@@ -237,20 +241,34 @@ function CommonsEvents({ client, me, world }) {
     return () => { try { ch && client.removeChannel(ch); } catch {} };
   }, [client, world.slug, load]);
 
-  // auto-rotate the carousel (paused briefly after you interact)
-  useEffect(() => {
-    if (!events || events.length < 2 || composing) return;
-    const t = setInterval(() => { if (Date.now() - paused.current > 6000) setIdx((i) => (i + 1) % events.length); }, 4500);
-    return () => clearInterval(t);
-  }, [events, composing]);
+  // date buckets: carousel = THIS WEEK (or undated/"anytime"); list = all upcoming
+  const today = ymd(new Date());
+  const weekEnd = ymd(new Date(Date.now() + 7 * 864e5));
+  const dayDiff = (w) => Math.round((new Date(w + "T00:00") - new Date(today + "T00:00")) / 864e5);
+  const dateLabel = (w) => { if (!w) return "anytime"; const n = dayDiff(w); if (n === 0) return "today"; if (n === 1) return "tomorrow"; return new Date(w + "T00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); };
+  const sortFn = (a, b) => ((a.when_at || "9999") < (b.when_at || "9999") ? -1 : 1);
+  const live = (events || []).filter((e) => !e.when_at || e.when_at >= today).sort(sortFn);
+  const week = live.filter((e) => !e.when_at || e.when_at <= weekEnd);
+  const ci = Math.min(idx, Math.max(0, week.length - 1));
 
-  const go = (n) => { paused.current = Date.now(); setIdx(((n % (events.length || 1)) + (events.length || 1)) % (events.length || 1)); };
+  // auto-rotate this week's carousel (paused after you touch it)
+  useEffect(() => {
+    if (week.length < 2 || composing) return;
+    const t = setInterval(() => { if (Date.now() - paused.current > 6000) setIdx((i) => (i + 1) % week.length); }, 4500);
+    return () => clearInterval(t);
+  }, [week.length, composing]);
+
+  // finger-attached swipe
+  const onDown = (e) => { drag.current = { x: e.clientX, t: Date.now(), off: 0 }; paused.current = Date.now(); };
+  const onMove = (e) => { const d = drag.current; if (!d) return; let off = e.clientX - d.x; if ((ci === 0 && off > 0) || (ci >= week.length - 1 && off < 0)) off *= 0.35; d.off = off; setDx(off); };
+  const onUp = () => { const d = drag.current; drag.current = null; setDx(0); if (!d) return; const off = d.off; const v = off / Math.max(Date.now() - d.t, 1); let ni = ci; if ((off < -48 || v < -0.45) && ci < week.length - 1) ni = ci + 1; else if ((off > 48 || v > 0.45) && ci > 0) ni = ci - 1; setIdx(ni); };
+  const go = (n) => { paused.current = Date.now(); setIdx(n); };
 
   const post = async () => {
     const title = f.title.trim(); if (!title) return;
     setComposing(false); setIdx(0); paused.current = Date.now();
-    await client.from("world_events").insert({ world_slug: world.slug, title, place: f.place.trim() || null, when_txt: f.when_txt.trim() || null, emoji: f.emoji, created_by: me.id, creator_name: me.name, creator_emoji: me.emoji });
-    setF({ title: "", place: "", when_txt: "", emoji: "🎉" });
+    await client.from("world_events").insert({ world_slug: world.slug, title, place: f.place.trim() || null, when_txt: f.when_txt.trim() || null, when_at: f.when_at || null, emoji: f.emoji, created_by: me.id, creator_name: me.name, creator_emoji: me.emoji });
+    setF({ title: "", place: "", when_txt: "", when_at: "", emoji: "🎉" });
     load();
   };
   const toggleJoin = async (ev) => {
@@ -258,50 +276,67 @@ function CommonsEvents({ client, me, world }) {
     const list = ev.joined || [];
     const mine = list.find((j) => j.id === me.id);
     const next = mine ? list.filter((j) => j.id !== me.id) : [...list, { id: me.id, name: me.name, emoji: me.emoji, at: new Date().toISOString() }];
-    setEvents((es) => (es || []).map((x) => x.id === ev.id ? { ...x, joined: next } : x));   // optimistic
+    setEvents((es) => (es || []).map((x) => x.id === ev.id ? { ...x, joined: next } : x));
     await client.from("world_events").update({ joined: next }).eq("id", ev.id);
   };
   const remove = async (ev) => { setEvents((es) => (es || []).filter((x) => x.id !== ev.id)); await client.from("world_events").delete().eq("id", ev.id); };
 
   if (events === null) return null;
   if (composing) {
-    return html`<div class="we-wrap">
-      <div class="we-compose">
-        <div class="we-emojis">${EV_EMOJI.map((e) => html`<button key=${e} class=${f.emoji === e ? "on" : ""} onClick=${() => setF({ ...f, emoji: e })}>${e}</button>`)}</div>
-        <input class="we-in" value=${f.title} placeholder="What's happening? (e.g. beach day)" maxlength="60" onInput=${(e) => setF({ ...f, title: e.target.value })} />
-        <div class="we-row">
-          <input class="we-in" value=${f.place} placeholder="where (optional)" maxlength="40" onInput=${(e) => setF({ ...f, place: e.target.value })} />
-          <input class="we-in" value=${f.when_txt} placeholder="when (optional)" maxlength="30" onInput=${(e) => setF({ ...f, when_txt: e.target.value })} />
-        </div>
-        <div class="we-row">
-          <button class="btn ghost" onClick=${() => setComposing(false)}>Cancel</button>
-          <button class="btn" disabled=${!f.title.trim()} onClick=${post}>Share it</button>
-        </div>
+    return html`<div class="we-wrap"><div class="we-compose">
+      <div class="we-emojis">${EV_EMOJI.map((e) => html`<button key=${e} class=${f.emoji === e ? "on" : ""} onClick=${() => setF({ ...f, emoji: e })}>${e}</button>`)}</div>
+      <input class="we-in" value=${f.title} placeholder="What's happening? (e.g. beach day)" maxlength="60" onInput=${(e) => setF({ ...f, title: e.target.value })} />
+      <div class="we-row">
+        <input class="we-in" value=${f.place} placeholder="where (optional)" maxlength="40" onInput=${(e) => setF({ ...f, place: e.target.value })} />
+        <input class="we-in" type="date" value=${f.when_at} onInput=${(e) => setF({ ...f, when_at: e.target.value })} />
       </div>
+      <input class="we-in" value=${f.when_txt} placeholder="time / note (optional, e.g. 8pm)" maxlength="30" onInput=${(e) => setF({ ...f, when_txt: e.target.value })} />
+      <div class="we-row">
+        <button class="btn ghost" onClick=${() => setComposing(false)}>Cancel</button>
+        <button class="btn" disabled=${!f.title.trim()} onClick=${post}>Share it</button>
+      </div>
+    </div></div>`;
+  }
+
+  const joinRow = (ev) => {
+    const joined = ev.joined || [];
+    const mineIn = joined.some((j) => j.id === me.id);
+    return html`<div class="we-join">
+      <div class="we-faces">${joined.slice(0, 5).map((j) => html`<span key=${j.id} title=${j.name}>${j.emoji || "👤"}</span>`)}<span class="we-count">${joined.length ? `${joined.length} going` : "be the first"}</span></div>
+      <button class=${`we-rsvp ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "Going ✓" : "Join"}</button>
     </div>`;
-  }
-  if (!events.length) {
-    return html`<div class="we-wrap"><button class="we-empty" onClick=${() => setComposing(true)}>＋ Share something to do — anyone can join</button></div>`;
-  }
-  const ev = events[Math.min(idx, events.length - 1)];
-  const joined = ev.joined || [];
-  const mineIn = joined.some((j) => j.id === me.id);
+  };
+
   return html`<div class="we-wrap">
-    <div class="we-card" style=${`--wc:${world.color}`} key=${ev.id}>
-      <button class="we-x" title="remove" onClick=${() => remove(ev)}>✕</button>
-      <div class="we-emoji">${ev.emoji}</div>
-      <div class="we-main">
-        <div class="we-title">${ev.title}</div>
-        <div class="we-meta">${[ev.place && `📍 ${ev.place}`, ev.when_txt && `🕒 ${ev.when_txt}`].filter(Boolean).join(" · ") || `by ${ev.creator_name || "someone"}`}</div>
-        <div class="we-join">
-          <div class="we-faces">${joined.slice(0, 5).map((j) => html`<span key=${j.id} title=${j.name}>${j.emoji || "👤"}</span>`)}${joined.length ? html`<span class="we-count">${joined.length} going</span>` : html`<span class="we-count">be the first</span>`}</div>
-          <button class=${`we-rsvp ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "Going ✓" : "Join"}</button>
-        </div>
-      </div>
-    </div>
-    <div class="we-foot">
-      <div class="we-dots">${events.map((_, i) => html`<span key=${i} class=${i === idx ? "on" : ""} onClick=${() => go(i)}></span>`)}</div>
-      <button class="we-add" onClick=${() => setComposing(true)}>＋ Share</button>
-    </div>
+    <div class="we-head"><span>This week</span><button class="we-add" onClick=${() => setComposing(true)}>＋ Share</button></div>
+    ${week.length === 0
+      ? html`<button class="we-empty" onClick=${() => setComposing(true)}>Nothing this week yet — ＋ share something</button>`
+      : html`<div class="we-vp">
+          <div class="we-track" style=${`width:${week.length * 100}%;transform:translateX(calc(${-ci * (100 / week.length)}% + ${dx}px));transition:${drag.current ? "none" : "transform .3s cubic-bezier(.2,.8,.3,1.05)"}`}
+            onPointerDown=${onDown} onPointerMove=${onMove} onPointerUp=${onUp} onPointerCancel=${onUp}>
+            ${week.map((ev) => html`<div class="we-pane" key=${ev.id} style=${`width:${100 / week.length}%`}>
+              <div class="we-card" style=${`--wc:${world.color}`}>
+                <button class="we-x" title="remove" onClick=${() => remove(ev)}>✕</button>
+                <div class="we-emoji">${ev.emoji}</div>
+                <div class="we-main">
+                  <div class="we-title">${ev.title}</div>
+                  <div class="we-meta">${[ev.place && `📍 ${ev.place}`, `🗓 ${dateLabel(ev.when_at)}${ev.when_txt ? ` · ${ev.when_txt}` : ""}`].filter(Boolean).join(" · ")}</div>
+                  ${joinRow(ev)}
+                </div>
+              </div>
+            </div>`)}
+          </div>
+          ${week.length > 1 && html`<div class="we-dots">${week.map((_, i) => html`<span key=${i} class=${i === ci ? "on" : ""} onClick=${() => go(i)}></span>`)}</div>`}
+        </div>`}
+
+    ${live.length > 0 && html`<div class="we-up">
+      <div class="we-up-head">Upcoming</div>
+      ${live.map((ev) => { const joined = ev.joined || []; const mineIn = joined.some((j) => j.id === me.id); return html`<div class="we-up-row" key=${ev.id}>
+        <span class="we-up-emoji">${ev.emoji}</span>
+        <div class="we-up-main"><div class="we-up-title">${ev.title}</div>
+          <div class="we-up-meta">${[dateLabel(ev.when_at), ev.place].filter(Boolean).join(" · ")}${joined.length ? ` · ${joined.length} going` : ""}</div></div>
+        <button class=${`we-up-join ${mineIn ? "in" : ""}`} onClick=${() => toggleJoin(ev)}>${mineIn ? "✓" : "Join"}</button>
+      </div>`; })}
+    </div>`}
   </div>`;
 }

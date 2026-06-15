@@ -437,7 +437,7 @@ where not exists (select 1 from worlds where slug = 'game-room');
 -- world_events (018): "happenings" carousel above a public world's chat
 create table if not exists world_events (
   id uuid primary key default gen_random_uuid(),
-  world_slug text not null, title text not null, place text, when_txt text,
+  world_slug text not null, title text not null, place text, when_txt text, when_at date,
   emoji text not null default '🎉', created_by uuid, creator_name text, creator_emoji text,
   joined jsonb not null default '[]'::jsonb, created_at timestamptz not null default now()
 );

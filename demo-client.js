@@ -44,8 +44,9 @@ function seed() {
       { id: "wm1", world_slug: "the-commons", player_id: null, name: "The Commons", emoji: "🌍", text: "Welcome to The Commons — the first public world. Say hi 👋", created_at: nowISO() },
     ],
     world_events: [
-      { id: "we1", world_slug: "the-commons", title: "Movie night", place: "my place", when_txt: "Friday 8pm", emoji: "🍿", created_by: null, creator_name: "Collide", creator_emoji: "🌍", joined: [], created_at: nowISO() },
-      { id: "we2", world_slug: "the-commons", title: "Coffee & catch-up", place: "anywhere cozy", when_txt: "this week", emoji: "☕", created_by: null, creator_name: "Collide", creator_emoji: "🌍", joined: [], created_at: nowISO() },
+      { id: "we1", world_slug: "the-commons", title: "Movie night", place: "my place", when_txt: "8pm", emoji: "🍿", when_at: new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10), created_by: null, creator_name: "Collide", creator_emoji: "🌍", joined: [], created_at: nowISO() },
+      { id: "we2", world_slug: "the-commons", title: "Coffee & catch-up", place: "anywhere cozy", when_txt: null, emoji: "☕", when_at: null, created_by: null, creator_name: "Collide", creator_emoji: "🌍", joined: [], created_at: nowISO() },
+      { id: "we3", world_slug: "the-commons", title: "Sunday hike", place: "the trailhead", when_txt: "morning", emoji: "🥾", when_at: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10), created_by: null, creator_name: "Collide", creator_emoji: "🌍", joined: [], created_at: nowISO() },
     ],
     trash_talk: [],
     memories: [],
