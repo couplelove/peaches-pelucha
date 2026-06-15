@@ -1128,3 +1128,64 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .gs-title { font-size: 34px; }
 .gs-sub { color: var(--ink-2); margin: 4px 0 4px; }
 .gs-wait { font-size: 15px; color: var(--ink); padding: 6px 0; }
+
+/* ---- 🎲 Uno ---- */
+.uno-fs .gamefs-body { background: var(--paper); }
+.uno-room { max-width: var(--maxw); margin: 0 auto; padding: 8px 14px calc(18px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+.uno-dir { font-size: 20px; color: var(--ink-2); width: 64px; text-align: right; }
+.uno-dir.rev { color: var(--accent); }
+
+/* Uno cards */
+.ucard { --uc: #555; position: relative; width: 58px; height: 84px; border-radius: 11px; background: var(--uc); border: 0; padding: 0; flex: 0 0 auto; box-shadow: inset 0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,.18); cursor: pointer; color: #fff; overflow: hidden; transition: transform .12s ease; }
+.ucard.static, .ucard.back { cursor: default; }
+.ucard.u-r { --uc: #d4453c; } .ucard.u-y { --uc: #e0a325; } .ucard.u-g { --uc: #3fa35a; } .ucard.u-b { --uc: #3b78c4; }
+.ucard.u-w { --uc: #2b2521; background: conic-gradient(#d4453c 0 25%, #e0a325 0 50%, #3fa35a 0 75%, #3b78c4 0 100%); }
+.uc-center { position: absolute; inset: 0; display: grid; place-content: center; font-family: var(--serif); font-weight: 600; font-size: 26px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); transform: rotate(-12deg); }
+.ucard.u-w .uc-center { background: rgba(0,0,0,.55); border-radius: 50%; width: 38px; height: 38px; margin: auto; inset: 0; transform: none; }
+.uc-corner { position: absolute; font-size: 11px; font-weight: 700; line-height: 1; color: #fff; }
+.uc-corner.tl { top: 5px; left: 6px; } .uc-corner.br { bottom: 5px; right: 6px; transform: rotate(180deg); }
+.ucard.back { background: #2b2521; box-shadow: inset 0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,.18); display: grid; place-content: center; }
+.uc-logo { font-family: var(--serif); font-weight: 700; font-size: 13px; color: #e0a325; transform: rotate(-12deg); letter-spacing: .02em; }
+.ucard.sm { width: 30px; height: 44px; border-radius: 7px; box-shadow: inset 0 0 0 2px #fff, 0 1px 3px rgba(0,0,0,.18); }
+.ucard.sm .uc-center { font-size: 15px; } .ucard.sm .uc-corner { font-size: 8px; } .ucard.sm .uc-logo { font-size: 8px; }
+.ucard.nope { animation: unoNope .4s ease; }
+@keyframes unoNope { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(3px)} }
+
+/* opponents */
+.uno-opps { display: flex; flex-direction: column; gap: 8px; }
+.uno-opp { border: 1px solid var(--line); border-radius: var(--r); padding: 9px 12px; background: var(--surface); transition: border-color .15s ease; }
+.uno-opp.turn { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.uno-oppname { font-weight: 600; font-size: 13.5px; margin-bottom: 6px; }
+.uno-opp.turn .uno-oppname { color: var(--accent); }
+.uno-oppfan { display: flex; gap: -6px; align-items: center; }
+.uno-oppfan .ucard { margin-right: -14px; }
+.uno-more { font-size: 12px; color: var(--ink-2); margin-left: 20px; font-variant-numeric: tabular-nums; }
+.uno-count { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ink-3); text-transform: uppercase; margin-top: 6px; }
+.uno-count.uno { color: var(--accent); }
+
+/* middle: draw pile + discard */
+.uno-mid { display: flex; align-items: center; justify-content: center; gap: 30px; padding: 6px 0; }
+.uno-pile { background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; }
+.uno-pile:disabled { opacity: .5; cursor: default; }
+.uno-pilelbl { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); }
+.uno-discard { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.uno-color { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 9px; border-radius: var(--r-pill); color: #fff; }
+.uno-color.u-r { background: #d4453c; } .uno-color.u-y { background: #c98a12; } .uno-color.u-g { background: #3fa35a; } .uno-color.u-b { background: #3b78c4; }
+
+.uno-feed { text-align: center; font-size: 12.5px; color: var(--ink-2); min-height: 18px; }
+
+/* my hand */
+.uno-handwrap { margin-top: auto; }
+.uno-handhead { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; margin-bottom: 7px; }
+.uno-yourturn { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.uno-hand { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; padding: 4px; }
+
+.uno-controls { padding-top: 4px; }
+.uno-decide { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.uno-over { text-align: center; }
+.uno-winner { font-family: var(--serif); font-size: 22px; margin-bottom: 12px; }
+
+/* colour picker */
+.uno-pick .uno-swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+.uno-swatch { border: 0; border-radius: var(--r); padding: 18px; font: inherit; font-weight: 700; font-size: 15px; color: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.uno-swatch.u-r { background: #d4453c; } .uno-swatch.u-y { background: #c98a12; } .uno-swatch.u-g { background: #3fa35a; } .uno-swatch.u-b { background: #3b78c4; }

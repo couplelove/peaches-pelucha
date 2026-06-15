@@ -431,8 +431,23 @@ alter table poker_table  add column if not exists room text;
 create index if not exists matches_room     on matches (room, status);
 create index if not exists poker_table_room on poker_table (room);
 insert into worlds (slug, name, kind, emoji, color, x, y, blurb, owner_label)
-select 'game-room', 'The Game Room', 'public', '🎲', '#3e7a58', 0.52, 0.30, 'Pull up a seat — Phase 10 & Poker', 'Collide'
+select 'game-room', 'The Game Room', 'public', '🎲', '#3e7a58', 0.52, 0.30, 'Pull up a seat — Phase 10, Poker & Uno', 'Collide'
 where not exists (select 1 from worlds where slug = 'game-room');
+
+-- shared Uno table (020): one deck, turn-based, room-scoped like poker_table
+create table if not exists uno_table (
+  id         uuid primary key default gen_random_uuid(),
+  state      jsonb not null,
+  version    int not null default 0,
+  room       text,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists uno_table_room on uno_table (room);
+alter table uno_table enable row level security;
+drop policy if exists anon_all on uno_table;
+create policy anon_all on uno_table for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table uno_table; exception when duplicate_object then null; end $$;
 
 -- world_events (018): "happenings" carousel above a public world's chat
 create table if not exists world_events (

@@ -33,6 +33,7 @@ function seed() {
     bets: [],
     matches: [],
     poker_table: [],
+    uno_table: [],
     social_links: [],
     watch_state: [],
     worlds: [
@@ -90,6 +91,7 @@ const DEFAULTS = {
   rewards: { cost: 50, emoji: "🎁", active: true, sort: 0 },
   bets: { stake: 10, status: "open", winner_id: null, settled_at: null },
   matches: { status: "playing", version: 0 },
+  uno_table: { version: 0, room: null },
   trash_talk: { player_id: null },
   memories: { kind: "photo", uploaded_by: null, place: null, lat: null, lng: null, thumb_path: null, blur: null },
   social_links: { platform: "other", video_id: null, mode: "share", sender_id: null, recipient_id: null, note: null, seen_at: null, reactions: [], status: "active" },

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "https://esm.s
 import htm from "https://esm.sh/htm@3.1.1";
 import { PlayTab } from "./game.js";
 import { PokerTab } from "./poker.js";
+import { UnoTab } from "./uno.js";
 
 const html = htm.bind(h);
 
@@ -195,7 +196,7 @@ function WorldRoom({ client, me, world, demo, crowd, floats, onReact, onBack }) 
 /* ---- the Game Room: a LOBBY you opt into. See who's here + what they're up
    for, invite a player to a game, set yourself available/unavailable, leave.
    Accepting an invite drops you both into the shared room-scoped game. ---- */
-const GR_GAMES = { phase10: { emoji: "🎴", name: "Phase 10" }, poker: { emoji: "🃏", name: "Poker" } };
+const GR_GAMES = { phase10: { emoji: "🎴", name: "Phase 10" }, poker: { emoji: "🃏", name: "Poker" }, uno: { emoji: "🎲", name: "Uno" } };
 function GameRoom({ client, me, players, flash, api, world, onBack }) {
   const demo = !!client._db;
   const [available, setAvailable] = useState(true);
@@ -251,6 +252,8 @@ function GameRoom({ client, me, players, flash, api, world, onBack }) {
       <div class="gr-body">
         ${inGame === "phase10"
           ? html`<${PlayTab} client=${client} players=${players} me=${me} api=${api} flash=${flash} room="game-room" />`
+          : inGame === "uno"
+          ? html`<${UnoTab} client=${client} me=${me} players=${players} flash=${flash} room="game-room" />`
           : html`<${PokerTab} client=${client} me=${me} players=${players} flash=${flash} room="game-room" />`}
       </div>
     </div>`;
