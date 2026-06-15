@@ -899,3 +899,37 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .cp-text { display: flex; flex-direction: column; }
 .cp-text b { font-family: var(--serif); font-weight: 500; font-size: 16px; }
 .cp-text span { font-size: 12.5px; color: rgba(236,231,245,.6); }
+
+/* ---- 🌍 public world interior: the town square ---- */
+.collide.wr { display: flex; flex-direction: column; }
+.wr-bar { display: flex; align-items: center; gap: 10px; padding: calc(var(--safe-top) + 12px) 14px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.08); position: relative; z-index: 2; }
+.wr-title { font-family: var(--serif); font-weight: 500; font-size: 16px; color: #f3eefb; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr-here { display: flex; gap: -6px; flex: 0 0 auto; }
+.wr-here .cav { width: 26px; height: 26px; font-size: 14px; margin-left: -6px; box-shadow: 0 0 0 2px #15121f; }
+.wr-here .cav:first-child { margin-left: 0; }
+
+.wr-msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; position: relative; z-index: 1; }
+.wr-msg { max-width: 80%; align-self: flex-start; display: flex; flex-direction: column; gap: 2px; }
+.wr-msg.mine { align-self: flex-end; align-items: flex-end; }
+.wr-who { font-size: 11px; color: rgba(236,231,245,.55); padding: 0 4px; }
+.wr-bub { background: rgba(255,255,255,.1); color: #f3eefb; border-radius: 15px; padding: 9px 13px; font-size: 14px; line-height: 1.35;
+  border: 1px solid rgba(255,255,255,.08); }
+.wr-msg.mine .wr-bub { background: color-mix(in srgb, var(--wc) 55%, #2a2440); border-color: color-mix(in srgb, var(--wc) 40%, transparent); }
+.wr-msg.sys { align-self: center; max-width: 92%; }
+.wr-msg.sys .wr-bub { background: rgba(255,255,255,.05); color: rgba(236,231,245,.7); font-size: 13px; text-align: center; }
+.wr-msg.pending .wr-bub { opacity: .6; }
+
+.wr-react { display: flex; gap: 6px; justify-content: center; padding: 6px 12px; position: relative; z-index: 2; }
+.wr-react button { width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(255,255,255,.08);
+  font-size: 18px; cursor: pointer; transition: transform .12s ease, background .15s ease; }
+.wr-react button:active { transform: scale(.82); background: rgba(255,255,255,.18); }
+.wr-compose { display: flex; gap: 8px; padding: 8px 12px calc(12px + var(--safe-bottom)); position: relative; z-index: 2;
+  border-top: 1px solid rgba(255,255,255,.08); }
+.wr-compose input { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: #f3eefb; }
+.wr-compose input::placeholder { color: rgba(236,231,245,.4); }
+.wr-compose input:focus { border-color: color-mix(in srgb, var(--wc) 60%, transparent); box-shadow: none; }
+
+.cfloat { position: fixed; bottom: 90px; font-size: 30px; z-index: 5; pointer-events: none; animation: cfloatrise 2.4s ease-out forwards; }
+@keyframes cfloatrise { 0% { opacity: 0; transform: translateY(0) scale(.5); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-46vh) scale(1.3); } }

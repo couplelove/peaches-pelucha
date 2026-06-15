@@ -39,6 +39,9 @@ function seed() {
       { id: "w1", slug: "peaches-pelucha", name: "Peaches & Pelucha", kind: "private", emoji: "🍑", color: "#c15f3c", x: 0.30, y: 0.40, blurb: "Your private world", owner_label: "Peaches & Pelucha", created_at: nowISO() },
       { id: "w2", slug: "the-commons", name: "The Commons", kind: "public", emoji: "🌍", color: "#356b8c", x: 0.66, y: 0.58, blurb: "The first public square — more worlds are forming", owner_label: "Collide", created_at: nowISO() },
     ],
+    world_messages: [
+      { id: "wm1", world_slug: "the-commons", player_id: null, name: "The Commons", emoji: "🌍", text: "Welcome to The Commons — the first public world. Say hi 👋", created_at: nowISO() },
+    ],
     trash_talk: [],
     memories: [],
     todos: [],
