@@ -28,7 +28,8 @@ const JoinMe = lazyTab(() => import("./joinme.js"), "JoinMe");
 
 // Tab order drives the gesture-first navigation (swipe = step through this list)
 // and the floating dock. Score stays first — its warm Phase-10 world is home base.
-const TAB_ORDER = ["score", "plans", "memories", "schmoney", "joinme", "more"];
+// "more" is intentionally off the dock — it's reached by tapping your name (rarely used)
+const TAB_ORDER = ["score", "plans", "memories", "schmoney", "joinme"];
 const TAB_META = {
   score: ["🏆", "Score"], plans: ["📅", "Plans"], memories: ["📸", "Memories"],
   schmoney: ["💸", "Schmoney"], joinme: ["🧘", "Join Me"], more: ["⚙️", "More"],
@@ -225,9 +226,10 @@ function App({ client, onResetCreds }) {
   const tabIdx = TAB_ORDER.indexOf(tab);
   const goTab = useCallback((to) => {
     setTab((cur) => {
+      if (to === cur) return cur;
       const from = TAB_ORDER.indexOf(cur), ti = TAB_ORDER.indexOf(to);
-      if (ti < 0 || to === cur) return cur;
-      setNavDir(ti > from ? 1 : -1);
+      // "more" lives off the dock (reached by tapping your name) → slide in from the right
+      setNavDir(ti >= 0 && from >= 0 ? (ti > from ? 1 : -1) : 1);
       return to;
     });
   }, []);
@@ -478,7 +480,7 @@ function App({ client, onResetCreds }) {
     <div class=${`app-shell cool ${mem ? "mem" : ""}`}>
       <div class="topbar">
         <div class="brand script">peaches & pelucha</div>
-        <button class="whoami" onClick=${() => setModal({ type: "switch" })}>
+        <button class="whoami" onClick=${() => goTab("more")}>
           <span class="av" style=${`background:${me.color}22`}>${me.emoji}</span>
           ${me.name}
         </button>
@@ -505,7 +507,7 @@ function App({ client, onResetCreds }) {
 
       <div class="dock-label" key=${tab}>${TAB_META[tab][1]}</div>
       <nav class="dock">
-        <div class="dock-puck" style=${`transform:translateX(${tabIdx * 48}px)`}></div>
+        <div class="dock-puck" style=${tabIdx < 0 ? "opacity:0" : `transform:translateX(${tabIdx * 48}px)`}></div>
         ${TAB_ORDER.map((k) => html`
           <button class=${tab === k ? "active" : ""} aria-label=${TAB_META[k][1]} onClick=${() => goTab(k)}>
             ${TAB_META[k][0]}
