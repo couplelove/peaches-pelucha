@@ -18,6 +18,28 @@ const DEFAULT_LIST = "Places We Want to Go";
 const TILE = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
 const TILE_ATTR = "© OpenStreetMap, © CARTO";
 
+// Curated "things to do" — a Timeout-style mix of iconic + romantic spots. No
+// scraping/keys (this repo is public); each carries a geocode query so one tap
+// resolves real coordinates and drops it into "Places We Want to Go".
+const SUGGESTIONS = [
+  { emoji: "🌉", name: "Brooklyn Bridge Park", blurb: "Skyline picnics at golden hour", q: "Brooklyn Bridge Park, New York" },
+  { emoji: "🌃", name: "Top of the Rock", blurb: "The skyline's best seat", q: "Top of the Rock, New York" },
+  { emoji: "📚", name: "Strand Book Store", blurb: "18 miles of books to get lost in", q: "Strand Book Store, New York" },
+  { emoji: "🦪", name: "Grand Central Oyster Bar", blurb: "Oysters under the vaulted tiles", q: "Grand Central Oyster Bar, New York" },
+  { emoji: "🌲", name: "The Ramble, Central Park", blurb: "Get pleasantly lost together", q: "The Ramble, Central Park, New York" },
+  { emoji: "🎡", name: "Coney Island", blurb: "Boardwalk rides & hot dogs", q: "Coney Island, New York" },
+  { emoji: "🌊", name: "Rockaway Beach", blurb: "Surf, tacos, sand", q: "Rockaway Beach, New York" },
+  { emoji: "🖼️", name: "The Met", blurb: "Lose an afternoon in art", q: "Metropolitan Museum of Art, New York" },
+  { emoji: "🌉", name: "Golden Gate Bridge", blurb: "Bike across the bay", q: "Golden Gate Bridge, San Francisco" },
+  { emoji: "⛰️", name: "Big Sur", blurb: "Cliffs, fog, the open road", q: "Big Sur, California" },
+  { emoji: "🌮", name: "Grand Central Market", blurb: "A hundred cravings, one roof", q: "Grand Central Market, Los Angeles" },
+  { emoji: "🗼", name: "Eiffel Tower", blurb: "Champagne on the Champ de Mars", q: "Eiffel Tower, Paris" },
+  { emoji: "🥐", name: "Le Marais", blurb: "Wander, pastries, repeat", q: "Le Marais, Paris" },
+  { emoji: "🏛️", name: "Trastevere", blurb: "Cobblestones & carbonara", q: "Trastevere, Rome" },
+  { emoji: "🌅", name: "Oia, Santorini", blurb: "Caldera sunsets", q: "Oia, Santorini, Greece" },
+  { emoji: "🏮", name: "Gion, Kyoto", blurb: "Lantern-lit old streets", q: "Gion, Kyoto, Japan" },
+];
+
 let _leaflet = null;
 function loadLeaflet() {
   if (_leaflet) return _leaflet;
@@ -175,6 +197,7 @@ export function MapCard({ client, me, players, flash }) {
   const [full, setFull] = useState(false);            // full-screen map open
   const [fullCenter, setFullCenter] = useState(null); // where full-screen opens centered (null = fit all)
   const [adding, setAdding] = useState(false);
+  const [sugBusy, setSugBusy] = useState(-1);         // suggestion being added
   const [query, setQuery] = useState("");             // place/address search
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -273,6 +296,19 @@ export function MapCard({ client, me, players, flash }) {
     if (mode === "places") setPinSheet({ lat, lng, title: "", note: "", list: listFilter || DEFAULT_LIST, emoji: "📍", visited: false });
     else if (mode === "trips" && selTrip) setStopSheet({ trip_id: selTrip, lat, lng, title: "", note: "", seq: stops.length, visited: false });
     setAdding(false);
+  };
+
+  // one-tap add a curated suggestion → geocode → drop into "Places We Want to Go"
+  const addSuggestion = async (s, i) => {
+    setSugBusy(i);
+    const res = await geocode(s.q);
+    const hit = res[0];
+    if (!hit) { setSugBusy(-1); flash("Couldn't place that one — try the map search"); return; }
+    const { error } = await client.from("map_pins").insert({ lat: hit.lat, lng: hit.lng, title: s.name, list: DEFAULT_LIST, emoji: s.emoji, note: s.blurb || null, visited: false, created_by: me.id });
+    setSugBusy(-1);
+    if (error) { flash("⚠️ " + error.message); return; }
+    flash(`Added ${s.emoji} ${s.name}`);
+    setListFilter(null); loadPins();
   };
 
   const openFull = (center, startAdding) => { setFullCenter(center || null); setAdding(!!startAdding); setQuery(""); setResults([]); setFocus(null); setFull(true); };
@@ -388,6 +424,8 @@ export function MapCard({ client, me, players, flash }) {
       <button class="map-open" onClick=${() => openFull(null)}>${hasAnything ? "" : html`<span class="map-open-empty">Tap to open the map</span>`}<span class="map-open-cta">⤢ Explore</span></button>
     </div>
 
+    ${mode === "places" && html`<${Suggestions} onAdd=${addSuggestion} busy=${sugBusy} />`}
+
     ${panel(false)}
 
     ${full && createPortal(html`<div class="mapfull">
@@ -430,6 +468,33 @@ export function MapCard({ client, me, players, flash }) {
         <button class="linkbtn block mt" style="width:100%" onClick=${() => setTripSheet(null)}>Cancel</button>
       </div>
     </div>`, document.body)}
+  </div>`;
+}
+
+// Auto-rotating, swipeable "ideas" strip → one tap adds to the wishlist.
+function Suggestions({ onAdd, busy }) {
+  const ref = useRef(null), paused = useRef(false), resume = useRef(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const id = setInterval(() => {
+      if (paused.current || !el.isConnected) return;
+      const card = el.querySelector(".sug-card");
+      const step = card ? card.offsetWidth + 12 : 240;
+      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 8) el.scrollTo({ left: 0, behavior: "smooth" });
+      else el.scrollBy({ left: step, behavior: "smooth" });
+    }, 4500);
+    return () => clearInterval(id);
+  }, []);
+  const hold = () => { paused.current = true; clearTimeout(resume.current); resume.current = setTimeout(() => { paused.current = false; }, 9000); };
+  return html`<div class="sugwrap" data-noswipe>
+    <div class="sug-eyebrow">Ideas for your list ✨</div>
+    <div class="sugstrip" ref=${ref} onPointerDown=${hold}>
+      ${SUGGESTIONS.map((s, i) => html`<div class="sug-card" key=${i}>
+        <span class="sug-emoji">${s.emoji}</span>
+        <div class="sug-main"><div class="sug-name">${s.name}</div><div class="sug-blurb">${s.blurb}</div></div>
+        <button class="sug-add" disabled=${busy === i} onClick=${() => onAdd(s, i)}>${busy === i ? "…" : "＋"}</button>
+      </div>`)}
+    </div>
   </div>`;
 }
 
