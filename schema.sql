@@ -384,80 +384,12 @@ create index if not exists transactions_player      on transactions (player_id);
 create index if not exists matches_status           on matches (status);
 create index if not exists games_status             on games (status, created_at desc);
 
--- Collide 🌌 — worlds are the circle-portals on the public map
-create table if not exists worlds (
-  id          uuid primary key default gen_random_uuid(),
-  slug        text unique not null,
-  name        text not null,
-  kind        text not null default 'public',
-  emoji       text not null default '🌍',
-  color       text not null default '#c15f3c',
-  x           real not null default 0.5,
-  y           real not null default 0.5,
-  blurb       text,
-  owner_label text,
-  created_at  timestamptz not null default now()
-);
-alter table worlds enable row level security;
-drop policy if exists anon_all on worlds;
-create policy anon_all on worlds for all to anon, authenticated using (true) with check (true);
-do $$ begin alter publication supabase_realtime add table worlds; exception when duplicate_object then null; end $$;
-insert into worlds (slug, name, kind, emoji, color, x, y, blurb, owner_label)
-select * from (values
-  ('peaches-pelucha', 'Peaches & Pelucha', 'private', '🍑', '#c15f3c', 0.30, 0.40, 'Your private world', 'Peaches & Pelucha'),
-  ('the-commons',     'The Commons',       'public',  '🌍', '#356b8c', 0.66, 0.58, 'The first public square — more worlds are forming', 'Collide')
-) as v(slug, name, kind, emoji, color, x, y, blurb, owner_label)
-where not exists (select 1 from worlds);
-
--- world_messages (016): town-square chat for public worlds
-create table if not exists world_messages (
-  id         uuid primary key default gen_random_uuid(),
-  world_slug text not null,
-  player_id  uuid,
-  name       text not null,
-  emoji      text not null default '👤',
-  text       text not null,
-  created_at timestamptz not null default now()
-);
-create index if not exists world_messages_feed on world_messages (world_slug, created_at);
-alter table world_messages enable row level security;
-drop policy if exists anon_all on world_messages;
-create policy anon_all on world_messages for all to anon, authenticated using (true) with check (true);
-do $$ begin alter publication supabase_realtime add table world_messages; exception when duplicate_object then null; end $$;
-
--- room-scoped games (017): NULL room = private couple game; slug = public instance
+-- room-scoping columns (017): retained from the removed public Game Room. They
+-- are always NULL now (= the couple's private game); kept so the game engines
+-- (game.js / poker.js) need no changes. The Collide tables (worlds,
+-- world_messages, world_events) and uno_table were dropped in migration 021.
 alter table matches      add column if not exists room text;
 alter table poker_table  add column if not exists room text;
 create index if not exists matches_room     on matches (room, status);
 create index if not exists poker_table_room on poker_table (room);
-insert into worlds (slug, name, kind, emoji, color, x, y, blurb, owner_label)
-select 'game-room', 'The Game Room', 'public', '🎲', '#3e7a58', 0.52, 0.30, 'Pull up a seat — Phase 10, Poker & Uno', 'Collide'
-where not exists (select 1 from worlds where slug = 'game-room');
-
--- shared Uno table (020): one deck, turn-based, room-scoped like poker_table
-create table if not exists uno_table (
-  id         uuid primary key default gen_random_uuid(),
-  state      jsonb not null,
-  version    int not null default 0,
-  room       text,
-  updated_at timestamptz not null default now(),
-  created_at timestamptz not null default now()
-);
-create index if not exists uno_table_room on uno_table (room);
-alter table uno_table enable row level security;
-drop policy if exists anon_all on uno_table;
-create policy anon_all on uno_table for all to anon, authenticated using (true) with check (true);
-do $$ begin alter publication supabase_realtime add table uno_table; exception when duplicate_object then null; end $$;
-
--- world_events (018): "happenings" carousel above a public world's chat
-create table if not exists world_events (
-  id uuid primary key default gen_random_uuid(),
-  world_slug text not null, title text not null, place text, when_txt text, when_at date,
-  emoji text not null default '🎉', created_by uuid, creator_name text, creator_emoji text,
-  joined jsonb not null default '[]'::jsonb, created_at timestamptz not null default now()
-);
-create index if not exists world_events_feed on world_events (world_slug, created_at desc);
-alter table world_events enable row level security;
-drop policy if exists anon_all on world_events;
-create policy anon_all on world_events for all to anon, authenticated using (true) with check (true);
 do $$ begin alter publication supabase_realtime add table world_events; exception when duplicate_object then null; end $$;

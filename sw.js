@@ -1,7 +1,7 @@
 // Service worker for Peaches & Pelucha.
 // Strategy: cache the app shell so it installs and opens instantly / offline.
 // (Live data still needs a connection — that's Supabase, never cached.)
-const CACHE = "pp-v57";
+const CACHE = "pp-v58";
 // Separate, long-lived cache for memory IMAGE media (thumbnails + full photos).
 // Survives shell-version bumps; self-evicts oldest entries past the cap so it
 // never blows the device quota. Videos are NOT cached here — they stream.
@@ -19,9 +19,7 @@ const SHELL = [
   "./engine.js",
   "./game.js",
   "./poker.js",
-  "./uno.js",
   "./watch.js",
-  "./collide.js",
   "./push.js",
   "./roulette.js",
   "./home.js",

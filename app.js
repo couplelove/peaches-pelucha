@@ -25,7 +25,6 @@ const PokerTab = lazyTab(() => import("./poker.js"), "PokerTab");
 const MemoriesTab = lazyTab(() => import("./memories.js"), "MemoriesTab");
 const WatchTab = lazyTab(() => import("./watch.js"), "WatchTab");
 const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
-const Collide = lazyTab(() => import("./collide.js"), "Collide");
 
 // One tab crashing shouldn't blank the whole app. Keyed by tab so it resets on
 // navigation (a crashed section recovers when you leave and come back).
@@ -154,7 +153,6 @@ function App({ client, onResetCreds }) {
 
   const [meId, setMeId] = useState(localStorage.getItem(LS.me) || "");
   const [tab, setTab] = useState("score");
-  const [space, setSpace] = useState("home");      // 'home' = private world · 'collide' = the public map
   const [modal, setModal] = useState(null);       // {type, ...props}
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
@@ -331,13 +329,7 @@ function App({ client, onResetCreds }) {
       modal=${modal} setModal=${setModal} api=${api} />`;
   }
 
-  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab, setSpace };
-
-  // Stepping OUT of the private world into Collide replaces the whole shell —
-  // it's a different space, not a tab. The private world stays the anchor.
-  if (space === "collide") {
-    return html`<${Collide} client=${client} me=${me} players=${players} flash=${flash} api=${api} onEnterHome=${() => { setTab("score"); setSpace("home"); }} />`;
-  }
+  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
 
   return html`
     <div class="app-shell">
@@ -650,7 +642,7 @@ function ShopTab(ctx) {
 /* ============================================================ More ======== */
 
 function MoreTab(ctx) {
-  const { players, setModal, txns, api, onResetCreds, client, me, flash, setSpace } = ctx;
+  const { players, setModal, txns, api, onResetCreds, client, me, flash } = ctx;
   const [alerts, setAlerts] = useState("…");
   useEffect(() => { pushStatus().then(setAlerts); }, []);
   const toggleAlerts = async () => {
@@ -666,11 +658,6 @@ function MoreTab(ctx) {
     : alerts === "unsupported" ? "🔕 Turn alerts (open the installed app)"
     : "🔔 Get notified when it's your turn";
   return html`
-    <button class="card collide-portal" onClick=${() => setSpace("collide")}>
-      <div class="cp-orbit"><span class="cp-orb">🌌</span></div>
-      <div class="cp-text"><b>Step out to Collide</b><span>Leave your private world for the map of worlds →</span></div>
-    </button>
-
     <div class="card">
       <h2>Players</h2>
       <div class="list">
