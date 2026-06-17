@@ -25,6 +25,14 @@ const MemoriesTab = lazyTab(() => import("./memories.js"), "MemoriesTab");
 const WatchTab = lazyTab(() => import("./watch.js"), "WatchTab");
 const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
 
+// Tab order drives the gesture-first navigation (swipe = step through this list)
+// and the floating dock. Score stays first — its warm Phase-10 world is home base.
+const TAB_ORDER = ["score", "watch", "plans", "memories", "schmoney", "more"];
+const TAB_META = {
+  score: ["🏆", "Score"], watch: ["📺", "Watch"], plans: ["📅", "Plans"],
+  memories: ["📸", "Memories"], schmoney: ["💸", "Schmoney"], more: ["⚙️", "More"],
+};
+
 // One tab crashing shouldn't blank the whole app. Keyed by tab so it resets on
 // navigation (a crashed section recovers when you leave and come back).
 class ErrorBoundary extends Component {
@@ -156,6 +164,61 @@ function App({ client, onResetCreds }) {
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
   const netDone = useRef(false);   // first network load won → don't let cached data overwrite
+
+  // ---- gesture-first navigation: swipe between tabs with spring physics ----
+  const [navDir, setNavDir] = useState(1);   // +1 = next (slide from right), -1 = prev
+  const tabIdx = TAB_ORDER.indexOf(tab);
+  const goTab = useCallback((to) => {
+    setTab((cur) => {
+      const from = TAB_ORDER.indexOf(cur), ti = TAB_ORDER.indexOf(to);
+      if (ti < 0 || to === cur) return cur;
+      setNavDir(ti > from ? 1 : -1);
+      return to;
+    });
+  }, []);
+  const swipeRef = useRef(null);
+  const dragRef = useRef(null);
+  const onSwipeDown = useCallback((e) => {
+    // Score is the warm Phase-10 home — never hijack its draggable cards. Swipe
+    // navigation lives on the cool tabs only (.app-shell gets .cool off Score).
+    if (!document.querySelector(".app-shell.cool")) return;
+    if (document.querySelector(".gamefs, .modal-bg")) return;       // never over the board / a modal
+    if (e.target.closest("input, textarea, [data-noswipe]")) return;
+    // bail if the touch starts inside a horizontal scroller (carousels etc.)
+    let n = e.target;
+    while (n && n !== swipeRef.current) {
+      const ox = getComputedStyle(n).overflowX;
+      if ((ox === "auto" || ox === "scroll") && n.scrollWidth > n.clientWidth + 2) return;
+      n = n.parentElement;
+    }
+    dragRef.current = { x: e.clientX, y: e.clientY, t: Date.now(), axis: null, dx: 0 };
+  }, []);
+  const onSwipeMove = useCallback((e) => {
+    const d = dragRef.current; if (!d) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      d.axis = Math.abs(dx) > Math.abs(dy) * 1.25 ? "x" : "y";
+      if (d.axis === "y") { dragRef.current = null; return; }
+    }
+    d.dx = dx;
+    const i = TAB_ORDER.indexOf(tab);
+    const atEnd = (dx > 0 && i === 0) || (dx < 0 && i === TAB_ORDER.length - 1);
+    const el = swipeRef.current;
+    if (el) { el.style.transition = "none"; el.style.transform = `translateX(${dx * (atEnd ? 0.26 : 0.72)}px)`; }
+  }, [tab]);
+  const onSwipeUp = useCallback(() => {
+    const d = dragRef.current; dragRef.current = null;
+    const el = swipeRef.current;
+    if (el) { el.style.transition = "transform .4s cubic-bezier(.34,1.56,.64,1)"; el.style.transform = ""; }
+    if (!d || d.axis !== "x") return;
+    const v = d.dx / Math.max(1, Date.now() - d.t);
+    const i = TAB_ORDER.indexOf(tab);
+    if (Math.abs(d.dx) > 62 || Math.abs(v) > 0.45) {
+      if (d.dx < 0 && i < TAB_ORDER.length - 1) goTab(TAB_ORDER[i + 1]);
+      else if (d.dx > 0 && i > 0) goTab(TAB_ORDER[i - 1]);
+    }
+  }, [tab, goTab]);
 
   const flash = useCallback((msg) => {
     setToast(msg);
@@ -330,8 +393,11 @@ function App({ client, onResetCreds }) {
 
   const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
 
+  const cool = tab !== "score";   // Score = warm Phase-10 home; the rest = cool-glass world
+
   return html`
-    <div class="app-shell">
+    <div class=${`canvas-cool ${cool ? "on" : ""}`}></div>
+    <div class=${`app-shell ${cool ? "cool" : ""}`}>
       <div class="topbar">
         <div class="brand script">peaches & pelucha</div>
         <button class="whoami" onClick=${() => setModal({ type: "switch" })}>
@@ -342,24 +408,29 @@ function App({ client, onResetCreds }) {
 
       ${err && html`<div class="banner" style="background:#ffeef1;color:#b00020">⚠️ ${err}</div>`}
 
-      <${ErrorBoundary} key=${tab}>
-        ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
-        ${tab === "watch" && html`<${WatchTab} client=${client} me=${me} players=${players} flash=${flash} />`}
-        ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
-        ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
-        ${tab === "schmoney" && html`<${Fragment}>
-          <${WalletTab} ...${ctx} />
-          <${BetsTab} ...${ctx} />
-          <${ShopTab} ...${ctx} />
-        <//>`}
-        ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
-      <//>
+      <div class=${`swipe-wrap ${navDir > 0 ? "pane-from-r" : "pane-from-l"}`} key=${tab}
+        ref=${swipeRef} onPointerDown=${onSwipeDown} onPointerMove=${onSwipeMove}
+        onPointerUp=${onSwipeUp} onPointerCancel=${onSwipeUp}>
+        <${ErrorBoundary} key=${tab}>
+          ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
+          ${tab === "watch" && html`<${WatchTab} client=${client} me=${me} players=${players} flash=${flash} />`}
+          ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
+          ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
+          ${tab === "schmoney" && html`<${Fragment}>
+            <${WalletTab} ...${ctx} />
+            <${BetsTab} ...${ctx} />
+            <${ShopTab} ...${ctx} />
+          <//>`}
+          ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
+        <//>
+      </div>
 
-      <nav class="nav">
-        ${[["score", "🏆", "Score"], ["watch", "📺", "Watch"], ["plans", "📅", "Plans"], ["memories", "📸", "Memories"], ["schmoney", "💸", "Schmoney"], ["more", "⚙️", "More"]].map(
-          ([k, ic, label]) => html`
-          <button class=${tab === k ? "active" : ""} onClick=${() => setTab(k)}>
-            <span class="ic">${ic}</span>${label}
+      <div class="dock-label" key=${tab}>${TAB_META[tab][1]}</div>
+      <nav class="dock">
+        <div class="dock-puck" style=${`transform:translateX(${tabIdx * 48}px)`}></div>
+        ${TAB_ORDER.map((k) => html`
+          <button class=${tab === k ? "active" : ""} aria-label=${TAB_META[k][1]} onClick=${() => goTab(k)}>
+            ${TAB_META[k][0]}
           </button>`)}
       </nav>
 

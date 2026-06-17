@@ -55,7 +55,7 @@ body {
 @keyframes rise { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-6px);} }
 
 /* ---- shell ---- */
-.app-shell { max-width: var(--maxw); margin: 0 auto; padding: calc(var(--safe-top) + 14px) 18px 104px; }
+.app-shell { max-width: var(--maxw); margin: 0 auto; padding: calc(var(--safe-top) + 14px) 18px 128px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px 18px; }
 .brand { font-family: var(--serif); font-weight: 500; font-size: 19px; letter-spacing: -0.01em; color: var(--ink); display: flex; align-items: center; gap: 7px; }
 .brand.script { font-family: "Caveat", cursive; font-weight: 500; font-size: 25px; color: var(--ink-2); }
@@ -746,3 +746,190 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .vw-nav { display: flex; gap: 10px; width: 100%; max-width: 440px; }
 .vw-nav .btn { flex: 1; }
 
+
+/* ============================================================================
+   ✨ Refreshed shell — brighter cool-glass world + tactile motion.
+   ADDITIVE ONLY: new tokens + new classes. Touches nothing Phase 10 uses
+   (--paper/--ink/--accent, .btn, .card, .gamefs* all left exactly as-is), so
+   the Score tab + the full-screen board stay pixel-identical.
+   ========================================================================== */
+:root {
+  --c-canvas:   #e7eef3;
+  --c-canvas-2: #dde8ef;
+  --c-ink:   #14212e;
+  --c-ink-2: #5d7080;
+  --c-ink-3: #97a7b3;
+  --c-line:  rgba(20,33,46,.09);
+  --c-accent: #1f8c8a;          /* lagoon teal */
+  --c-accent-press: #167572;
+  --glass:        rgba(255,255,255,.58);
+  --glass-strong: rgba(255,255,255,.80);
+  --glass-line:   rgba(255,255,255,.72);
+  --glass-shadow: 0 18px 50px -18px rgba(20,33,46,.34), 0 3px 10px -5px rgba(20,33,46,.14);
+  --spring:   cubic-bezier(.34, 1.56, .64, 1);   /* gentle overshoot */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* cool canvas — fixed behind everything; faded IN only off the warm home, so
+   the Score/Phase-10 backdrop (body = --paper) is never altered. */
+.canvas-cool {
+  position: fixed; inset: 0; z-index: -1; opacity: 0; pointer-events: none;
+  transition: opacity .55s var(--ease-out);
+  background:
+    radial-gradient(125% 80% at 12% -8%, #f4f9fc 0%, transparent 55%),
+    radial-gradient(120% 90% at 112% 6%, #e0ecf4 0%, transparent 52%),
+    linear-gradient(180deg, var(--c-canvas) 0%, var(--c-canvas-2) 100%);
+}
+.canvas-cool.on { opacity: 1; }
+
+/* cool-world chrome (scoped under .cool — Score never gets this class) */
+.app-shell.cool { color: var(--c-ink); }
+.app-shell.cool .topbar { padding-top: 6px; }
+.app-shell.cool .brand.script { color: var(--c-ink-2); }
+
+/* journal-flip page transition (replays on tab change via key=tab) */
+.swipe-wrap { position: relative; will-change: transform; touch-action: pan-y; min-height: 60vh; }
+.pane-from-r { animation: paneFromR .44s var(--ease-out); }
+.pane-from-l { animation: paneFromL .44s var(--ease-out); }
+@keyframes paneFromR { from { opacity: 0; transform: translateX(40px) scale(.984); } to { opacity: 1; transform: none; } }
+@keyframes paneFromL { from { opacity: 0; transform: translateX(-40px) scale(.984); } to { opacity: 1; transform: none; } }
+
+/* floating glass dock — minimal, gesture-first, with a spring puck */
+.dock {
+  position: fixed; left: 50%; bottom: calc(16px + var(--safe-bottom)); transform: translateX(-50%);
+  z-index: 40; display: flex; align-items: center; gap: 2px; padding: 7px;
+  background: var(--glass-strong); border: 1px solid var(--glass-line); border-radius: var(--r-pill);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7);
+}
+.dock-puck {
+  position: absolute; left: 7px; top: 7px; width: 46px; height: calc(100% - 14px);
+  border-radius: var(--r-pill); background: var(--c-accent); z-index: 0;
+  box-shadow: 0 8px 18px -7px var(--c-accent), inset 0 1px 0 rgba(255,255,255,.25);
+  transition: transform .52s var(--spring);
+}
+.dock button {
+  position: relative; z-index: 1; border: 0; background: none; cursor: pointer;
+  width: 46px; height: 44px; display: grid; place-content: center; font-size: 21px; line-height: 1;
+  border-radius: var(--r-pill); transition: transform .4s var(--spring), filter .3s ease, opacity .3s ease;
+  filter: grayscale(.45); opacity: .62;
+}
+.dock button:active { transform: scale(.82); }
+.dock button.active { filter: none; opacity: 1; transform: translateY(-1px); text-shadow: 0 1px 6px rgba(0,0,0,.28); }
+.dock-label {
+  position: fixed; left: 50%; bottom: calc(16px + 58px + var(--safe-bottom)); transform: translateX(-50%);
+  z-index: 40; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--c-ink-2); background: var(--glass-strong); padding: 4px 12px; border-radius: var(--r-pill);
+  border: 1px solid var(--glass-line); box-shadow: 0 6px 18px -10px rgba(20,33,46,.4);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  animation: labelPop .5s var(--spring);
+}
+@keyframes labelPop { from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(.9); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+
+/* reusable glass card primitive for the cool tabs (Phase 2 surfaces opt in) */
+.glass {
+  background: var(--glass); border: 1px solid var(--glass-line); border-radius: var(--r);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+}
+.tap { transition: transform .3s var(--spring); }
+.tap:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) {
+  .pane-from-r, .pane-from-l, .dock-label { animation: none; }
+  .dock-puck, .dock button, .tap { transition: none; }
+}
+
+/* ============================================================================
+   ✨ Phase 2 — the cool-glass content language. ALL scoped under .app-shell.cool,
+   which exists only on the non-Score tabs, so Phase 10 (Score home + the .gamefs
+   board, which opens from the warm home) is never affected.
+   ========================================================================== */
+.app-shell.cool { color: var(--c-ink); letter-spacing: -.006em; }
+.app-shell.cool .topbar .whoami {
+  background: var(--glass); border-color: var(--glass-line); color: var(--c-ink);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+.app-shell.cool .whoami .av { background: rgba(255,255,255,.6); }
+
+/* type hierarchy — bigger, more confident, more air */
+.app-shell.cool h2 { font-size: 25px; letter-spacing: -.022em; color: var(--c-ink); margin: 4px 0 14px; }
+.app-shell.cool .eyebrow, .app-shell.cool .weyebrow {
+  color: var(--c-accent); letter-spacing: .12em; font-weight: 700; text-transform: uppercase; font-size: 11px;
+}
+.app-shell.cool .muted, .app-shell.cool .tiny.muted { color: var(--c-ink-2); }
+.app-shell.cool .sub, .app-shell.cool .wsub { color: var(--c-ink-2); }
+
+/* cards → frosted glass with depth */
+.app-shell.cool .card {
+  background: var(--glass); border: 1px solid var(--glass-line); border-radius: 22px;
+  box-shadow: var(--glass-shadow); color: var(--c-ink);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  padding: 18px; margin-bottom: 16px;
+}
+
+/* buttons → tactile, cool accent */
+.app-shell.cool .btn {
+  background: linear-gradient(180deg, #2aa3a0, var(--c-accent-press)); color: #fff; border: 0;
+  border-radius: 14px; box-shadow: 0 10px 22px -10px var(--c-accent), inset 0 1px 0 rgba(255,255,255,.25);
+  transition: transform .26s var(--spring), box-shadow .26s ease, filter .2s ease;
+}
+.app-shell.cool .btn:active { transform: scale(.955); filter: brightness(.97); }
+.app-shell.cool .btn.ghost {
+  background: var(--glass); color: var(--c-ink); border: 1px solid var(--glass-line); box-shadow: none;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.app-shell.cool .btn.danger { background: linear-gradient(180deg, #c8584f, #b5524a); box-shadow: 0 10px 22px -10px #b5524a; }
+.app-shell.cool .linkbtn { color: var(--c-accent); }
+
+/* pills / segmented / toggles → glass with a tactile spring */
+.app-shell.cool .pill, .app-shell.cool .seg {
+  background: var(--glass); border: 1px solid var(--glass-line); color: var(--c-ink-2); border-radius: 999px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: transform .24s var(--spring), background .2s ease, color .2s ease;
+}
+.app-shell.cool .pill:active, .app-shell.cool .seg:active { transform: scale(.94); }
+.app-shell.cool .pill.on, .app-shell.cool .pill.active, .app-shell.cool .seg.on {
+  background: var(--c-accent); color: #fff; border-color: transparent; box-shadow: 0 6px 14px -7px var(--c-accent);
+}
+.app-shell.cool .gameswitch { background: var(--glass); border: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.app-shell.cool .gameswitch button.on { background: #fff; color: var(--c-ink); }
+
+/* inputs / fields → glass */
+.app-shell.cool .field, .app-shell.cool input[type=text], .app-shell.cool input:not([type]), .app-shell.cool textarea, .app-shell.cool input[type=number], .app-shell.cool input[type=date] {
+  background: rgba(255,255,255,.7); border: 1px solid var(--glass-line); border-radius: 13px; color: var(--c-ink);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.app-shell.cool input::placeholder, .app-shell.cool textarea::placeholder { color: var(--c-ink-3); }
+.app-shell.cool input:focus, .app-shell.cool textarea:focus { outline: none; border-color: var(--c-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 18%, transparent); }
+
+/* lists / dividers → soft cool hairlines */
+.app-shell.cool .line { border-color: var(--c-line); }
+.app-shell.cool hr, .app-shell.cool .rule { border-color: var(--c-line); background: var(--c-line); }
+
+/* stat tiles (wallet) → glass */
+.app-shell.cool .score-tile { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 18px; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.app-shell.cool .score-tile .pts { color: var(--c-ink); }
+
+/* empty states float, not flatten */
+.app-shell.cool .empty { color: var(--c-ink-2); }
+
+/* Phase 2 — per-tab bespoke elements, cool-scoped */
+/* Plans (events.js) */
+.app-shell.cool .deck-title { color: var(--c-ink); font-size: 27px; letter-spacing: -.025em; }
+.app-shell.cool .deck-body { color: var(--c-ink-2); }
+.app-shell.cool .fcard { background: var(--glass); border-color: var(--glass-line); box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); }
+.app-shell.cool .fcard.first { background: linear-gradient(158deg, #15323a 0%, #102329 100%); border-color: transparent; }
+.app-shell.cool .fchip { background: var(--glass); border: 1px solid var(--glass-line); color: var(--c-ink-2); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: transform .24s var(--spring), background .2s ease, color .2s ease; }
+.app-shell.cool .fchip:active { transform: scale(.93); }
+.app-shell.cool .fchip.on { background: var(--c-accent); color: #fff; border-color: transparent; box-shadow: 0 6px 16px -7px var(--c-accent); }
+.app-shell.cool .erow { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 16px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform .24s var(--spring); }
+.app-shell.cool .erow:active { transform: scale(.985); }
+.app-shell.cool .evhero { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 22px; -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+
+/* Watch (watch.js) */
+.app-shell.cool .wcard { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 18px; box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); }
+.app-shell.cool .wtitle { color: var(--c-ink); }
+
+/* Memories (memories.js) — keep it photo-forward, just cooler labels + rounder tiles */
+.app-shell.cool .memday { color: var(--c-ink); }
+.app-shell.cool .memcell { border-radius: 14px; }
