@@ -32,9 +32,21 @@ Deno.serve(async (req) => {
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY not set" }, 500);
     if (!images.length) return json({ error: "no images" }, 400);
 
-    const imgs = images.slice(0, 6).map((url: string) => ({
-      type: "image", source: { type: "url", url },
-    }));
+    // Fetch each image server-side and inline it as base64. (Sending image URLs
+    // directly fails when the host's robots.txt blocks Anthropic's fetcher; the
+    // function's own fetch isn't subject to that.)
+    const imgs = (await Promise.all(images.slice(0, 6).map(async (url: string) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const ct = (r.headers.get("content-type") || "image/jpeg").split(";")[0];
+        if (!ct.startsWith("image/")) return null;
+        const bytes = new Uint8Array(await r.arrayBuffer());
+        let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return { type: "image", source: { type: "base64", media_type: ct, data: btoa(bin) } };
+      } catch { return null; }
+    }))).filter(Boolean);
+    if (!imgs.length) return json({ error: "could not load images" }, 502);
     const hint = [
       context.date ? `Date: ${context.date}.` : "",
       context.place ? `Place: ${context.place}.` : "",
