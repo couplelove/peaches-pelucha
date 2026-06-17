@@ -1,9 +1,11 @@
 import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useMemo, useRef, useCallback } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
+import { createPortal } from "https://esm.sh/preact@10.23.2/compat";
 import { notifyTurn } from "./push.js";
 
 const html = htm.bind(h);
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 
 /* 📺 Shared Social Queue
    - SHARE: send a social link one-way to your partner; the loop closes with a
@@ -100,13 +102,15 @@ function Viewer({ items, index, me, onClose, onNav, onReact }) {
       : html`<div class="vw-openpane">
           <div class="vw-bigicon">${meta.icon}</div>
           <div class="vw-pl">${meta.label}${it.platform === "instagram" ? " Reel" : ""}</div>
-          <a class="btn" href=${it.url} target="_blank" rel="noopener">Open in ${meta.label} ↗</a>
-          <div class="tiny muted" style="margin-top:8px">${meta.label} won't play inside other apps — opens its own app, then come back to react.</div>
+          <a class="btn" href=${it.url} target="_blank" rel="noopener">Open ↗</a>
         </div>`;
 
-  return html`<div class="viewer">
-    <button class="vw-x" onClick=${onClose}>✕</button>
-    <div class="vw-count">${index + 1} / ${items.length}</div>
+  return createPortal(html`<div class="viewer">
+    <div class="vw-bar">
+      <button class="vw-x" onClick=${onClose}>‹</button>
+      <span class="vw-addr">${meta.icon} ${hostOf(it.url) || meta.label}</span>
+      <span class="vw-count">${index + 1} / ${items.length}</span>
+    </div>
     <div class="vw-stage">${stage}</div>
     ${it.note ? html`<div class="vw-note">“${it.note}”</div>` : ""}
     <div class="vw-react">
@@ -116,7 +120,7 @@ function Viewer({ items, index, me, onClose, onNav, onReact }) {
       <button class="btn ghost" disabled=${index === 0} onClick=${() => onNav(index - 1)}>‹ Prev</button>
       <button class="btn" disabled=${index >= items.length - 1} onClick=${() => onNav(index + 1)}>Next ▶</button>
     </div>
-  </div>`;
+  </div>`, document.body);
 }
 
 /* ----------------------------------------------------------- tab ---------- */
