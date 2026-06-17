@@ -1,5 +1,6 @@
 import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useRef, useCallback, useMemo } from "https://esm.sh/preact@10.23.2/hooks";
+import { createPortal } from "https://esm.sh/preact@10.23.2/compat";
 import htm from "https://esm.sh/htm@3.1.1";
 
 const html = htm.bind(h);
@@ -7,17 +8,16 @@ const html = htm.bind(h);
 /* 🗺️ Shared map for Plans
    - Places: drop pins into free-text lists ("Places We Want to Go"), mark visited.
    - Memories: auto-plot one pin per geotagged photo-day (read-only).
-   - Road trips: ordered stops + a road-following route line (OSRM, with a
-     straight-line fallback); stops styled planned vs visited.
-   Leaflet loads lazily from a CDN (no build step, no API key). Clean CARTO
-   Voyager tiles. All markers are styled divIcons to match the app + dodge
-   Leaflet's broken default-marker-image problem. */
+   - Road trips: ordered stops + a road-following route line (OSRM, straight-line
+     fallback); stops styled planned vs visited.
+   The card shows a NON-INTERACTIVE preview (can't pan → never fights the app's
+   swipe-to-navigate); a full-screen map opens for real exploration + adding.
+   Leaflet loads lazily from a CDN (no build, no API key). Clean CARTO tiles. */
 
 const DEFAULT_LIST = "Places We Want to Go";
 const TILE = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
 const TILE_ATTR = "© OpenStreetMap, © CARTO";
 
-// lazy Leaflet loader (JS module from esm.sh, CSS from unpkg) — cached after first
 let _leaflet = null;
 function loadLeaflet() {
   if (_leaflet) return _leaflet;
@@ -47,62 +47,104 @@ async function routeLine(stops) {
   return straight;
 }
 
-const pinIcon = (L, emoji, visited) => L.divIcon({
-  className: "mkr", html: `<div class="mkr-pin ${visited ? "done" : ""}">${emoji || "📍"}</div>`,
-  iconSize: [34, 40], iconAnchor: [17, 38], popupAnchor: [0, -36],
-});
-const memIcon = (L) => L.divIcon({
-  className: "mkr", html: `<div class="mkr-pin mem">📸</div>`, iconSize: [34, 40], iconAnchor: [17, 38],
-});
-const stopIcon = (L, n, visited) => L.divIcon({
-  className: "mkr", html: `<div class="mkr-stop ${visited ? "done" : ""}">${visited ? "✓" : n}</div>`,
-  iconSize: [30, 30], iconAnchor: [15, 15],
-});
+const pinIcon = (L, emoji, visited) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin ${visited ? "done" : ""}">${emoji || "📍"}</div>`, iconSize: [34, 40], iconAnchor: [17, 38] });
+const memIcon = (L) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin mem">📸</div>`, iconSize: [34, 40], iconAnchor: [17, 38] });
+const stopIcon = (L, n, visited) => L.divIcon({ className: "mkr", html: `<div class="mkr-stop ${visited ? "done" : ""}">${visited ? "✓" : n}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+
+// A self-contained Leaflet map. interactive=false → a frozen preview (can't pan,
+// so it never steals the swipe-nav gesture). fitMode "always" refits on every
+// data change (preview); "once" fits a single time on open (full-screen).
+function LeafletMap({ interactive, fitMode, initialCenter, mode, pins, memDays, stops, route, listFilter, onMapClick, onPinClick, onStopClick }) {
+  const elRef = useRef(null), mapRef = useRef(null), layerRef = useRef(null), LRef = useRef(null), clickRef = useRef(() => {});
+  const [ready, setReady] = useState(false);
+  const fitSig = useRef("");
+
+  useEffect(() => {
+    let killed = false;
+    loadLeaflet().then((L) => {
+      if (killed || !elRef.current || mapRef.current) return;
+      LRef.current = L;
+      const opts = interactive
+        ? { zoomControl: true, attributionControl: true }
+        : { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false, tap: false };
+      const map = L.map(elRef.current, opts);
+      if (initialCenter) map.setView([initialCenter.lat, initialCenter.lng], 12);
+      else map.setView([30, -20], 2);
+      L.tileLayer(TILE, { subdomains: "abcd", maxZoom: 19, attribution: TILE_ATTR }).addTo(map);
+      layerRef.current = L.layerGroup().addTo(map);
+      map.on("click", (e) => clickRef.current(e));
+      mapRef.current = map; setReady(true);
+      [60, 250, 500, 900].forEach((t) => setTimeout(() => { try { map.invalidateSize(); } catch {} }, t));
+    });
+    return () => { killed = true; if (mapRef.current) { try { mapRef.current.remove(); } catch {} mapRef.current = null; } };
+  }, [interactive]);
+
+  useEffect(() => { clickRef.current = (e) => { if (onMapClick) onMapClick(e.latlng); }; }, [onMapClick]);
+
+  useEffect(() => {
+    const L = LRef.current, map = mapRef.current, lg = layerRef.current;
+    if (!ready || !L || !map || !lg) return;
+    try { map.invalidateSize(); } catch {}
+    lg.clearLayers();
+    const pts = [];
+    if (mode === "places") {
+      pins.filter((p) => !listFilter || p.list === listFilter).forEach((p) => {
+        const m = L.marker([p.lat, p.lng], { icon: pinIcon(L, p.emoji, p.visited) }).addTo(lg);
+        if (onPinClick) m.on("click", () => onPinClick(p));
+        pts.push([p.lat, p.lng]);
+      });
+    } else if (mode === "memories") {
+      memDays.forEach((d) => { L.marker([d.lat, d.lng], { icon: memIcon(L) }).addTo(lg); pts.push([d.lat, d.lng]); });
+    } else if (mode === "trips") {
+      if (route && route.length > 1) L.polyline(route, { color: "#1f8c8a", weight: 4, opacity: .85, lineJoin: "round" }).addTo(lg);
+      stops.forEach((s, i) => {
+        const m = L.marker([s.lat, s.lng], { icon: stopIcon(L, i + 1, s.visited) }).addTo(lg);
+        if (onStopClick) m.on("click", () => onStopClick(s));
+        pts.push([s.lat, s.lng]);
+      });
+    }
+    if (pts.length) {
+      if (fitMode === "always") {
+        const sig = mode + ":" + pts.length + ":" + (listFilter || "");
+        if (sig !== fitSig.current) { fitSig.current = sig; try { map.fitBounds(pts, { padding: [28, 28], maxZoom: 13 }); } catch {} }
+      } else if (!fitSig.current && !initialCenter) {
+        fitSig.current = "done";
+        try { map.fitBounds(pts, { padding: [50, 50], maxZoom: 14 }); } catch {}
+      }
+    }
+    setTimeout(() => { try { map.invalidateSize(); } catch {} }, 30);
+  }, [ready, mode, pins, memDays, stops, route, listFilter]);
+
+  return html`<div ref=${elRef} class="leaflet-host"></div>`;
+}
 
 export function MapCard({ client, me, players, flash }) {
-  const [mode, setMode] = useState("places");        // 'places' | 'memories' | 'trips'
+  const [mode, setMode] = useState("places");
   const [pins, setPins] = useState([]);
   const [trips, setTrips] = useState([]);
-  const [selTrip, setSelTrip] = useState(null);       // trip id
-  const [stops, setStops] = useState([]);             // stops of selTrip
-  const [route, setRoute] = useState(null);           // computed latlng path
-  const [memDays, setMemDays] = useState([]);         // [{date,lat,lng,place,count}]
-  const [listFilter, setListFilter] = useState(null); // null = all lists
-  const [adding, setAdding] = useState(false);        // next map tap drops a pin/stop
-  const [pinSheet, setPinSheet] = useState(null);     // {id?,lat,lng,title,note,list,emoji,visited}
-  const [stopSheet, setStopSheet] = useState(null);   // {id?,trip_id,lat,lng,title,note,seq,visited}
-  const [tripSheet, setTripSheet] = useState(null);   // {title} new trip
-  const [ready, setReady] = useState(false);
-
-  const mapEl = useRef(null);
-  const mapRef = useRef(null);
-  const layerRef = useRef(null);                      // LayerGroup we rebuild
-  const LRef = useRef(null);
-  const clickRef = useRef(() => {});                  // latest click handler
-  const fitSig = useRef("");                          // only auto-fit when this changes
+  const [selTrip, setSelTrip] = useState(null);
+  const [stops, setStops] = useState([]);
+  const [route, setRoute] = useState(null);
+  const [memDays, setMemDays] = useState([]);
+  const [listFilter, setListFilter] = useState(null);
+  const [full, setFull] = useState(false);            // full-screen map open
+  const [fullCenter, setFullCenter] = useState(null); // where full-screen opens centered (null = fit all)
+  const [adding, setAdding] = useState(false);
+  const [pinSheet, setPinSheet] = useState(null);
+  const [stopSheet, setStopSheet] = useState(null);
+  const [tripSheet, setTripSheet] = useState(null);
 
   // ---- data ----
-  const loadPins = useCallback(async () => {
-    const { data } = await client.from("map_pins").select("*").order("created_at", { ascending: false });
-    setPins(data || []);
-  }, [client]);
-  const loadTrips = useCallback(async () => {
-    const { data } = await client.from("trips").select("*").order("created_at", { ascending: false });
-    setTrips(data || []);
-  }, [client]);
-  const loadStops = useCallback(async (tripId) => {
-    if (!tripId) { setStops([]); return; }
-    const { data } = await client.from("trip_stops").select("*").eq("trip_id", tripId).order("seq");
-    setStops(data || []);
-  }, [client]);
+  const loadPins = useCallback(async () => { const { data } = await client.from("map_pins").select("*").order("created_at", { ascending: false }); setPins(data || []); }, [client]);
+  const loadTrips = useCallback(async () => { const { data } = await client.from("trips").select("*").order("created_at", { ascending: false }); setTrips(data || []); }, [client]);
+  const loadStops = useCallback(async (tripId) => { if (!tripId) { setStops([]); return; } const { data } = await client.from("trip_stops").select("*").eq("trip_id", tripId).order("seq"); setStops(data || []); }, [client]);
   const loadMemDays = useCallback(async () => {
     const { data } = await client.from("memories").select("id,taken_on,lat,lng,place").order("taken_on", { ascending: false });
     const byDay = new Map();
     for (const m of data || []) {
       if (m.lat == null || m.lng == null) continue;
       const g = byDay.get(m.taken_on);
-      if (g) g.count++;
-      else byDay.set(m.taken_on, { date: m.taken_on, lat: m.lat, lng: m.lng, place: m.place, count: 1 });
+      if (g) g.count++; else byDay.set(m.taken_on, { date: m.taken_on, lat: m.lat, lng: m.lng, place: m.place, count: 1 });
     }
     setMemDays([...byDay.values()]);
   }, [client]);
@@ -126,7 +168,6 @@ export function MapCard({ client, me, players, flash }) {
   }, [client, loadPins, loadTrips, loadMemDays, loadStops]);
 
   useEffect(() => { loadStops(selTrip); }, [selTrip, loadStops]);
-  // recompute the route whenever the selected trip's stops change
   useEffect(() => {
     let live = true;
     if (mode !== "trips" || stops.length < 1) { setRoute(null); return; }
@@ -134,100 +175,25 @@ export function MapCard({ client, me, players, flash }) {
     return () => { live = false; };
   }, [stops, mode]);
 
-  // ---- map init (once Leaflet + the host node are ready) ----
-  useEffect(() => {
-    let killed = false;
-    loadLeaflet().then((L) => {
-      if (killed || !mapEl.current || mapRef.current) return;
-      LRef.current = L;
-      const map = L.map(mapEl.current, { zoomControl: true, attributionControl: true }).setView([30, -20], 2);
-      L.tileLayer(TILE, { subdomains: "abcd", maxZoom: 19, attribution: TILE_ATTR }).addTo(map);
-      layerRef.current = L.layerGroup().addTo(map);
-      map.on("click", (e) => clickRef.current(e));
-      mapRef.current = map;
-      setReady(true);
-      // the glass card lays out after init — re-measure a few times so tiles
-      // fill the whole container (no grey gaps from a stale size)
-      [60, 250, 500, 900].forEach((t) => setTimeout(() => { try { map.invalidateSize(); } catch {} }, t));
-    });
-    return () => { killed = true; if (mapRef.current) { try { mapRef.current.remove(); } catch {} mapRef.current = null; } };
-  }, []);
-
-  // keep the click handler current (mode/adding/selTrip change)
-  useEffect(() => {
-    clickRef.current = (e) => {
-      if (!adding) return;
-      const { lat, lng } = e.latlng;
-      if (mode === "places") setPinSheet({ lat: +lat.toFixed(6), lng: +lng.toFixed(6), title: "", note: "", list: listFilter || DEFAULT_LIST, emoji: "📍", visited: false });
-      else if (mode === "trips" && selTrip) setStopSheet({ trip_id: selTrip, lat: +lat.toFixed(6), lng: +lng.toFixed(6), title: "", note: "", seq: stops.length, visited: false });
-      setAdding(false);
-    };
-  }, [adding, mode, selTrip, listFilter, stops.length]);
-
-  // ---- render markers + route into the layer group ----
-  useEffect(() => {
-    const L = LRef.current, map = mapRef.current, lg = layerRef.current;
-    if (!ready || !L || !map || !lg) return;
-    try { map.invalidateSize(); } catch {}   // true size before we fit bounds → no grey gaps
-    lg.clearLayers();
-    const pts = [];
-    if (mode === "places") {
-      const shown = pins.filter((p) => !listFilter || p.list === listFilter);
-      for (const p of shown) {
-        L.marker([p.lat, p.lng], { icon: pinIcon(L, p.emoji, p.visited) }).addTo(lg).on("click", () => setPinSheet({ ...p }));
-        pts.push([p.lat, p.lng]);
-      }
-    } else if (mode === "memories") {
-      for (const d of memDays) {
-        L.marker([d.lat, d.lng], { icon: memIcon(L) }).addTo(lg)
-          .on("click", () => flash(`${d.place || "A day together"} · ${fmtDay(d.date)} · ${d.count} 📸`));
-        pts.push([d.lat, d.lng]);
-      }
-    } else if (mode === "trips") {
-      if (route && route.length > 1) L.polyline(route, { color: "#1f8c8a", weight: 4, opacity: .85, lineJoin: "round" }).addTo(lg);
-      stops.forEach((s, i) => {
-        L.marker([s.lat, s.lng], { icon: stopIcon(L, i + 1, s.visited) }).addTo(lg).on("click", () => setStopSheet({ ...s }));
-        pts.push([s.lat, s.lng]);
-      });
-    }
-    // auto-fit only when the dataset/mode changes (don't yank the map mid-pan)
-    const sig = mode + ":" + (mode === "trips" ? selTrip : "") + ":" + pts.length;
-    if (pts.length && sig !== fitSig.current) {
-      fitSig.current = sig;
-      try { map.fitBounds(pts, { padding: [40, 40], maxZoom: 14 }); } catch {}
-    }
-    setTimeout(() => { try { map.invalidateSize(); } catch {} }, 30);
-  }, [ready, mode, pins, memDays, stops, route, listFilter, selTrip]);
-
   // ---- actions ----
   const savePin = async () => {
     const f = pinSheet; if (!f.title.trim()) { flash("Name this place"); return; }
-    const row = { lat: f.lat, lng: f.lng, title: f.title.trim(), note: f.note.trim() || null, list: (f.list || DEFAULT_LIST).trim() || DEFAULT_LIST, emoji: f.emoji || "📍", visited: !!f.visited };
-    const q = f.id ? client.from("map_pins").update(row).eq("id", f.id) : client.from("map_pins").insert({ ...row, created_by: me.id });
-    const { error } = await q;
+    const row = { lat: f.lat, lng: f.lng, title: f.title.trim(), note: (f.note || "").trim() || null, list: (f.list || DEFAULT_LIST).trim() || DEFAULT_LIST, emoji: f.emoji || "📍", visited: !!f.visited };
+    const { error } = f.id ? await client.from("map_pins").update(row).eq("id", f.id) : await client.from("map_pins").insert({ ...row, created_by: me.id });
     if (error) { flash("⚠️ " + error.message); return; }
     setPinSheet(null); loadPins();
   };
-  const deletePin = async () => {
-    if (!pinSheet.id) { setPinSheet(null); return; }
-    await client.from("map_pins").delete().eq("id", pinSheet.id);
-    setPinSheet(null); loadPins();
-  };
+  const deletePin = async () => { if (pinSheet.id) await client.from("map_pins").delete().eq("id", pinSheet.id); setPinSheet(null); loadPins(); };
   const togglePinVisited = async (p) => { await client.from("map_pins").update({ visited: !p.visited }).eq("id", p.id); loadPins(); };
 
   const saveStop = async () => {
     const f = stopSheet; if (!f.title.trim()) { flash("Name this stop"); return; }
-    const row = { lat: f.lat, lng: f.lng, title: f.title.trim(), note: f.note.trim() || null, visited: !!f.visited, seq: f.seq ?? stops.length };
-    const q = f.id ? client.from("trip_stops").update(row).eq("id", f.id) : client.from("trip_stops").insert({ ...row, trip_id: f.trip_id });
-    const { error } = await q;
+    const row = { lat: f.lat, lng: f.lng, title: f.title.trim(), note: (f.note || "").trim() || null, visited: !!f.visited, seq: f.seq ?? stops.length };
+    const { error } = f.id ? await client.from("trip_stops").update(row).eq("id", f.id) : await client.from("trip_stops").insert({ ...row, trip_id: f.trip_id });
     if (error) { flash("⚠️ " + error.message); return; }
     setStopSheet(null); loadStops(selTrip);
   };
-  const deleteStop = async () => {
-    if (!stopSheet.id) { setStopSheet(null); return; }
-    await client.from("trip_stops").delete().eq("id", stopSheet.id);
-    setStopSheet(null); loadStops(selTrip);
-  };
+  const deleteStop = async () => { if (stopSheet.id) await client.from("trip_stops").delete().eq("id", stopSheet.id); setStopSheet(null); loadStops(selTrip); };
   const toggleStopVisited = async (s) => { await client.from("trip_stops").update({ visited: !s.visited }).eq("id", s.id); loadStops(selTrip); };
 
   const createTrip = async () => {
@@ -244,22 +210,30 @@ export function MapCard({ client, me, players, flash }) {
     loadTrips();
   };
 
-  const flyTo = (lat, lng) => { try { mapRef.current.flyTo([lat, lng], Math.max(mapRef.current.getZoom(), 12), { duration: .6 }); } catch {} };
-  const lists = useMemo(() => {
-    const s = new Set([DEFAULT_LIST]); pins.forEach((p) => s.add(p.list)); return [...s];
-  }, [pins]);
+  // tapping the full-screen map while in "add" mode drops a pin / stop there
+  const onMapTap = (latlng) => {
+    if (!adding) return;
+    const lat = +latlng.lat.toFixed(6), lng = +latlng.lng.toFixed(6);
+    if (mode === "places") setPinSheet({ lat, lng, title: "", note: "", list: listFilter || DEFAULT_LIST, emoji: "📍", visited: false });
+    else if (mode === "trips" && selTrip) setStopSheet({ trip_id: selTrip, lat, lng, title: "", note: "", seq: stops.length, visited: false });
+    setAdding(false);
+  };
+
+  const openFull = (center, startAdding) => { setFullCenter(center || null); setAdding(!!startAdding); setFull(true); };
+  const lists = useMemo(() => { const s = new Set([DEFAULT_LIST]); pins.forEach((p) => s.add(p.list)); return [...s]; }, [pins]);
   const visiblePins = pins.filter((p) => !listFilter || p.list === listFilter);
   const curTrip = trips.find((t) => t.id === selTrip);
-
+  const hasAnything = pins.length || memDays.length || (mode === "trips" && stops.length);
   const modeBtn = (k, label) => html`<button class=${mode === k ? "on" : ""} onClick=${() => { setMode(k); setAdding(false); }}>${label}</button>`;
+
+  // shared map props (the same data drives both the preview and the full map)
+  const mapData = { mode, pins, memDays, stops, route, listFilter };
 
   return html`<div class="card mapcard">
     <div class="shead">
       <h2>Map <span class="muted-glyph">🗺️</span></h2>
       <div class="shead-actions">
-        ${mode === "places" && html`<button class=${`btn sm ${adding ? "" : "ghost"}`} onClick=${() => setAdding((a) => !a)}>${adding ? "Tap the map…" : "＋ Pin"}</button>`}
-        ${mode === "trips" && selTrip && html`<button class=${`btn sm ${adding ? "" : "ghost"}`} onClick=${() => setAdding((a) => !a)}>${adding ? "Tap the map…" : "＋ Stop"}</button>`}
-        ${mode === "trips" && !selTrip && html`<button class="btn sm" onClick=${() => setTripSheet({ title: "" })}>＋ Trip</button>`}
+        <button class="btn sm ghost" onClick=${() => openFull(null)}>⤢ Explore</button>
       </div>
     </div>
 
@@ -269,19 +243,21 @@ export function MapCard({ client, me, players, flash }) {
       ${modeBtn("memories", "📸 Memories")}
     </div>
 
-    <div class=${`map-wrap ${adding ? "adding" : ""}`}>
-      <div ref=${mapEl} class="leaflet-host"></div>
-      ${adding && html`<div class="map-hint">Tap to place</div>`}
+    <!-- preview: frozen (can't pan → never fights swipe-nav); tap to explore -->
+    <div class="map-wrap preview">
+      <${LeafletMap} interactive=${false} fitMode="always" ...${mapData} />
+      <button class="map-open" onClick=${() => openFull(null)}>${hasAnything ? "" : html`<span class="map-open-empty">Tap to open the map</span>`}<span class="map-open-cta">⤢ Explore</span></button>
     </div>
 
     ${mode === "places" && html`<div class="map-panel">
       <div class="fchips">
         <button class=${`fchip ${!listFilter ? "on" : ""}`} onClick=${() => setListFilter(null)}>All</button>
         ${lists.map((l) => html`<button key=${l} class=${`fchip ${listFilter === l ? "on" : ""}`} onClick=${() => setListFilter(l)}>${l}</button>`)}
+        <button class="fchip add" onClick=${() => openFull(null, true)}>＋ Pin</button>
       </div>
       ${visiblePins.length === 0
-        ? html`<div class="map-empty">No places yet — tap ＋ Pin, then tap the map.</div>`
-        : html`<div class="map-list">${visiblePins.map((p) => html`<button class="map-row" key=${p.id} onClick=${() => { flyTo(p.lat, p.lng); setPinSheet({ ...p }); }}>
+        ? html`<div class="map-empty">No places yet — ＋ Pin, then tap the map.</div>`
+        : html`<div class="map-list">${visiblePins.map((p) => html`<button class="map-row" key=${p.id} onClick=${() => openFull({ lat: p.lat, lng: p.lng })}>
             <span class="mr-emoji">${p.emoji || "📍"}</span>
             <span class="mr-main"><span class=${`mr-title ${p.visited ? "done" : ""}`}>${p.title}</span><span class="mr-sub">${p.list}${p.note ? " · " + p.note : ""}</span></span>
             <span class=${`mr-check ${p.visited ? "on" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); togglePinVisited(p); }}>${p.visited ? "✓" : "○"}</span>
@@ -297,10 +273,13 @@ export function MapCard({ client, me, players, flash }) {
         ? html`<div class="map-empty">${trips.length ? "Pick a trip." : "No road trips yet — start one with ＋ New."}</div>`
         : html`<div class="trip-detail">
             <div class="trip-head"><span class="trip-name">${curTrip ? curTrip.title : ""}</span>
-              <button class="linkbtn danger" onClick=${() => deleteTrip(selTrip)}>Delete trip</button></div>
+              <div class="trip-head-actions">
+                <button class="btn sm" onClick=${() => openFull(null, true)}>＋ Stop</button>
+                <button class="linkbtn danger" onClick=${() => deleteTrip(selTrip)}>Delete</button>
+              </div></div>
             ${stops.length === 0
-              ? html`<div class="map-empty">No stops yet — tap ＋ Stop, then tap the map.</div>`
-              : html`<div class="map-list">${stops.map((s, i) => html`<button class="map-row" key=${s.id} onClick=${() => { flyTo(s.lat, s.lng); setStopSheet({ ...s }); }}>
+              ? html`<div class="map-empty">No stops yet — ＋ Stop, then tap the map.</div>`
+              : html`<div class="map-list">${stops.map((s, i) => html`<button class="map-row" key=${s.id} onClick=${() => openFull({ lat: s.lat, lng: s.lng })}>
                   <span class=${`mr-seq ${s.visited ? "done" : ""}`}>${s.visited ? "✓" : i + 1}</span>
                   <span class="mr-main"><span class=${`mr-title ${s.visited ? "done" : ""}`}>${s.title}</span>${s.note ? html`<span class="mr-sub">${s.note}</span>` : ""}</span>
                   <span class=${`mr-check ${s.visited ? "on" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); toggleStopVisited(s); }}>${s.visited ? "been" : "plan"}</span>
@@ -311,11 +290,29 @@ export function MapCard({ client, me, players, flash }) {
     ${mode === "memories" && html`<div class="map-panel">
       ${memDays.length === 0
         ? html`<div class="map-empty">Geotagged photo days show up here automatically.</div>`
-        : html`<div class="map-list">${memDays.map((d) => html`<button class="map-row" key=${d.date} onClick=${() => flyTo(d.lat, d.lng)}>
+        : html`<div class="map-list">${memDays.map((d) => html`<button class="map-row" key=${d.date} onClick=${() => openFull({ lat: d.lat, lng: d.lng })}>
             <span class="mr-emoji">📸</span>
             <span class="mr-main"><span class="mr-title">${d.place || "A day together"}</span><span class="mr-sub">${fmtDay(d.date)} · ${d.count} ${d.count === 1 ? "photo" : "photos"}</span></span>
           </button>`)}</div>`}
     </div>`}
+
+    ${full && createPortal(html`<div class="mapfull">
+      <div class="mapfull-bar">
+        <button class="vw-x" onClick=${() => { setFull(false); setAdding(false); }}>✕</button>
+        <div class="seg map-modes mf-modes">
+          ${modeBtn("places", "📍")}
+          ${modeBtn("trips", "🚐")}
+          ${modeBtn("memories", "📸")}
+        </div>
+        ${(mode === "places" || (mode === "trips" && selTrip)) && html`<button class=${`btn sm ${adding ? "" : "ghost"}`} onClick=${() => setAdding((a) => !a)}>${adding ? "Tap to place" : (mode === "places" ? "＋ Pin" : "＋ Stop")}</button>`}
+      </div>
+      <div class=${`mapfull-map ${adding ? "adding" : ""}`}>
+        <${LeafletMap} interactive=${true} fitMode="once" initialCenter=${fullCenter} ...${mapData}
+          onMapClick=${onMapTap} onPinClick=${(p) => setPinSheet({ ...p })} onStopClick=${(s) => setStopSheet({ ...s })} />
+        ${adding && html`<div class="map-hint">Tap to place</div>`}
+        ${mode === "trips" && !selTrip && html`<div class="mf-note">Pick a trip below to plan stops.</div>`}
+      </div>
+    </div>`, document.body)}
 
     ${pinSheet && html`<${PinSheet} f=${pinSheet} setF=${setPinSheet} lists=${lists} onSave=${savePin} onDelete=${deletePin} />`}
     ${stopSheet && html`<${StopSheet} f=${stopSheet} setF=${setStopSheet} onSave=${saveStop} onDelete=${deleteStop} />`}
@@ -341,7 +338,7 @@ function PinSheet({ f, setF, lists, onSave, onDelete }) {
       <div class="eyebrow" style="margin-bottom:10px">${f.id ? "📍 place" : "📍 new place"}</div>
       <input autofocus value=${f.title} onInput=${up("title")} placeholder="Name this place…" />
       <div class="emoji-row mt">${EMOJI.map((e) => html`<button key=${e} class=${`emoji-pick ${f.emoji === e ? "on" : ""}`} onClick=${() => setF({ ...f, emoji: e })}>${e}</button>`)}</div>
-      <input class="mt" list="pp-lists" value=${f.list} onInput=${up("list")} placeholder="List (e.g. ${"Places We Want to Go"})" />
+      <input class="mt" list="pp-lists" value=${f.list} onInput=${up("list")} placeholder="List" />
       <datalist id="pp-lists">${lists.map((l) => html`<option key=${l} value=${l}></option>`)}</datalist>
       <input class="mt" value=${f.note || ""} onInput=${up("note")} placeholder="Note (optional)…" />
       <label class="map-toggle mt"><input type="checkbox" checked=${!!f.visited} onChange=${(e) => setF({ ...f, visited: e.target.checked })} /> <span>We've been here</span></label>

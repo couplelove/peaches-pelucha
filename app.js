@@ -238,7 +238,7 @@ function App({ client, onResetCreds }) {
   const onSwipeDown = useCallback((e) => {
     // never hijack the Phase 10 game (its block is marked [data-noswipe]), the
     // full-screen board, a modal, or a text field.
-    if (document.querySelector(".gamefs, .modal-bg, .lightbox, .viewer")) return;   // board / modal / photo lightbox / video viewer own their gestures
+    if (document.querySelector(".gamefs, .modal-bg, .lightbox, .viewer, .mapfull")) return;   // board / modal / photo lightbox / video viewer / fullscreen map own their gestures
     if (e.target.closest("input, textarea, [data-noswipe]")) return;
     // bail if the touch starts inside a horizontal scroller (carousels etc.)
     let n = e.target;
