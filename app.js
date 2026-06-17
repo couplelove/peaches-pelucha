@@ -61,7 +61,7 @@ function PhotoBackdrop({ client }) {
     if (!photos || !photos.length) return;
     const screenful = (off) => Array.from({ length: COLLAGE_TILES }, (_, i) => photos[(off + i) % photos.length]);
     // preload every thumbnail once so a crossfade never reveals a half-loaded tile
-    photos.forEach((u) => { const im = new Image(); im.decoding = "async"; im.src = u; });
+    photos.forEach((u) => { const im = new Image(); im.crossOrigin = "anonymous"; im.decoding = "async"; im.src = u; });
     setView({ layers: [screenful(0), null], front: 0 });
     if (photos.length <= COLLAGE_TILES) return;   // one screenful — nothing to rotate
     let off = 0;

@@ -1,12 +1,18 @@
 // Service worker for Peaches & Pelucha.
 // Strategy: cache the app shell so it installs and opens instantly / offline.
 // (Live data still needs a connection — that's Supabase, never cached.)
-const CACHE = "pp-v73";
+const CACHE = "pp-v74";
 // Separate, long-lived cache for memory IMAGE media (thumbnails + full photos).
 // Survives shell-version bumps; self-evicts oldest entries past the cap so it
 // never blows the device quota. Videos are NOT cached here — they stream.
-const MEDIA_CACHE = "pp-media-v1";
-const MEDIA_MAX = 450;
+// v2: previous cache held no-cors OPAQUE image responses. iOS pads every opaque
+// Cache entry to multiple MB regardless of real size, so a few hundred thumbs
+// could blow the PWA storage quota — and once over quota, caches.open() can
+// throw and stall image loads. We now (a) request media with CORS so entries are
+// non-opaque and counted at true size, (b) only cache non-opaque responses, and
+// (c) never let a cache error break a load. Renaming drops the bloated v1.
+const MEDIA_CACHE = "pp-media-v2";
+const MEDIA_MAX = 300;
 // Runtime deps (Preact/htm/supabase-js) load from esm.sh at version-pinned,
 // immutable URLs. CacheFirst them in their own long-lived cache so cold starts
 // after the first never wait on esm.sh — and the deps work offline too.
@@ -87,12 +93,12 @@ self.addEventListener("fetch", (e) => {
   // CacheFirst for runtime deps from esm.sh (immutable, version-pinned URLs).
   if (url.hostname === "esm.sh") {
     e.respondWith((async () => {
-      const cache = await caches.open(DEPS_CACHE);
-      const hit = await cache.match(e.request);
+      let cache = null, hit = null;
+      try { cache = await caches.open(DEPS_CACHE); hit = await cache.match(e.request); } catch {}
       if (hit) return hit;
       try {
         const res = await fetch(e.request);
-        if (res && (res.ok || res.type === "opaque")) cache.put(e.request, res.clone()).catch(() => {});
+        if (cache && res && (res.ok || res.type === "opaque")) cache.put(e.request, res.clone()).catch(() => {});
         return res;
       } catch { return hit || Response.error(); }
     })());
@@ -109,17 +115,22 @@ self.addEventListener("fetch", (e) => {
     !/\.(mp4|mov|m4v|webm)$/i.test(url.pathname);
   if (isMediaImage) {
     e.respondWith((async () => {
-      const cache = await caches.open(MEDIA_CACHE);
-      const hit = await cache.match(e.request);
+      // The whole cache layer is best-effort: if caches.open/match throws (iOS
+      // over-quota or corrupt store), we must still serve the image from the
+      // network rather than reject and leave a broken/stalled tile.
+      let cache = null, hit = null;
+      try { cache = await caches.open(MEDIA_CACHE); hit = await cache.match(e.request); } catch {}
       if (hit) return hit;
       try {
         const res = await fetch(e.request);
-        if (res && (res.ok || res.type === "opaque")) {
+        // Only cache real (non-opaque) responses — opaque entries are what bloat
+        // the quota on iOS. With CORS-enabled <img>, Storage responses are 'cors'.
+        if (cache && res && res.ok && res.type !== "opaque") {
           cache.put(e.request, res.clone()).then(trimMedia).catch(() => {});
         }
         return res;
       } catch {
-        return hit || Response.error();
+        return Response.error();
       }
     })());
     return;

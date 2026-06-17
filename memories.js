@@ -343,6 +343,8 @@ export function MemoriesTab({ client, me, flash }) {
     e.target.value = "";
     if (!files.length) return;
     const jobs = files.map((f, i) => ({ i, f, status: "queued" }));
+    const forceDay = dayOpen;                         // picking inside an open day → the file belongs to THAT day
+    const added = [];                                 // inserted rows, merged in immediately (survives pagination)
     const paint = () => setUploads({ done: jobs.filter((j) => j.status === "done" || j.status === "failed").length, total: jobs.length, failed: jobs.filter((j) => j.status === "failed").length });
     paint();
     const runJob = async (j) => {
@@ -384,17 +386,21 @@ export function MemoriesTab({ client, me, flash }) {
           try { await uploadWithRetry(client, thumb_path, thumb.blob, thumb.ct); }
           catch { thumb_path = null; }
         }
-        let taken_on = meta.taken_on;
+        let taken_on = forceDay || meta.taken_on;     // an open day wins over the photo's own capture date
         if (!taken_on) {
           const taken = new Date(f.lastModified || Date.now());
           taken_on = `${taken.getFullYear()}-${String(taken.getMonth() + 1).padStart(2, "0")}-${String(taken.getDate()).padStart(2, "0")}`;
         }
         const place = meta.lat != null ? await placeFor(meta.lat, meta.lng) : null;
         // the bytes are already in Storage — don't lose the memory to one
-        // transient DB blip. Retry the row insert with the same backoff.
-        await withRetry(() => client.from("memories")
+        // transient DB blip. Retry the row insert with the same backoff, and get
+        // the row back so we can show it instantly (even in a day outside the
+        // currently-loaded page window).
+        const res = await withRetry(() => client.from("memories")
           .insert({ path, kind: isVideo ? "video" : "photo", taken_on, uploaded_by: me.id,
-                    place, lat: meta.lat ?? null, lng: meta.lng ?? null, thumb_path, blur }));
+                    place, lat: meta.lat ?? null, lng: meta.lng ?? null, thumb_path, blur })
+          .select(SELECT_COLS).single());
+        if (res && res.data) added.push(res.data);
         j.status = "done";
       } catch (err) {
         j.status = "failed"; j.err = err.message || "failed";
@@ -413,7 +419,14 @@ export function MemoriesTab({ client, me, flash }) {
     const ok = jobs.filter((j) => j.status === "done").length;
     const failed = jobs.filter((j) => j.status === "failed");
     setUploads(null);
-    if (ok) refresh();                                // merge new uploads at the top
+    // merge the new rows in immediately so they appear in their day at once —
+    // including a day below the loaded window (uploading into an opened old day).
+    if (added.length) setItems((cur) => {
+      const map = new Map((cur || []).map((r) => [r.id, r]));
+      for (const r of added) map.set(r.id, r);
+      return [...map.values()].sort(memCmp);
+    });
+    if (ok) refresh();                                // also reconcile with the server
     if (failed.length) flash(`⚠️ ${failed.length} failed (${failed[0].err})${ok ? ` · ${ok} added` : ""}`);
     else if (ok) flash(`Added ${ok} ${ok === 1 ? "memory" : "memories"} 📸`);
   };
@@ -633,7 +646,7 @@ export function MemoriesTab({ client, me, flash }) {
       ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline
           onLoadedData=${(e) => e.target.classList.add("ld")}
           ref=${(el) => { if (el && el.readyState >= 2) el.classList.add("ld"); }}></video>`
-      : html`<img src=${thumbUrl(it)} loading="lazy" decoding="async" alt=""
+      : html`<img src=${thumbUrl(it)} loading="lazy" decoding="async" alt="" crossorigin="anonymous"
           onLoad=${(e) => e.target.classList.add("ld")}
           ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
     ${it.kind === "video" && html`<span class="memplay">🎥</span>`}
@@ -673,7 +686,7 @@ export function MemoriesTab({ client, me, flash }) {
           const evs = events.filter((e) => e.starts_on === g.date);
           // blur-up placeholder (instant) under a natively lazy hero (off-screen cards never fetch)
           return html`<button class="daytile" key=${g.date} style=${cover.blur ? `background-image:url(${cover.blur})` : ""} onClick=${() => setDayOpen(g.date)}>
-            ${heroSrc && html`<img class="dt-img" src=${heroSrc} alt="" decoding="async"
+            ${heroSrc && html`<img class="dt-img" src=${heroSrc} alt="" decoding="async" crossorigin="anonymous"
               loading=${gi === 0 ? "eager" : "lazy"} fetchpriority=${gi === 0 ? "high" : "auto"}
               onLoad=${(e) => e.target.classList.add("ld")}
               ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
@@ -719,7 +732,7 @@ export function MemoriesTab({ client, me, flash }) {
           <span class="apv-media">
             ${sheet.kind === "video" && !sheet.thumb_path
               ? html`<video src=${pubUrl(sheet.path) + "#t=0.1"} preload="metadata" muted playsinline></video>`
-              : html`<img src=${thumbUrl(sheet)} alt="" />`}
+              : html`<img src=${thumbUrl(sheet)} alt="" crossorigin="anonymous" />`}
             ${sheet.kind === "video" && html`<span class="memplay">🎥</span>`}
           </span>
           <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}${sheet.place ? " · 📍 " + sheet.place : ""}</div>
@@ -856,11 +869,11 @@ function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions, origin }) {
       ? (current
           ? html`<video src=${pubUrl(item.path)} poster=${item.thumb_path ? pubUrl(item.thumb_path) : undefined} controls playsinline autoplay muted=${false}></video>`
           : item.thumb_path
-            ? html`<img src=${pubUrl(item.thumb_path)} alt="" /><span class="lb-play">🎥</span>`
+            ? html`<img src=${pubUrl(item.thumb_path)} alt="" crossorigin="anonymous" /><span class="lb-play">🎥</span>`
             : html`<video src=${pubUrl(item.path) + "#t=0.1"} preload="metadata" muted playsinline></video><span class="lb-play">🎥</span>`)
       : html`<span class="lb-frame">
           ${item.blur && html`<span class="lb-blur" style=${`background-image:url(${item.blur})`}></span>`}
-          <img src=${current ? pubUrl(item.path) : (item.thumb_path ? pubUrl(item.thumb_path) : pubUrl(item.path))} alt=""
+          <img src=${current ? pubUrl(item.path) : (item.thumb_path ? pubUrl(item.thumb_path) : pubUrl(item.path))} alt="" crossorigin="anonymous"
             onLoad=${(e) => e.target.classList.add("ld")}
             ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />
         </span>`}
@@ -937,7 +950,7 @@ function MatchGame({ items, pubUrl, thumbUrl }) {
         return html`<button class=${`mcard ${faceUp ? "up" : ""} ${done ? "done" : ""}`} key=${c.key} onClick=${() => tap(c)}>
           <div class="mcard-inner">
             <div class="mcard-back">🍑🧸</div>
-            <div class="mcard-face"><img src=${thumbUrl(c.it)} loading="lazy" decoding="async" alt="" /></div>
+            <div class="mcard-face"><img src=${thumbUrl(c.it)} loading="lazy" decoding="async" alt="" crossorigin="anonymous" /></div>
           </div>
         </button>`;
       })}
