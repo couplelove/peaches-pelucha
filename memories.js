@@ -203,6 +203,8 @@ const memCmp = (a, b) =>
   a.taken_on < b.taken_on ? 1 : a.taken_on > b.taken_on ? -1
   : a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0;
 
+// chapter title shown until the AI weaves a real one
+const fallbackTitle = (g) => (g.items.find((i) => i.place) || {}).place || "A Day Together";
 // shown under a day until its AI story is woven (placeholder, never empty)
 const fallbackStory = (g) => {
   const place = (g.items.find((i) => i.place) || {}).place;
@@ -220,8 +222,9 @@ export function MemoriesTab({ client, me, flash }) {
   // pulled via range(), whether the tail is reached, and an in-flight guard.
   const more = useRef({ offset: 0, done: false, loading: false });
   const sentinel = useRef(null);                     // IntersectionObserver target
-  const [stories, setStories] = useState({});        // day -> AI story text
+  const [stories, setStories] = useState({});        // day -> { title, story }
   const storyTried = useRef(new Set());              // days we've already asked to generate this session
+  const [dayOpen, setDayOpen] = useState(null);      // the day whose photo grid is open (null = title-card feed)
 
   const pubUrl = useCallback((path) => {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
@@ -552,9 +555,9 @@ export function MemoriesTab({ client, me, flash }) {
     const days = groups.map((g) => g.date).filter(Boolean);
     if (!days.length) return;
     let live = true;
-    client.from("day_stories").select("day,story").in("day", days).then(({ data }) => {
+    client.from("day_stories").select("day,title,story").in("day", days).then(({ data }) => {
       if (!live || !data) return;
-      const got = {}; data.forEach((r) => { got[r.day] = r.story; });
+      const got = {}; data.forEach((r) => { got[r.day] = { title: r.title, story: r.story }; });
       setStories((s) => ({ ...got, ...s }));
       // generate for the newest groups still without a story (cap 6/session)
       let budget = 6;
@@ -577,11 +580,29 @@ export function MemoriesTab({ client, me, flash }) {
       const { data } = await client.functions.invoke("day-story", {
         body: { day: g.date, images, context: { date: dayHead(g.date), place, count: g.items.length, sig } },
       });
-      if (data && data.story) setStories((s) => ({ ...s, [g.date]: data.story }));
+      if (data && data.story) setStories((s) => ({ ...s, [g.date]: { title: data.title, story: data.story } }));
     } catch { /* fall back to the metadata line */ }
   }, [client, pubUrl]);
 
   const flat = items || [];
+  const openGroup = dayOpen ? groups.find((g) => g.date === dayOpen) : null;
+
+  // one photo/video tile (used in a day's grid)
+  const cell = (it) => html`<button class=${`memcell ${sel ? "selble" : ""} ${sel && sel.has(it.id) ? "selon" : ""}`} key=${it.id} data-id=${it.id}
+    onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}
+    onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selCancel : holdCancel}
+    onContextMenu=${(e) => e.preventDefault()}>
+    ${it.blur && html`<span class="memblur" style=${`background-image:url(${it.blur})`}></span>`}
+    ${it.kind === "video" && !it.thumb_path
+      ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline
+          onLoadedData=${(e) => e.target.classList.add("ld")}
+          ref=${(el) => { if (el && el.readyState >= 2) el.classList.add("ld"); }}></video>`
+      : html`<img src=${thumbUrl(it)} loading="lazy" decoding="async" alt=""
+          onLoad=${(e) => e.target.classList.add("ld")}
+          ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
+    ${it.kind === "video" && html`<span class="memplay">🎥</span>`}
+    ${sel && html`<span class="selbadge">${sel.has(it.id) ? "✓" : ""}</span>`}
+  </button>`;
 
   return html`<div>
     <div class="card">
@@ -593,7 +614,7 @@ export function MemoriesTab({ client, me, flash }) {
             <button class=${view === "gallery" ? "on" : ""} onClick=${() => setView("gallery")}>Gallery</button>
             <button class=${view === "game" ? "on" : ""} onClick=${() => setView("game")}>Match</button>
           </div>
-          ${view === "gallery" && items && items.length > 0 && html`<button class="linkbtn micro" onClick=${() => setSel(new Set())}>Select</button>`}
+          ${view === "gallery" && dayOpen && html`<button class="linkbtn micro" onClick=${() => setSel(new Set())}>Select</button>`}
           <button class="btn sm" disabled=${!!uploads} onClick=${() => fileInput.current && fileInput.current.click()}>
             ${uploads ? `${uploads.done}/${uploads.total}…` : "＋ Add"}
           </button>`}
@@ -607,32 +628,35 @@ export function MemoriesTab({ client, me, flash }) {
       ${items === null && html`<div class="memskel">${[...Array(9)].map((_, i) => html`<div class="memskel-cell" key=${i}></div>`)}</div>`}
       ${items !== null && items.length === 0 && html`<div class="empty"><span class="big">📸</span>No memories yet — add your first.</div>`}
 
-      ${view === "gallery" && groups.map((g) => html`<div class="daycard" key=${g.date}>
-        <div class="memday">${dayHead(g.date)}
-          ${sel && html`<button class=${`dayall ${g.items.every((i) => sel.has(i.id)) ? "on" : ""}`} onClick=${dayToggle(g)}>✓</button>`}
-        </div>
-        ${!sel && html`<p class=${`dc-story ${stories[g.date] ? "" : "dim"}`}>${stories[g.date] || fallbackStory(g)}</p>`}
-        <div class="memgrid">
-          ${g.items.map((it) => html`<button class=${`memcell ${sel ? "selble" : ""} ${sel && sel.has(it.id) ? "selon" : ""}`} key=${it.id} data-id=${it.id}
-            onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}
-            onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selCancel : holdCancel}
-            onContextMenu=${(e) => e.preventDefault()}>
-            ${it.blur && html`<span class="memblur" style=${`background-image:url(${it.blur})`}></span>`}
-            ${it.kind === "video" && !it.thumb_path
-              ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline
-                  onLoadedData=${(e) => e.target.classList.add("ld")}
-                  ref=${(el) => { if (el && el.readyState >= 2) el.classList.add("ld"); }}></video>`
-              : html`<img src=${thumbUrl(it)} loading="lazy" decoding="async" alt=""
-                  onLoad=${(e) => e.target.classList.add("ld")}
-                  ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
-            ${it.kind === "video" && html`<span class="memplay">🎥</span>`}
-            ${sel && html`<span class="selbadge">${sel.has(it.id) ? "✓" : ""}</span>`}
-          </button>`)}
-        </div>
-      </div>`)}
+      <!-- title-card feed: scroll the days like a journey; tap a card to open the day -->
+      ${view === "gallery" && items !== null && !openGroup && html`<div class="dayfeed">
+        ${groups.map((g) => {
+          const s = stories[g.date];
+          const cover = g.items.find((i) => i.kind === "photo") || g.items[0];
+          return html`<button class="daytile" key=${g.date} style=${`background-image:url(${thumbUrl(cover)})`} onClick=${() => setDayOpen(g.date)}>
+            <span class="dt-scrim"></span>
+            <span class="dt-count">${g.items.length} 📸</span>
+            <span class="dt-body">
+              <span class="dt-date">${dayHead(g.date)}</span>
+              <span class="dt-title">${(s && s.title) || fallbackTitle(g)}</span>
+              <span class="dt-story">${(s && s.story) || fallbackStory(g)}</span>
+            </span>
+          </button>`;
+        })}
+        <div ref=${sentinel} class="memsentinel">${!more.current.done ? html`<span class="memspin"></span>` : ""}</div>
+      </div>`}
 
-      ${view === "gallery" && items !== null && items.length > 0 && html`
-        <div ref=${sentinel} class="memsentinel">${!more.current.done ? html`<span class="memspin"></span>` : ""}</div>`}
+      <!-- a single day: its story, then the full photo grid -->
+      ${view === "gallery" && openGroup && html`<div class="daydetail">
+        <button class="dd-back" onClick=${() => setDayOpen(null)}>‹ All days</button>
+        <div class="dd-head">
+          <div class="dd-date">${dayHead(openGroup.date)}</div>
+          <div class="dd-title">${(stories[openGroup.date] && stories[openGroup.date].title) || fallbackTitle(openGroup)}</div>
+          <p class="dd-story">${(stories[openGroup.date] && stories[openGroup.date].story) || fallbackStory(openGroup)}</p>
+          ${sel && html`<button class=${`dayall ${openGroup.items.every((i) => sel.has(i.id)) ? "on" : ""}`} onClick=${dayToggle(openGroup)}>✓ Select all this day</button>`}
+        </div>
+        <div class="memgrid">${openGroup.items.map(cell)}</div>
+      </div>`}
 
       ${view === "game" && items !== null && html`<${MatchGame} items=${items} pubUrl=${pubUrl} thumbUrl=${thumbUrl} />`}
     </div>

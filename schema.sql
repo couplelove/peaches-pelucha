@@ -378,6 +378,7 @@ create index if not exists matches_room on matches (room, status);
 create table if not exists day_stories (
   id         uuid primary key default gen_random_uuid(),
   day        date not null unique,
+  title      text,
   story      text not null,
   sig        text,
   created_at timestamptz not null default now(),
