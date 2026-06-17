@@ -328,23 +328,6 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 
--- shared poker table (Casino Hold'em, two seats vs one dealer)
-create table if not exists poker_table (
-  id         uuid primary key default gen_random_uuid(),
-  state      jsonb not null,
-  version    int not null default 0,
-  updated_at timestamptz not null default now(),
-  created_at timestamptz not null default now()
-);
-alter table poker_table enable row level security;
-drop policy if exists anon_all on poker_table;
-create policy anon_all on poker_table
-  for all to anon, authenticated using (true) with check (true);
-do $$ begin
-  alter publication supabase_realtime add table poker_table;
-exception when duplicate_object then null;
-end $$;
-
 -- Shared Social Queue 📺 — one-way shares (with seen receipts + reactions) and
 -- a together-watch queue gated by a mutual-ready flag.
 create table if not exists social_links (
@@ -384,12 +367,9 @@ create index if not exists transactions_player      on transactions (player_id);
 create index if not exists matches_status           on matches (status);
 create index if not exists games_status             on games (status, created_at desc);
 
--- room-scoping columns (017): retained from the removed public Game Room. They
--- are always NULL now (= the couple's private game); kept so the game engines
--- (game.js / poker.js) need no changes. The Collide tables (worlds,
--- world_messages, world_events) and uno_table were dropped in migration 021.
-alter table matches      add column if not exists room text;
-alter table poker_table  add column if not exists room text;
-create index if not exists matches_room     on matches (room, status);
-create index if not exists poker_table_room on poker_table (room);
-do $$ begin alter publication supabase_realtime add table world_events; exception when duplicate_object then null; end $$;
+-- room-scoping column (017): retained from the removed public Game Room. Always
+-- NULL now (= the couple's private game); kept so the game engine (game.js)
+-- needs no changes. The Collide tables (worlds, world_messages, world_events)
+-- and uno_table were dropped in migration 021; poker_table in migration 022.
+alter table matches add column if not exists room text;
+create index if not exists matches_room on matches (room, status);

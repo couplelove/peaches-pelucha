@@ -32,7 +32,6 @@ function seed() {
     ],
     bets: [],
     matches: [],
-    poker_table: [],
     social_links: [],
     watch_state: [],
     trash_talk: [],

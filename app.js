@@ -21,7 +21,6 @@ function lazyTab(loader, name) {
     return C ? h(C, props) : html`<div class="card center"><div class="muted">Loading…</div></div>`;
   };
 }
-const PokerTab = lazyTab(() => import("./poker.js"), "PokerTab");
 const MemoriesTab = lazyTab(() => import("./memories.js"), "MemoriesTab");
 const WatchTab = lazyTab(() => import("./watch.js"), "WatchTab");
 const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
@@ -223,7 +222,7 @@ function App({ client, onResetCreds }) {
     return () => { live = false; };
   }, []);
   // Realtime for the shell's own data only. The old version reloaded EVERYTHING
-  // on any change to any table (a poker bet, a reaction, a memory backfill all
+  // on any change to any table (a hearts gift, a reaction, a memory backfill all
   // triggered 6+ queries). Now it (a) ignores tables the shell doesn't read,
   // (b) debounces bursts into one reload, and (c) resubscribes if the socket
   // drops — phones kill it on sleep.
@@ -480,19 +479,10 @@ function Login({ players, onPick, onAdd, modal, setModal, api }) {
 // The home screen: current game (prominent) → lifetime line → his & hers
 // Cancer horoscopes → daily scripture → Date Night Roulette.
 function ScoreTab(ctx) {
-  // The home page. A Phase 10 / Poker toggle swaps ONLY the game section at the
-  // top — the rest of the home page (lifetime, horoscopes, scripture, roulette)
-  // stays put. Switching games never navigates away or goes full-screen.
-  const [activeGame, setActiveGame] = useState(() => localStorage.getItem("pp.activeGame") || "phase10");
-  const pickGame = (g) => { localStorage.setItem("pp.activeGame", g); setActiveGame(g); };
+  // The home page: Phase 10 at the top, then lifetime, horoscopes, scripture,
+  // and the date roulette.
   return html`<${Fragment}>
-    <div class="gameswitch">
-      <button class=${activeGame === "phase10" ? "on" : ""} onClick=${() => pickGame("phase10")}>🎴 Phase 10</button>
-      <button class=${activeGame === "poker" ? "on" : ""} onClick=${() => pickGame("poker")}>🃏 Poker</button>
-    </div>
-    ${activeGame === "phase10"
-      ? html`<${PlayTab} ...${ctx} />`
-      : html`<${PokerTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />`}
+    <${PlayTab} ...${ctx} />
     <${LifetimeCard} ...${ctx} />
     <${HoroscopeCard} players=${ctx.players} />
     <${ScriptureCard} />

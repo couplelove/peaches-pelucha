@@ -679,100 +679,14 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .bchips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; min-height: 46px; align-items: center; }
 .bchips .pcard { cursor: pointer; }
 .bempty { font-size: 11px; color: var(--ink-3); font-weight: 500; }
-/* ---- 🃏 poker (Casino Hold'em) ---- */
+
+/* segmented toggle (Watch tab: Shares / Queue) */
 .gameswitch { display: flex; gap: 6px; background: var(--paper-2); border-radius: var(--r-pill);
   padding: 4px; margin-bottom: 14px; }
 .gameswitch button { flex: 1; border: none; background: none; border-radius: var(--r-pill);
   padding: 9px 0; font-size: 14px; font-weight: 600; color: var(--ink-2); cursor: pointer;
   transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
 .gameswitch button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(43,37,33,.1); }
-
-.pk-table { }
-.pk-chips { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); font-size: 15px; }
-.pk-zone { margin: 10px 0; }
-.pk-zone.center { background: var(--paper-2); border-radius: var(--r); padding: 10px 8px; margin: 12px -4px; }
-.pk-zlabel { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--ink-3); margin-bottom: 7px; }
-.pk-hname { color: var(--accent); text-transform: none; letter-spacing: 0; font-weight: 600; }
-.pk-hname.you { color: var(--good); }
-.pk-row { display: flex; gap: 7px; justify-content: center; }
-
-/* playing card — warm, minimal, matches the deck's editorial feel */
-.pkcard { position: relative; width: 62px; height: 86px; border-radius: 9px; background: var(--surface);
-  color: var(--ink); border: 1px solid var(--line); box-shadow: 0 2px 8px -3px rgba(43,37,33,.3);
-  flex: 0 0 auto; overflow: hidden; animation: pkdeal .34s cubic-bezier(.2,.85,.3,1.05) both; }
-.pkcard.sm { width: 38px; height: 53px; border-radius: 6px; }
-.pkcard.slot { background: transparent; border: 1.5px dashed var(--line); box-shadow: none; animation: none; }
-.pkcard.red { color: var(--bad); }
-.pk-corner { position: absolute; font-weight: 700; font-size: 13px; line-height: 1; text-align: center; }
-.pkcard.sm .pk-corner { font-size: 9px; }
-.pk-corner.tl { top: 5px; left: 6px; }
-.pk-corner.br { bottom: 5px; right: 6px; transform: rotate(180deg); }
-.pk-pip { position: absolute; inset: 0; display: grid; place-content: center; font-size: 30px; opacity: .92; }
-.pkcard.sm .pk-pip { font-size: 18px; }
-.pkcard.back { background: linear-gradient(135deg, #3a322c, #2b2521); border-color: #2b2521; color: #c79a78; }
-.pk-mono { text-align: center; font-size: 13px; line-height: 1.05; letter-spacing: 2px; opacity: .7; }
-.pkcard.sm .pk-mono { font-size: 8px; letter-spacing: 1px; }
-/* cards deal in from the top of the table with a little flip + settle */
-@keyframes pkdeal { 0% { opacity: 0; transform: translateY(-46px) scale(.78) rotate(-9deg); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
-.pkcard:not(.slot):not(.back) { animation: pkdeal .42s cubic-bezier(.2,.8,.3,1.1) both; }
-.pkcard.back { animation: pkdeal .34s cubic-bezier(.2,.8,.3,1.1) both; }
-
-.pk-controls { margin-top: 14px; }
-.pk-antes { display: flex; align-items: center; gap: 7px; justify-content: center; margin-bottom: 10px; }
-.pk-chipbtn { width: 44px; height: 36px; border-radius: var(--r-pill); border: 1.5px solid var(--line);
-  background: var(--surface); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-2); cursor: pointer;
-  transition: transform .12s ease, border-color .15s ease, color .15s ease, background .15s ease; }
-.pk-chipbtn.on { background: var(--accent); border-color: var(--accent); color: #fff8f3; }
-.pk-chipbtn:active { transform: scale(.9); }
-.pk-chipbtn:disabled { opacity: .35; }
-.pk-deal { font-weight: 700; }
-.pk-decide { display: flex; gap: 10px; }
-.pk-decide .btn { flex: 1; padding: 12px 8px; }
-.pk-decide.three .btn { font-size: 13px; padding: 12px 4px; }
-.pk-wager { font-size: 11px; color: var(--ink-3); }
-.btn.pk-call { background: var(--good); border-color: var(--good); color: #fff8f3; }
-
-.pk-result { margin-top: 14px; text-align: center; border-radius: var(--r); padding: 14px;
-  background: var(--paper-2); animation: pop .24s ease; }
-.pk-result.win { background: #eaf3ec; }
-.pk-result.lose { background: #f8ecea; }
-.pk-outcome { font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 4px; }
-.pk-result.win .pk-outcome { color: var(--good); }
-.pk-result.lose .pk-outcome { color: var(--bad); }
-.pk-net { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 8px; }
-.pk-net.pos { color: var(--good); }
-.pk-net.neg { color: var(--bad); }
-
-/* hand-rank key */
-.modal.pk-key { max-height: 88dvh; overflow-y: auto; }
-.pk-keylist { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-.pk-keyrow { display: flex; align-items: center; gap: 10px; }
-.pk-keyrank { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; background: var(--paper-2);
-  display: grid; place-content: center; font-size: 12px; font-weight: 700; color: var(--ink-2); }
-.pk-keymain { flex: 1; display: flex; align-items: center; gap: 10px; justify-content: space-between; }
-.pk-keycards { display: flex; gap: 3px; }
-.pk-keytext { text-align: right; }
-.pk-keytext b { display: block; font-size: 13px; }
-.pk-keytext .tiny { display: block; max-width: 150px; }
-
-/* poker — two-seat shared table */
-.pk-seats { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.pk-seat { border: 1px solid var(--line-2); border-radius: var(--r); padding: 10px 12px; background: var(--paper-2); transition: border-color .2s ease, background .2s ease; }
-.pk-seat.me { border-color: var(--line); background: var(--surface); }
-.pk-seat.win { border-color: var(--good); background: #eef4ef; }
-.pk-seat.lose { border-color: var(--bad); background: #f8eeec; }
-.pk-seat.fold { opacity: .72; }
-.pk-seathead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.pk-seatname { font-weight: 600; font-size: 13.5px; }
-.pk-seatchips { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13.5px; }
-.pk-seatbody { display: flex; align-items: center; gap: 12px; }
-.pk-row.sm { gap: 5px; }
-.pk-seatinfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.pk-tag { font-size: 12px; color: var(--ink-2); font-weight: 600; }
-.pk-seat .pk-net { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.pk-net.pos { color: var(--good); }
-.pk-net.neg { color: var(--bad); }
 
 /* ---- 📺 watch: shared social queue ---- */
 /* 6-tab nav: a touch tighter */
@@ -831,7 +745,4 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .vw-react button.on { background: var(--accent); }
 .vw-nav { display: flex; gap: 10px; width: 100%; max-width: 440px; }
 .vw-nav .btn { flex: 1; }
-
-/* poker full-screen room: side padding (gamefs-body is full-bleed for Phase 10) */
-.pk-room { padding: 2px 18px 20px; max-width: var(--maxw); margin: 0 auto; }
 
