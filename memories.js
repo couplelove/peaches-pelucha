@@ -560,13 +560,18 @@ export function MemoriesTab({ client, me, flash }) {
       if (!live || !data) return;
       const got = {}; data.forEach((r) => { got[r.day] = { title: r.title, story: r.story }; });
       setStories((s) => ({ ...got, ...s }));
-      // generate for the newest groups still without a story (cap 6/session)
-      let budget = 6;
+      // queue the newest storyless days (cap 6) — but weave them DEFERRED and
+      // ONE AT A TIME, so these long edge-function calls never compete with the
+      // feed's image loading on the same origin (faster first paint on mobile).
+      const queue = [];
       for (const g of groups) {
-        if (budget <= 0) break;
+        if (queue.length >= 6) break;
         if (!g.date || got[g.date] || stories[g.date] || storyTried.current.has(g.date)) continue;
-        budget--; storyTried.current.add(g.date);
-        weaveStory(g);
+        storyTried.current.add(g.date); queue.push(g);
+      }
+      if (queue.length) {
+        const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1400));
+        idle(async () => { for (const g of queue) { if (!live) break; await weaveStory(g); } });
       }
     });
     return () => { live = false; };
@@ -638,12 +643,19 @@ export function MemoriesTab({ client, me, flash }) {
 
       <!-- title-card feed: scroll the days like a journey; tap a card to open the day -->
       ${view === "gallery" && items !== null && !openGroup && html`<div class="dayfeed">
-        ${groups.map((g) => {
+        ${groups.map((g, gi) => {
           const s = stories[g.date];
           const cover = g.items.find((i) => i.kind === "photo") || g.items[0];
-          return html`<button class="daytile" key=${g.date} style=${`background-image:url(${thumbUrl(cover)})`} onClick=${() => setDayOpen(g.date)}>
+          const heroSrc = cover.thumb_path ? pubUrl(cover.thumb_path) : (cover.kind === "photo" ? pubUrl(cover.path) : null);
+          const evs = events.filter((e) => e.starts_on === g.date);
+          // blur-up placeholder (instant) under a natively lazy hero (off-screen cards never fetch)
+          return html`<button class="daytile" key=${g.date} style=${cover.blur ? `background-image:url(${cover.blur})` : ""} onClick=${() => setDayOpen(g.date)}>
+            ${heroSrc && html`<img class="dt-img" src=${heroSrc} alt="" decoding="async"
+              loading=${gi === 0 ? "eager" : "lazy"} fetchpriority=${gi === 0 ? "high" : "auto"}
+              onLoad=${(e) => e.target.classList.add("ld")}
+              ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
             <span class="dt-scrim"></span>
-            ${(() => { const evs = events.filter((e) => e.starts_on === g.date); return evs.length ? html`<span class="dt-ev" title=${evs.map((e) => e.title).join(", ")}>${evs[0].emoji || "📌"}${evs.length > 1 ? ` +${evs.length - 1}` : ""}</span>` : ""; })()}
+            ${evs.length ? html`<span class="dt-ev" title=${evs.map((e) => e.title).join(", ")}>${evs[0].emoji || "📌"}${evs.length > 1 ? ` +${evs.length - 1}` : ""}</span>` : ""}
             <span class="dt-count">${g.items.length} 📸</span>
             <span class="dt-body">
               <span class="dt-date">${dayHead(g.date)}</span>
