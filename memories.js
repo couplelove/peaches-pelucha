@@ -225,6 +225,7 @@ export function MemoriesTab({ client, me, flash }) {
   const [stories, setStories] = useState({});        // day -> { title, story }
   const storyTried = useRef(new Set());              // days we've already asked to generate this session
   const [dayOpen, setDayOpen] = useState(null);      // the day whose photo grid is open (null = title-card feed)
+  const [events, setEvents] = useState([]);          // calendar events, to cite the ones that fell on a day
 
   const pubUrl = useCallback((path) => {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
@@ -571,6 +572,13 @@ export function MemoriesTab({ client, me, flash }) {
     return () => { live = false; };
   }, [groups, client]);
 
+  // calendar events — so a day can cite what was planned/happening then
+  useEffect(() => {
+    let live = true;
+    client.from("events").select("id,title,emoji,starts_on").then(({ data }) => { if (live && data) setEvents(data); });
+    return () => { live = false; };
+  }, [client]);
+
   const weaveStory = useCallback(async (g) => {
     const images = g.items.filter((it) => it.kind === "photo").map((it) => pubUrl(it.thumb_path || it.path)).filter(Boolean).slice(0, 6);
     if (!images.length) return;
@@ -635,6 +643,7 @@ export function MemoriesTab({ client, me, flash }) {
           const cover = g.items.find((i) => i.kind === "photo") || g.items[0];
           return html`<button class="daytile" key=${g.date} style=${`background-image:url(${thumbUrl(cover)})`} onClick=${() => setDayOpen(g.date)}>
             <span class="dt-scrim"></span>
+            ${(() => { const evs = events.filter((e) => e.starts_on === g.date); return evs.length ? html`<span class="dt-ev" title=${evs.map((e) => e.title).join(", ")}>${evs[0].emoji || "📌"}${evs.length > 1 ? ` +${evs.length - 1}` : ""}</span>` : ""; })()}
             <span class="dt-count">${g.items.length} 📸</span>
             <span class="dt-body">
               <span class="dt-date">${dayHead(g.date)}</span>
@@ -653,6 +662,10 @@ export function MemoriesTab({ client, me, flash }) {
           <div class="dd-date">${dayHead(openGroup.date)}</div>
           <div class="dd-title">${(stories[openGroup.date] && stories[openGroup.date].title) || fallbackTitle(openGroup)}</div>
           <p class="dd-story">${(stories[openGroup.date] && stories[openGroup.date].story) || fallbackStory(openGroup)}</p>
+          ${(() => { const evs = events.filter((e) => e.starts_on === openGroup.date); return evs.length ? html`<div class="dd-events">
+            <span class="dd-ev-label">📌 that day</span>
+            ${evs.map((e) => html`<span class="dd-ev" key=${e.id}>${e.emoji || "•"} ${e.title}</span>`)}
+          </div>` : ""; })()}
           ${sel && html`<button class=${`dayall ${openGroup.items.every((i) => sel.has(i.id)) ? "on" : ""}`} onClick=${dayToggle(openGroup)}>✓ Select all this day</button>`}
         </div>
         <div class="memgrid">${openGroup.items.map(cell)}</div>

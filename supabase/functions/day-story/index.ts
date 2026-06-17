@@ -17,8 +17,15 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Who's who — so the narrative attributes actions to the right person.
+const SUBJECTS =
+  "The two people are: Peaches — a light-skinned woman with brown hair. Pelucha — a darker-skinned man with a beard. " +
+  "Look carefully at each photo and attribute actions to the correct person by these features; never swap them. " +
+  "If a photo doesn't clearly show who is who, write 'you two' / 'together' instead of guessing a name.";
+
 const SYSTEM = [
   "You are the storyteller for Peaches 🍑 and Pelucha 🧸 — a couple keeping a lifetime of days in a shared journal.",
+  SUBJECTS,
   "Given a few photos from ONE day, return a `title` and a `story`.",
   "title: a short, evocative chapter heading for the day — like a storybook page or a postcard caption (e.g. 'Cliffs Over the Fjord', 'The Red Rocks at Dusk'). 2–5 words, ≤45 characters. Title Case. No emoji, no quotes, no date.",
   "story: one warm, whimsical entry — the way a beautiful children's picture-book narrates a small adventure. Voice: tender, playful, a little magical. Present tense. Second person plural ('you two', 'together') or gently name them. Notice real details you can see in the photos (light, place, weather, what they're doing) and turn the day into a tiny journey. ≤500 characters, 1–3 short sentences. No quotes, no emoji.",
@@ -34,7 +41,7 @@ const SCHEMA = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { day, images = [], context = {} } = await req.json();
+    const { day, images = [], context = {}, revise = null } = await req.json();
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY not set" }, 500);
     if (!images.length) return json({ error: "no images" }, 400);
@@ -54,12 +61,17 @@ Deno.serve(async (req) => {
       } catch { return null; }
     }))).filter(Boolean);
     if (!imgs.length) return json({ error: "could not load images" }, 502);
-    const hint = [
-      context.date ? `Date: ${context.date}.` : "",
-      context.place ? `Place: ${context.place}.` : "",
-      context.count ? `${context.count} photo${context.count === 1 ? "" : "s"} from this day.` : "",
-      "Write the storybook entry for this day.",
-    ].filter(Boolean).join(" ");
+    // revise mode: fix ONLY who-is-who in an existing entry; keep the wording.
+    const hint = revise && (revise.story || revise.title)
+      ? "Here is an existing journal entry for this day:\n" +
+        `title: ${revise.title || ""}\nstory: ${revise.story || ""}\n\n` +
+        "Return it again, almost verbatim — same voice, same length, same wording. Change ONLY the names/pronouns that mis-identify who is who, using the photos and the descriptions above (light-skinned woman with brown hair = Peaches; darker-skinned man with a beard = Pelucha). If it's already correct, return it unchanged. Do not improve, shorten, restyle, or re-title it (keep the title unless it names the wrong person)."
+      : [
+          context.date ? `Date: ${context.date}.` : "",
+          context.place ? `Place: ${context.place}.` : "",
+          context.count ? `${context.count} photo${context.count === 1 ? "" : "s"} from this day.` : "",
+          "Write the storybook entry for this day.",
+        ].filter(Boolean).join(" ");
 
     const resp = await fetch(ANTHROPIC_URL, {
       method: "POST",
