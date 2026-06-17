@@ -40,14 +40,18 @@ function seed() {
     // backdrop have something to show. Real app uses Supabase Storage.
     memories: [
       "1015", "1016", "1018", "1024", "1025", "1039", "1043", "1059", "1068", "1074", "1080", "1084",
-    ].map((id, i) => ({
-      id: uid(), kind: "photo",
-      path: `https://picsum.photos/id/${id}/600/800`,
-      thumb_path: `https://picsum.photos/id/${id}/300/400`,
-      blur: null, place: null, lat: null, lng: null,
-      taken_on: new Date(Date.now() - i * 3 * 864e5).toISOString().slice(0, 10),
-      uploaded_by: i % 2 ? pelucha : peaches, created_at: new Date(Date.now() - i * 3 * 864e5).toISOString(),
-    })),
+    ].map((id, i) => {
+      // a few demo days carry GPS so the Map's "Memories" overlay has pins to show
+      const geo = [[40.7128, -74.006, "New York, NY"], [34.0522, -118.2437, "Los Angeles, CA"], [41.3874, 2.1686, "Barcelona"], [48.8566, 2.3522, "Paris"], [37.8199, -122.4783, "San Francisco, CA"]][i] || [];
+      return {
+        id: uid(), kind: "photo",
+        path: `https://picsum.photos/id/${id}/600/800`,
+        thumb_path: `https://picsum.photos/id/${id}/300/400`,
+        blur: null, place: geo[2] ?? null, lat: geo[0] ?? null, lng: geo[1] ?? null,
+        taken_on: new Date(Date.now() - i * 3 * 864e5).toISOString().slice(0, 10),
+        uploaded_by: i % 2 ? pelucha : peaches, created_at: new Date(Date.now() - i * 3 * 864e5).toISOString(),
+      };
+    }),
     todos: [],
     push_subscriptions: [],
     date_ideas: [
@@ -73,6 +77,18 @@ function seed() {
   db.round_entries.push(
     { id: uid(), round_id: r1.id, player_id: peaches, points: 15, completed_phase: true },
     { id: uid(), round_id: r1.id, player_id: pelucha, points: 35, completed_phase: false });
+  // sample map content (pins + a road trip)
+  const trip = { id: uid(), title: "Pacific Coast Highway", emoji: "🚐", created_by: peaches, created_at: nowISO() };
+  db.trips = [trip];
+  db.trip_stops = [
+    { id: uid(), trip_id: trip.id, lat: 37.8199, lng: -122.4783, title: "Golden Gate", note: null, seq: 0, visited: true, created_at: nowISO() },
+    { id: uid(), trip_id: trip.id, lat: 36.9741, lng: -122.0308, title: "Santa Cruz", note: null, seq: 1, visited: false, created_at: nowISO() },
+    { id: uid(), trip_id: trip.id, lat: 36.2704, lng: -121.8081, title: "Big Sur", note: "sunset stop", seq: 2, visited: false, created_at: nowISO() },
+  ];
+  db.map_pins = [
+    { id: uid(), lat: 48.8566, lng: 2.3522, title: "That little café", note: null, list: "Places We Want to Go", emoji: "☕", visited: false, created_by: peaches, created_at: nowISO() },
+    { id: uid(), lat: 41.9028, lng: 12.4964, title: "Rome someday", note: "the pasta one", list: "Places We Want to Go", emoji: "🏛️", visited: false, created_by: pelucha, created_at: nowISO() },
+  ];
   return db;
 }
 
@@ -95,6 +111,9 @@ const DEFAULTS = {
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
   events: { emoji: "💗", starts_at: null, notes: null, location: null, kind: "invite", created_by: null, rsvp: "pending" },
+  map_pins: { note: null, list: "Places We Want to Go", emoji: "📍", visited: false, created_by: null },
+  trips: { emoji: "🚐", created_by: null },
+  trip_stops: { note: null, seq: 0, visited: false },
 };
 
 function matches(row, filters) {
