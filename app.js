@@ -24,14 +24,15 @@ function lazyTab(loader, name) {
 const MemoriesTab = lazyTab(() => import("./memories.js"), "MemoriesTab");
 const WatchTab = lazyTab(() => import("./watch.js"), "WatchTab");
 const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
+const MapTab = lazyTab(() => import("./map.js"), "MapCard");
 const JoinMe = lazyTab(() => import("./joinme.js"), "JoinMe");
 
 // Tab order drives the gesture-first navigation (swipe = step through this list)
 // and the floating dock. Score stays first — its warm Phase-10 world is home base.
 // "more" is intentionally off the dock — it's reached by tapping your name (rarely used)
-const TAB_ORDER = ["score", "plans", "memories", "schmoney", "joinme"];
+const TAB_ORDER = ["score", "plans", "map", "memories", "schmoney", "joinme"];
 const TAB_META = {
-  score: ["🏆", "Score"], plans: ["📅", "Plans"], memories: ["📸", "Memories"],
+  score: ["🏆", "Score"], plans: ["📅", "Plans"], map: ["🗺️", "Map"], memories: ["📸", "Memories"],
   schmoney: ["💸", "Schmoney"], joinme: ["🧘", "Join Me"], more: ["⚙️", "More"],
 };
 
@@ -494,6 +495,7 @@ function App({ client, onResetCreds }) {
         <${ErrorBoundary} key=${tab}>
           ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
           ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
+          ${tab === "map" && html`<${MapTab} client=${client} me=${me} players=${players} flash=${flash} />`}
           ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
           ${tab === "schmoney" && html`<${Fragment}>
             <${WalletTab} ...${ctx} />
