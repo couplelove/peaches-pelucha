@@ -180,18 +180,28 @@ async function placeFor(lat, lng) {
   } catch { return null; }
 }
 
-// upload with retries — mobile networks drop large bodies routinely
-async function uploadWithRetry(client, path, blob, contentType) {
+// Retry a Supabase call that resolves to {error} OR throws on a dropped
+// connection — mobile networks drop large bodies routinely, and a thrown
+// network error must be retried, not allowed to escape. Exponential backoff
+// with jitter (so parallel lanes don't retry in lockstep), capped; the final
+// failure propagates so the caller can mark the file failed.
+async function withRetry(fn, attempts = 5, base = 800) {
   let lastErr = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { error } = await client.storage.from("memories")
-      .upload(path, blob, { contentType, cacheControl: "31536000", upsert: true });
-    if (!error) return;
-    lastErr = error;
-    await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await fn();
+      if (!res || !res.error) return res;
+      lastErr = res.error;
+    } catch (e) { lastErr = e; }
+    if (attempt < attempts - 1)
+      await new Promise((r) => setTimeout(r, Math.min(base * 2 ** attempt, 8000) + Math.random() * 500));
   }
-  throw lastErr || new Error("upload failed");
+  throw lastErr || new Error("failed");
 }
+
+const uploadWithRetry = (client, path, blob, contentType) =>
+  withRetry(() => client.storage.from("memories")
+    .upload(path, blob, { contentType, cacheControl: "31536000", upsert: true }));
 
 // the grid needs only these columns — never pull the (large, unused) lat/lng or
 // any future heavy column into the list query. blur is a tiny inline data-URL.
@@ -324,8 +334,10 @@ export function MemoriesTab({ client, me, flash }) {
     return () => io.disconnect();
   }, [loadMore, view, items === null]);
 
-  // Concurrent upload queue (3 lanes) with per-file status — photos shrink
-  // on-device first; videos go as-is (50MB storage cap surfaced honestly).
+  // Concurrent upload queue (2 lanes) with per-file status — photos shrink
+  // on-device first; videos go as-is. Two lanes (not three) keeps fewer large
+  // bodies in flight on a phone uplink, so a dropped connection loses less and
+  // each request is less likely to time out; the shrunk photos still fly.
   const onPick = async (e) => {
     const files = [...(e.target.files || [])];
     e.target.value = "";
@@ -337,7 +349,7 @@ export function MemoriesTab({ client, me, flash }) {
       const f = j.f;
       try {
         const isVideo = f.type.startsWith("video/");
-        if (isVideo && f.size > 49 * 1024 * 1024) throw new Error("video over 50MB — trim it first");
+        if (isVideo && f.size > 490 * 1024 * 1024) throw new Error("video over 500MB — trim it first");
         j.status = "working"; paint();
         const base = `u${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         // real capture metadata comes from the ORIGINAL file bytes (before shrink)
@@ -348,9 +360,19 @@ export function MemoriesTab({ client, me, flash }) {
           const poster = await videoPoster(f);                 // best-effort; null is fine
           if (poster) { thumb = poster.thumb; blur = poster.blur; }
         } else {
-          const out = await processPhoto(f);
-          blob = out.full; ext = "jpg"; ct = "image/jpeg";
-          thumb = out.thumb; blur = out.blur;
+          try {
+            const out = await processPhoto(f);
+            blob = out.full; ext = "jpg"; ct = "image/jpeg";
+            thumb = out.thumb; blur = out.blur;
+          } catch {
+            // undecodable on THIS device (e.g. HEIC opened in desktop Chrome, or
+            // a canvas that ran out of memory) — save the ORIGINAL bytes rather
+            // than lose the memory. The grid falls back to the full image when a
+            // row has no thumb, and the couple's phones (Safari/iOS) render HEIC.
+            blob = f;
+            ct = f.type || "image/jpeg";
+            ext = ((f.name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "")) || "jpg";
+          }
         }
         const path = `${base}.${ext}`;
         await uploadWithRetry(client, path, blob, ct);
@@ -368,17 +390,18 @@ export function MemoriesTab({ client, me, flash }) {
           taken_on = `${taken.getFullYear()}-${String(taken.getMonth() + 1).padStart(2, "0")}-${String(taken.getDate()).padStart(2, "0")}`;
         }
         const place = meta.lat != null ? await placeFor(meta.lat, meta.lng) : null;
-        const { error: rowErr } = await client.from("memories")
+        // the bytes are already in Storage — don't lose the memory to one
+        // transient DB blip. Retry the row insert with the same backoff.
+        await withRetry(() => client.from("memories")
           .insert({ path, kind: isVideo ? "video" : "photo", taken_on, uploaded_by: me.id,
-                    place, lat: meta.lat ?? null, lng: meta.lng ?? null, thumb_path, blur });
-        if (rowErr) throw rowErr;
+                    place, lat: meta.lat ?? null, lng: meta.lng ?? null, thumb_path, blur }));
         j.status = "done";
       } catch (err) {
         j.status = "failed"; j.err = err.message || "failed";
       }
       paint();
     };
-    const lanes = Array.from({ length: 3 }, async () => {
+    const lanes = Array.from({ length: 2 }, async () => {
       for (;;) {
         const j = jobs.find((x) => x.status === "queued");
         if (!j) return;
