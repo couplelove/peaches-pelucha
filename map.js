@@ -47,6 +47,20 @@ async function routeLine(stops) {
   return straight;
 }
 
+// Free, key-less place/address search (Photon by komoot — built for autocomplete,
+// CORS-friendly). Returns a short list of {name, label, lat, lng}.
+async function geocode(q) {
+  try {
+    const r = await fetch(`https://photon.komoot.io/api/?limit=6&lang=en&q=${encodeURIComponent(q)}`);
+    const j = await r.json();
+    return (j.features || []).map((f) => {
+      const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
+      const label = [p.name, p.street && !p.name ? p.street : null, p.city || p.county, p.state, p.country].filter(Boolean).join(", ");
+      return { name: p.name || (label.split(",")[0]) || q, label: label || q, lat: c[1], lng: c[0] };
+    }).filter((r) => isFinite(r.lat) && isFinite(r.lng));
+  } catch { return []; }
+}
+
 const pinIcon = (L, emoji, visited) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin ${visited ? "done" : ""}">${emoji || "📍"}</div>`, iconSize: [34, 40], iconAnchor: [17, 38] });
 const memIcon = (L) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin mem">📸</div>`, iconSize: [34, 40], iconAnchor: [17, 38] });
 const stopIcon = (L, n, visited) => L.divIcon({ className: "mkr", html: `<div class="mkr-stop ${visited ? "done" : ""}">${visited ? "✓" : n}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
@@ -54,7 +68,7 @@ const stopIcon = (L, n, visited) => L.divIcon({ className: "mkr", html: `<div cl
 // A self-contained Leaflet map. interactive=false → a frozen preview (can't pan,
 // so it never steals the swipe-nav gesture). fitMode "always" refits on every
 // data change (preview); "once" fits a single time on open (full-screen).
-function LeafletMap({ interactive, fitMode, initialCenter, mode, pins, memDays, stops, route, listFilter, onMapClick, onPinClick, onStopClick }) {
+function LeafletMap({ interactive, fitMode, initialCenter, focus, mode, pins, memDays, stops, route, listFilter, onMapClick, onPinClick, onStopClick }) {
   const elRef = useRef(null), mapRef = useRef(null), layerRef = useRef(null), LRef = useRef(null), clickRef = useRef(() => {});
   const [ready, setReady] = useState(false);
   const fitSig = useRef("");
@@ -80,6 +94,13 @@ function LeafletMap({ interactive, fitMode, initialCenter, mode, pins, memDays, 
   }, [interactive]);
 
   useEffect(() => { clickRef.current = (e) => { if (onMapClick) onMapClick(e.latlng); }; }, [onMapClick]);
+
+  // runtime fly-to (search result picked) — after mount, so it won't fight the fit
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !focus) return;
+    try { map.flyTo([focus.lat, focus.lng], Math.max(map.getZoom(), 13), { duration: .6 }); } catch {}
+  }, [focus, ready]);
 
   useEffect(() => {
     const L = LRef.current, map = mapRef.current, lg = layerRef.current;
@@ -130,6 +151,10 @@ export function MapCard({ client, me, players, flash }) {
   const [full, setFull] = useState(false);            // full-screen map open
   const [fullCenter, setFullCenter] = useState(null); // where full-screen opens centered (null = fit all)
   const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");             // place/address search
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [focus, setFocus] = useState(null);           // {lat,lng,nonce} → full map flies here
   const [pinSheet, setPinSheet] = useState(null);
   const [stopSheet, setStopSheet] = useState(null);
   const [tripSheet, setTripSheet] = useState(null);
@@ -219,7 +244,26 @@ export function MapCard({ client, me, players, flash }) {
     setAdding(false);
   };
 
-  const openFull = (center, startAdding) => { setFullCenter(center || null); setAdding(!!startAdding); setFull(true); };
+  const openFull = (center, startAdding) => { setFullCenter(center || null); setAdding(!!startAdding); setQuery(""); setResults([]); setFocus(null); setFull(true); };
+  const closeFull = () => { setFull(false); setAdding(false); setQuery(""); setResults([]); };
+
+  // debounced place search while the full map is open
+  useEffect(() => {
+    if (!full) return;
+    const q = query.trim();
+    if (q.length < 3) { setResults([]); setSearching(false); return; }
+    let live = true; setSearching(true);
+    const t = setTimeout(async () => { const res = await geocode(q); if (live) { setResults(res); setSearching(false); } }, 350);
+    return () => { live = false; clearTimeout(t); };
+  }, [query, full]);
+
+  // picking a search result: fly there, and if adding, open the sheet pre-filled
+  const onSearchPick = (r) => {
+    setQuery(""); setResults([]);
+    setFocus({ lat: r.lat, lng: r.lng, nonce: Date.now() });
+    if (adding && mode === "places") { setPinSheet({ lat: r.lat, lng: r.lng, title: r.name, note: "", list: listFilter || DEFAULT_LIST, emoji: "📍", visited: false }); setAdding(false); }
+    else if (adding && mode === "trips" && selTrip) { setStopSheet({ trip_id: selTrip, lat: r.lat, lng: r.lng, title: r.name, note: "", seq: stops.length, visited: false }); setAdding(false); }
+  };
   const lists = useMemo(() => { const s = new Set([DEFAULT_LIST]); pins.forEach((p) => s.add(p.list)); return [...s]; }, [pins]);
   const visiblePins = pins.filter((p) => !listFilter || p.list === listFilter);
   const curTrip = trips.find((t) => t.id === selTrip);
@@ -298,18 +342,28 @@ export function MapCard({ client, me, players, flash }) {
 
     ${full && createPortal(html`<div class="mapfull">
       <div class="mapfull-bar">
-        <button class="vw-x" onClick=${() => { setFull(false); setAdding(false); }}>✕</button>
+        <button class="vw-x" onClick=${closeFull}>✕</button>
         <div class="seg map-modes mf-modes">
           ${modeBtn("places", "📍")}
           ${modeBtn("trips", "🚐")}
           ${modeBtn("memories", "📸")}
         </div>
-        ${(mode === "places" || (mode === "trips" && selTrip)) && html`<button class=${`btn sm ${adding ? "" : "ghost"}`} onClick=${() => setAdding((a) => !a)}>${adding ? "Tap to place" : (mode === "places" ? "＋ Pin" : "＋ Stop")}</button>`}
+        ${(mode === "places" || (mode === "trips" && selTrip)) && html`<button class=${`btn sm ${adding ? "" : "ghost"}`} onClick=${() => setAdding((a) => !a)}>${adding ? "Tap map" : (mode === "places" ? "＋ Pin" : "＋ Stop")}</button>`}
       </div>
+      ${mode !== "memories" && html`<div class="mapsearch">
+        <span class="ms-ico">🔍</span>
+        <input value=${query} onInput=${(e) => setQuery(e.target.value)} placeholder=${adding ? (mode === "trips" ? "Search a stop — place or address…" : "Search a place or address…") : "Search the map…"} autocomplete="off" />
+        ${query && html`<button class="ms-clear" onClick=${() => { setQuery(""); setResults([]); }}>✕</button>`}
+        ${(results.length > 0 || searching) && html`<div class="mapsearch-results">
+          ${searching && results.length === 0 ? html`<div class="ms-row muted">Searching…</div>`
+            : results.map((r, i) => html`<button class="ms-row" key=${i} onClick=${() => onSearchPick(r)}>
+                <span class="ms-pin">📍</span><span class="ms-label">${r.label}</span></button>`)}
+        </div>`}
+      </div>`}
       <div class=${`mapfull-map ${adding ? "adding" : ""}`}>
-        <${LeafletMap} interactive=${true} fitMode="once" initialCenter=${fullCenter} ...${mapData}
+        <${LeafletMap} interactive=${true} fitMode="once" initialCenter=${fullCenter} focus=${focus} ...${mapData}
           onMapClick=${onMapTap} onPinClick=${(p) => setPinSheet({ ...p })} onStopClick=${(s) => setStopSheet({ ...s })} />
-        ${adding && html`<div class="map-hint">Tap to place</div>`}
+        ${adding && html`<div class="map-hint">Search above, or tap the map</div>`}
         ${mode === "trips" && !selTrip && html`<div class="mf-note">Pick a trip below to plan stops.</div>`}
       </div>
     </div>`, document.body)}
