@@ -280,6 +280,66 @@ export function MapCard({ client, me, players, flash }) {
   // shared map props (the same data drives both the preview and the full map)
   const mapData = { mode, pins, memDays, stops, route, listFilter };
 
+  // tapping a row: in full-screen → fly there; on the card → open full-screen there
+  const rowGo = (inFull, lat, lng) => inFull ? setFocus({ lat, lng, nonce: Date.now() }) : openFull({ lat, lng });
+  // the add toggle: in full-screen → arm tap/search; on the card → open full + arm
+  const startAdd = (inFull) => inFull ? setAdding((a) => !a) : openFull(null, true);
+
+  // One panel definition used in BOTH the card and the full-screen drawer, so the
+  // whole add/remove/manage workflow lives wherever you are (no bouncing back).
+  const panel = (inFull) => {
+    if (mode === "places") return html`<div class="map-panel">
+      <div class="fchips">
+        <button class=${`fchip ${!listFilter ? "on" : ""}`} onClick=${() => setListFilter(null)}>All</button>
+        ${lists.map((l) => html`<button key=${l} class=${`fchip ${listFilter === l ? "on" : ""}`} onClick=${() => setListFilter(l)}>${l}</button>`)}
+        <button class=${`fchip add ${inFull && adding ? "on" : ""}`} onClick=${() => startAdd(inFull)}>${inFull && adding ? "Tap map" : "＋ Pin"}</button>
+      </div>
+      ${visiblePins.length === 0
+        ? html`<div class="map-empty">No places yet — ＋ Pin, then ${inFull ? "search or tap the map" : "open the map"}.</div>`
+        : html`<div class="map-list">${visiblePins.map((p) => html`<div class="map-row" role="button" key=${p.id} onClick=${() => rowGo(inFull, p.lat, p.lng)}>
+            <span class="mr-emoji">${p.emoji || "📍"}</span>
+            <span class="mr-main"><span class=${`mr-title ${p.visited ? "done" : ""}`}>${p.title}</span><span class="mr-sub">${p.list}${p.note ? " · " + p.note : ""}</span></span>
+            <span class=${`mr-check ${p.visited ? "on" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); togglePinVisited(p); }}>${p.visited ? "✓" : "○"}</span>
+            <span class="mr-edit" role="button" onClick=${(e) => { e.stopPropagation(); setPinSheet({ ...p }); }}>⋯</span>
+          </div>`)}</div>`}
+    </div>`;
+
+    if (mode === "trips") return html`<div class="map-panel">
+      <div class="fchips">
+        ${trips.map((t) => html`<button key=${t.id} class=${`fchip ${selTrip === t.id ? "on" : ""}`} onClick=${() => { setSelTrip(t.id); setAdding(false); }}>${t.emoji || "🚐"} ${t.title}</button>`)}
+        <button class="fchip add" onClick=${() => setTripSheet({ title: "" })}>＋ New</button>
+      </div>
+      ${!selTrip
+        ? html`<div class="map-empty">${trips.length ? "Pick a trip." : "No road trips yet — start one with ＋ New."}</div>`
+        : html`<div class="trip-detail">
+            <div class="trip-head"><span class="trip-name">${curTrip ? curTrip.title : ""}</span>
+              <div class="trip-head-actions">
+                <button class=${`btn sm ${inFull && adding ? "" : "ghost"}`} onClick=${() => startAdd(inFull)}>${inFull && adding ? "Tap map" : "＋ Stop"}</button>
+                <button class="linkbtn danger" onClick=${() => deleteTrip(selTrip)}>Delete</button>
+              </div></div>
+            ${stops.length === 0
+              ? html`<div class="map-empty">No stops yet — ＋ Stop, then ${inFull ? "search or tap the map" : "open the map"}.</div>`
+              : html`<div class="map-list">${stops.map((s, i) => html`<div class="map-row" role="button" key=${s.id} onClick=${() => rowGo(inFull, s.lat, s.lng)}>
+                  <span class=${`mr-seq ${s.visited ? "done" : ""}`}>${s.visited ? "✓" : i + 1}</span>
+                  <span class="mr-main"><span class=${`mr-title ${s.visited ? "done" : ""}`}>${s.title}</span>${s.note ? html`<span class="mr-sub">${s.note}</span>` : ""}</span>
+                  <span class=${`mr-check ${s.visited ? "on" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); toggleStopVisited(s); }}>${s.visited ? "been" : "plan"}</span>
+                  <span class="mr-edit" role="button" onClick=${(e) => { e.stopPropagation(); setStopSheet({ ...s }); }}>⋯</span>
+                </div>`)}</div>`}
+          </div>`}
+    </div>`;
+
+    return html`<div class="map-panel">
+      ${memDays.length === 0
+        ? html`<div class="map-empty">Geotagged photo days show up here automatically.</div>`
+        : html`<div class="map-list">${memDays.map((d) => {
+            const sub = [d.title && d.place ? d.place : null, fmtDay(d.date), `${d.count} ${d.count === 1 ? "photo" : "photos"}`].filter(Boolean).join(" · ");
+            return html`<div class="map-row" role="button" key=${d.date} onClick=${() => rowGo(inFull, d.lat, d.lng)}>
+              <span class="mr-emoji">📸</span>
+              <span class="mr-main"><span class="mr-title">${d.title || d.place || "A day together"}</span><span class="mr-sub">${sub}</span></span>
+            </div>`; })}</div>`}
+    </div>`;
+  };
+
   return html`<div class="card mapcard">
     <div class="shead">
       <h2>Map <span class="muted-glyph">🗺️</span></h2>
@@ -300,54 +360,7 @@ export function MapCard({ client, me, players, flash }) {
       <button class="map-open" onClick=${() => openFull(null)}>${hasAnything ? "" : html`<span class="map-open-empty">Tap to open the map</span>`}<span class="map-open-cta">⤢ Explore</span></button>
     </div>
 
-    ${mode === "places" && html`<div class="map-panel">
-      <div class="fchips">
-        <button class=${`fchip ${!listFilter ? "on" : ""}`} onClick=${() => setListFilter(null)}>All</button>
-        ${lists.map((l) => html`<button key=${l} class=${`fchip ${listFilter === l ? "on" : ""}`} onClick=${() => setListFilter(l)}>${l}</button>`)}
-        <button class="fchip add" onClick=${() => openFull(null, true)}>＋ Pin</button>
-      </div>
-      ${visiblePins.length === 0
-        ? html`<div class="map-empty">No places yet — ＋ Pin, then tap the map.</div>`
-        : html`<div class="map-list">${visiblePins.map((p) => html`<button class="map-row" key=${p.id} onClick=${() => openFull({ lat: p.lat, lng: p.lng })}>
-            <span class="mr-emoji">${p.emoji || "📍"}</span>
-            <span class="mr-main"><span class=${`mr-title ${p.visited ? "done" : ""}`}>${p.title}</span><span class="mr-sub">${p.list}${p.note ? " · " + p.note : ""}</span></span>
-            <span class=${`mr-check ${p.visited ? "on" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); togglePinVisited(p); }}>${p.visited ? "✓" : "○"}</span>
-          </button>`)}</div>`}
-    </div>`}
-
-    ${mode === "trips" && html`<div class="map-panel">
-      <div class="fchips">
-        ${trips.map((t) => html`<button key=${t.id} class=${`fchip ${selTrip === t.id ? "on" : ""}`} onClick=${() => { setSelTrip(t.id); setAdding(false); }}>${t.emoji || "🚐"} ${t.title}</button>`)}
-        <button class="fchip add" onClick=${() => setTripSheet({ title: "" })}>＋ New</button>
-      </div>
-      ${!selTrip
-        ? html`<div class="map-empty">${trips.length ? "Pick a trip." : "No road trips yet — start one with ＋ New."}</div>`
-        : html`<div class="trip-detail">
-            <div class="trip-head"><span class="trip-name">${curTrip ? curTrip.title : ""}</span>
-              <div class="trip-head-actions">
-                <button class="btn sm" onClick=${() => openFull(null, true)}>＋ Stop</button>
-                <button class="linkbtn danger" onClick=${() => deleteTrip(selTrip)}>Delete</button>
-              </div></div>
-            ${stops.length === 0
-              ? html`<div class="map-empty">No stops yet — ＋ Stop, then tap the map.</div>`
-              : html`<div class="map-list">${stops.map((s, i) => html`<button class="map-row" key=${s.id} onClick=${() => openFull({ lat: s.lat, lng: s.lng })}>
-                  <span class=${`mr-seq ${s.visited ? "done" : ""}`}>${s.visited ? "✓" : i + 1}</span>
-                  <span class="mr-main"><span class=${`mr-title ${s.visited ? "done" : ""}`}>${s.title}</span>${s.note ? html`<span class="mr-sub">${s.note}</span>` : ""}</span>
-                  <span class=${`mr-check ${s.visited ? "on" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); toggleStopVisited(s); }}>${s.visited ? "been" : "plan"}</span>
-                </button>`)}</div>`}
-          </div>`}
-    </div>`}
-
-    ${mode === "memories" && html`<div class="map-panel">
-      ${memDays.length === 0
-        ? html`<div class="map-empty">Geotagged photo days show up here automatically.</div>`
-        : html`<div class="map-list">${memDays.map((d) => {
-            const sub = [d.title && d.place ? d.place : null, fmtDay(d.date), `${d.count} ${d.count === 1 ? "photo" : "photos"}`].filter(Boolean).join(" · ");
-            return html`<button class="map-row" key=${d.date} onClick=${() => openFull({ lat: d.lat, lng: d.lng })}>
-            <span class="mr-emoji">📸</span>
-            <span class="mr-main"><span class="mr-title">${d.title || d.place || "A day together"}</span><span class="mr-sub">${sub}</span></span>
-          </button>`; })}</div>`}
-    </div>`}
+    ${panel(false)}
 
     ${full && createPortal(html`<div class="mapfull">
       <div class="mapfull-bar">
@@ -357,7 +370,6 @@ export function MapCard({ client, me, players, flash }) {
           ${modeBtn("trips", "🚐")}
           ${modeBtn("memories", "📸")}
         </div>
-        ${(mode === "places" || (mode === "trips" && selTrip)) && html`<button class=${`btn sm ${adding ? "" : "ghost"}`} onClick=${() => setAdding((a) => !a)}>${adding ? "Tap map" : (mode === "places" ? "＋ Pin" : "＋ Stop")}</button>`}
       </div>
       ${mode !== "memories" && html`<div class="mapsearch">
         <span class="ms-ico">🔍</span>
@@ -373,8 +385,8 @@ export function MapCard({ client, me, players, flash }) {
         <${LeafletMap} interactive=${true} fitMode="once" initialCenter=${fullCenter} focus=${focus} ...${mapData}
           onMapClick=${onMapTap} onPinClick=${(p) => setPinSheet({ ...p })} onStopClick=${(s) => setStopSheet({ ...s })} />
         ${adding && html`<div class="map-hint">Search above, or tap the map</div>`}
-        ${mode === "trips" && !selTrip && html`<div class="mf-note">Pick a trip below to plan stops.</div>`}
       </div>
+      <div class="mapfull-panel">${panel(true)}</div>
     </div>`, document.body)}
 
     ${pinSheet && html`<${PinSheet} f=${pinSheet} setF=${setPinSheet} lists=${lists} onSave=${savePin} onDelete=${deletePin} />`}
