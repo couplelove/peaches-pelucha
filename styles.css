@@ -1172,25 +1172,19 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 /* styled divIcon markers */
 .mkr { background: none; border: 0; }
-.mkr-pin { position: relative; width: 30px; height: 30px; margin: 0 auto; border-radius: 50%;
+.mkr-pin { width: 30px; height: 30px; border-radius: 50%;
   background: #fff; border: 2px solid var(--c-accent); box-shadow: 0 4px 10px rgba(20,33,46,.32);
   display: grid; place-content: center; font-size: 15px; line-height: 1; }
-.mkr-pin::after { content: ""; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
-  border: 5px solid transparent; border-top-color: var(--c-accent); }
 .mkr-pin.done { border-color: var(--good); }
-.mkr-pin.done::after { border-top-color: var(--good); }
 .mkr-pin.mem { border-color: var(--accent); }
-.mkr-pin.mem::after { border-top-color: var(--accent); }
 .mkr-stop { width: 28px; height: 28px; border-radius: 50%; background: #fff; border: 2px solid var(--c-accent);
   display: grid; place-content: center; font-weight: 800; font-size: 13px; color: var(--c-accent);
   box-shadow: 0 4px 10px rgba(20,33,46,.3); }
 .mkr-stop.done { background: var(--c-accent); color: #fff; }
 /* provisional pin (awaiting confirmation) — accent-filled, white ring, bobbing */
-.mkr-pending { position: relative; width: 38px; height: 38px; margin: 0 auto; border-radius: 50%;
+.mkr-pending { width: 38px; height: 38px; border-radius: 50%;
   background: var(--c-accent); border: 3px solid #fff; box-shadow: 0 8px 18px rgba(20,33,46,.5);
   display: grid; place-content: center; font-size: 18px; line-height: 1; animation: pendBounce 1s ease-in-out infinite; }
-.mkr-pending::after { content: ""; position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%);
-  border: 6px solid transparent; border-top-color: #fff; }
 @keyframes pendBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 
 /* mode panel below the map */

@@ -61,8 +61,8 @@ async function geocode(q) {
   } catch { return []; }
 }
 
-const pinIcon = (L, emoji, visited) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin ${visited ? "done" : ""}">${emoji || "📍"}</div>`, iconSize: [34, 40], iconAnchor: [17, 38] });
-const memIcon = (L) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin mem">📸</div>`, iconSize: [34, 40], iconAnchor: [17, 38] });
+const pinIcon = (L, emoji, visited) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin ${visited ? "done" : ""}">${emoji || "📍"}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+const memIcon = (L) => L.divIcon({ className: "mkr", html: `<div class="mkr-pin mem">📸</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
 const stopIcon = (L, n, visited) => L.divIcon({ className: "mkr", html: `<div class="mkr-stop ${visited ? "done" : ""}">${visited ? "✓" : n}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
 
 // A self-contained Leaflet map. interactive=false → a frozen preview (can't pan,
@@ -111,7 +111,7 @@ function LeafletMap({ interactive, fitMode, initialCenter, focus, pending, mode,
     if (!ready || !map || !L) return;
     if (pendRef.current) { try { map.removeLayer(pendRef.current); } catch {} pendRef.current = null; }
     if (!pending) { pendKey.current = ""; return; }
-    const icon = L.divIcon({ className: "mkr", html: `<div class="mkr-pending">${pending.emoji || "📍"}</div>`, iconSize: [42, 50], iconAnchor: [21, 48] });
+    const icon = L.divIcon({ className: "mkr", html: `<div class="mkr-pending">${pending.emoji || "📍"}</div>`, iconSize: [38, 38], iconAnchor: [19, 19] });
     pendRef.current = L.marker([pending.lat, pending.lng], { icon, zIndexOffset: 1000, interactive: false }).addTo(map);
     const key = pending.lat + "," + pending.lng;
     if (key !== pendKey.current) {
