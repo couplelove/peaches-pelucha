@@ -217,7 +217,7 @@ function App({ client, onResetCreds }) {
   const onSwipeDown = useCallback((e) => {
     // never hijack the Phase 10 game (its block is marked [data-noswipe]), the
     // full-screen board, a modal, or a text field.
-    if (document.querySelector(".gamefs, .modal-bg")) return;
+    if (document.querySelector(".gamefs, .modal-bg, .lightbox")) return;   // board / modal / photo lightbox own their gestures
     if (e.target.closest("input, textarea, [data-noswipe]")) return;
     // bail if the touch starts inside a horizontal scroller (carousels etc.)
     let n = e.target;
@@ -428,9 +428,11 @@ function App({ client, onResetCreds }) {
 
   const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
 
+  const mem = tab === "memories";   // Memories is its own white, full-bleed space — no glass container, no photo backdrop (that container broke the photo carousel)
+
   return html`
-    <${PhotoBackdrop} client=${client} />
-    <div class="app-shell cool">
+    ${mem ? html`<div class="mem-bg"></div>` : html`<${PhotoBackdrop} client=${client} />`}
+    <div class=${`app-shell cool ${mem ? "mem" : ""}`}>
       <div class="topbar">
         <div class="brand script">peaches & pelucha</div>
         <button class="whoami" onClick=${() => setModal({ type: "switch" })}>

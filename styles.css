@@ -49,7 +49,7 @@ body {
 .tnum { font-variant-numeric: tabular-nums; }
 
 /* ---- boot splash ---- */
-.boot { min-height: 100dvh; display: grid; place-content: center; text-align: center; gap: 14px; }
+.boot { min-height: 100dvh; display: grid; place-content: center; text-align: center; gap: 14px; background: #e7eef3; }
 .boot-heart { font-size: 40px; opacity: .9; animation: rise 1.4s ease-in-out infinite; }
 .boot-text { font-family: var(--serif); font-weight: 500; font-size: 20px; color: var(--ink); letter-spacing: 0; }
 @keyframes rise { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-6px);} }
@@ -965,3 +965,34 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .app-shell.cool .gamefs .card { background: transparent; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; padding: 16px; margin-bottom: 0; }
 .app-shell.cool .gamefs .btn { background: var(--accent); color: #fff8f3; border: 1px solid transparent; border-radius: var(--r-sm); box-shadow: none; }
 .app-shell.cool .gamefs .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+
+/* ============================================================================
+   ✨ Memories — its own white, full-bleed space. No glass container, no
+   backdrop-filter (that broke the photo carousel rendering), no photo backdrop.
+   ========================================================================== */
+.mem-bg { position: fixed; inset: 0; z-index: -1; background: #ffffff; }
+.app-shell.mem { padding-left: 0; padding-right: 0; color: var(--c-ink); }
+.app-shell.mem .topbar { padding-left: 18px; padding-right: 18px; }
+.app-shell.mem .card {
+  background: #fff; border: none; box-shadow: none; border-radius: 0; margin: 0; padding: 0 14px;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+
+/* ============================================================================
+   ✨ Professional polish pass
+   ========================================================================== */
+/* no floating hairline dividers between glass cards over the photo bg — let air separate them */
+.app-shell.cool .card + .card { border-top: none; padding-top: 0; }
+/* one consistent glass-card radius (cards were 22/18; rows/controls keep their own) */
+.app-shell.cool .card,
+.app-shell.cool .evhero,
+.app-shell.cool .score-tile,
+.app-shell.cool .wcard { border-radius: 20px; }
+/* dock label legible over any photo region */
+.dock-label { text-shadow: 0 1px 6px rgba(20,33,46,.26); }
+/* crisper, cooler modal grab handle */
+.handle { background: rgba(20,33,46,.16); }
+
+/* Memories header: stack the title above its controls so nothing clips on narrow phones */
+.app-shell.mem .shead { flex-direction: column; align-items: stretch; gap: 13px; }
+.app-shell.mem .shead-actions { justify-content: space-between; }
