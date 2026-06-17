@@ -946,21 +946,24 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
    ✨ Rotating photo-collage backdrop (memories) + legibility scrim.
    ========================================================================== */
 .photobg { position: fixed; inset: 0; z-index: -2; overflow: hidden; background: var(--c-canvas); }
+/* two layers stacked; the incoming one fades in over the outgoing one — a clean
+   crossfade with no flash to the empty canvas. Fewer, larger tiles (2×3). */
 .collage {
   position: absolute; inset: -7%; display: grid;
-  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 8px;
+  grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px;
   filter: blur(3px) saturate(1.12); transform: scale(1.05);
-  animation: collageDrift 46s ease-in-out infinite alternate;
+  opacity: 0; transition: opacity 1.4s ease;
+  animation: collageDrift 50s ease-in-out infinite alternate;
 }
-.ctile { background-size: cover; background-position: center; border-radius: 18px; opacity: 0; animation: tileIn 1.5s var(--ease-out) forwards; }
-@keyframes tileIn { from { opacity: 0; transform: scale(1.05); } to { opacity: 1; transform: none; } }
-@keyframes collageDrift { from { transform: scale(1.05) translate3d(-1.3%, -1.5%, 0); } to { transform: scale(1.13) translate3d(1.3%, 1.5%, 0); } }
+.collage.on { opacity: 1; }
+.ctile { background-size: cover; background-position: center; border-radius: 20px; }
+@keyframes collageDrift { from { transform: scale(1.05) translate3d(-1.3%, -1.5%, 0); } to { transform: scale(1.12) translate3d(1.3%, 1.5%, 0); } }
 /* cool wash so the photos read as soft ambient texture and everything on top stays legible */
 .photoscrim {
   position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(233,239,244,.38) 0%, rgba(223,233,240,.44) 50%, rgba(231,238,243,.58) 100%);
 }
-@media (prefers-reduced-motion: reduce) { .collage { animation: none; } .ctile { animation: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .collage { animation: none; transition: none; } }
 
 /* a hair more legibility for loose editorial text sitting directly on the backdrop */
 .app-shell.cool .brand.script { text-shadow: 0 1px 10px rgba(233,239,244,.9); }

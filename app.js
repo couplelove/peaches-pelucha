@@ -36,10 +36,11 @@ const TAB_META = {
 // Rotating photo-collage backdrop drawn from the couple's own memories. Heavily
 // blurred + cool-scrimmed (in CSS) so the glass panels and all text stay legible
 // on top. Falls back to the plain cool gradient until there are photos.
-const COLLAGE_TILES = 9;
+const COLLAGE_TILES = 6;   // fewer, larger photos
 function PhotoBackdrop({ client }) {
   const [photos, setPhotos] = useState(null);
-  const [offset, setOffset] = useState(0);
+  // two stacked collage layers that CROSSFADE on rotation (no flash to blank).
+  const [view, setView] = useState({ layers: [null, null], front: 0 });
   useEffect(() => {
     let live = true;
     client.from("memories").select("id,path,thumb_path,kind")
@@ -55,16 +56,32 @@ function PhotoBackdrop({ client }) {
     return () => { live = false; };
   }, [client]);
   useEffect(() => {
-    if (!photos || photos.length <= COLLAGE_TILES) return;   // no need to rotate a single screenful
-    const id = setInterval(() => setOffset((o) => (o + COLLAGE_TILES) % photos.length), 9000);
+    if (!photos || !photos.length) return;
+    const screenful = (off) => Array.from({ length: COLLAGE_TILES }, (_, i) => photos[(off + i) % photos.length]);
+    // preload every thumbnail once so a crossfade never reveals a half-loaded tile
+    photos.forEach((u) => { const im = new Image(); im.decoding = "async"; im.src = u; });
+    setView({ layers: [screenful(0), null], front: 0 });
+    if (photos.length <= COLLAGE_TILES) return;   // one screenful — nothing to rotate
+    let off = 0;
+    const id = setInterval(() => {
+      off = (off + COLLAGE_TILES) % photos.length;
+      const next = screenful(off);
+      setView((v) => {
+        const back = v.front ^ 1;
+        const layers = v.layers.slice();
+        layers[back] = next;
+        return { layers, front: back };   // flip: the freshly-filled layer fades in over the old one
+      });
+    }, 9000);
     return () => clearInterval(id);
   }, [photos]);
   if (!photos || !photos.length) return html`<div class="canvas-cool on"></div>`;
-  const tiles = Array.from({ length: COLLAGE_TILES }, (_, i) => photos[(offset + i) % photos.length]);
+  const layer = (tiles, i) => html`<div class=${`collage ${view.front === i ? "on" : ""}`} key=${i}>
+    ${(tiles || []).map((u, j) => html`<div class="ctile" key=${j} style=${`background-image:url(${u})`}></div>`)}
+  </div>`;
   return html`<div class="photobg">
-    <div class="collage" key=${offset}>
-      ${tiles.map((u, i) => html`<div class="ctile" style=${`background-image:url(${u}); animation-delay:${i * 40}ms`}></div>`)}
-    </div>
+    ${layer(view.layers[0], 0)}
+    ${layer(view.layers[1], 1)}
     <div class="photoscrim"></div>
   </div>`;
 }
