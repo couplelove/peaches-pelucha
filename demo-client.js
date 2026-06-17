@@ -85,6 +85,11 @@ function seed() {
     { id: uid(), trip_id: trip.id, lat: 36.9741, lng: -122.0308, title: "Santa Cruz", note: null, seq: 1, visited: false, created_at: nowISO() },
     { id: uid(), trip_id: trip.id, lat: 36.2704, lng: -121.8081, title: "Big Sur", note: "sunset stop", seq: 2, visited: false, created_at: nowISO() },
   ];
+  // one sample AI day-title (matches the geotagged "today" memory) so the Map's
+  // Memories list shows a chapter title, not just the city name
+  db.day_stories = [
+    { id: uid(), day: new Date().toISOString().slice(0, 10), title: "City of First Lights", story: "You two wander bright streets, hand in hand, chasing the good kind of lost.", sig: null, created_at: nowISO(), updated_at: nowISO() },
+  ];
   db.map_pins = [
     { id: uid(), lat: 48.8566, lng: 2.3522, title: "That little café", note: null, list: "Places We Want to Go", emoji: "☕", visited: false, created_by: peaches, created_at: nowISO() },
     { id: uid(), lat: 41.9028, lng: 12.4964, title: "Rome someday", note: "the pasta one", list: "Places We Want to Go", emoji: "🏛️", visited: false, created_by: pelucha, created_at: nowISO() },

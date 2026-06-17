@@ -171,6 +171,13 @@ export function MapCard({ client, me, players, flash }) {
       const g = byDay.get(m.taken_on);
       if (g) g.count++; else byDay.set(m.taken_on, { date: m.taken_on, lat: m.lat, lng: m.lng, place: m.place, count: 1 });
     }
+    // pull each day's AI chapter title so the list reads as a journey, not the
+    // same city name repeated.
+    const days = [...byDay.keys()];
+    if (days.length) {
+      const { data: st } = await client.from("day_stories").select("day,title").in("day", days);
+      (st || []).forEach((s) => { const g = byDay.get(s.day); if (g && s.title) g.title = s.title; });
+    }
     setMemDays([...byDay.values()]);
   }, [client]);
 
@@ -334,10 +341,12 @@ export function MapCard({ client, me, players, flash }) {
     ${mode === "memories" && html`<div class="map-panel">
       ${memDays.length === 0
         ? html`<div class="map-empty">Geotagged photo days show up here automatically.</div>`
-        : html`<div class="map-list">${memDays.map((d) => html`<button class="map-row" key=${d.date} onClick=${() => openFull({ lat: d.lat, lng: d.lng })}>
+        : html`<div class="map-list">${memDays.map((d) => {
+            const sub = [d.title && d.place ? d.place : null, fmtDay(d.date), `${d.count} ${d.count === 1 ? "photo" : "photos"}`].filter(Boolean).join(" · ");
+            return html`<button class="map-row" key=${d.date} onClick=${() => openFull({ lat: d.lat, lng: d.lng })}>
             <span class="mr-emoji">📸</span>
-            <span class="mr-main"><span class="mr-title">${d.place || "A day together"}</span><span class="mr-sub">${fmtDay(d.date)} · ${d.count} ${d.count === 1 ? "photo" : "photos"}</span></span>
-          </button>`)}</div>`}
+            <span class="mr-main"><span class="mr-title">${d.title || d.place || "A day together"}</span><span class="mr-sub">${sub}</span></span>
+          </button>`; })}</div>`}
     </div>`}
 
     ${full && createPortal(html`<div class="mapfull">
