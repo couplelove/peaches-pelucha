@@ -1008,3 +1008,49 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* unseen-memories notification dot on the dock */
 .dock-dot { position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%;
   background: #e5484d; border: 2px solid var(--glass-strong); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+
+/* ============================================================================
+   🧘 Join Me — presence-gated togetherness; breathe-together session.
+   ========================================================================== */
+.jm { text-align: center; }
+.jm .eyebrow { display: block; margin-bottom: 8px; }
+.jm h2 { margin: 2px 0 8px; }
+.jm-lede { color: var(--c-ink-2); font-size: 14.5px; line-height: 1.6; margin: 0 auto 18px; max-width: 34ch; }
+.jm-presets { display: flex; gap: 10px; justify-content: center; margin-bottom: 16px; }
+.jm-preset { border: 1px solid var(--glass-line); background: rgba(255,255,255,.62); border-radius: 16px;
+  padding: 14px 22px; font: inherit; font-weight: 600; font-size: 15px; color: var(--c-ink); cursor: pointer;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 6px 16px -10px rgba(20,33,46,.3); }
+.jm-here { font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--good); text-transform: uppercase; }
+
+/* waiting (solo) */
+.jm-waiting { position: relative; width: 96px; height: 96px; margin: 20px auto 18px; display: grid; place-content: center; }
+.jm-wait-av { font-size: 42px; position: relative; z-index: 1; }
+.jm-wait-pulse { position: absolute; inset: 0; margin: auto; width: 76px; height: 76px; border-radius: 50%;
+  border: 2px solid var(--c-accent); opacity: 0; animation: jmPulse 2.6s ease-out infinite; }
+@keyframes jmPulse { 0% { transform: scale(.7); opacity: .55; } 100% { transform: scale(1.7); opacity: 0; } }
+
+/* active breathing session */
+.jm-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.jm-count { font-family: var(--serif); font-size: 18px; color: var(--c-ink-2); }
+.jm-orbit { position: relative; width: 266px; height: 266px; margin: 16px auto 4px; display: grid; place-content: center; }
+.jm-ring { position: absolute; inset: 0; margin: auto; width: 246px; height: 246px; border-radius: 50%; border: 1.5px dashed rgba(31,140,138,.26); }
+.jm-circle { position: absolute; inset: 0; margin: auto; width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 36%, #79cdc7, var(--c-accent) 72%);
+  box-shadow: 0 22px 56px -12px var(--c-accent), inset 0 2px 12px rgba(255,255,255,.45);
+  animation: jmBreathe 12s ease-in-out infinite; will-change: transform; }
+@keyframes jmBreathe { 0% { transform: scale(.5); } 33.333% { transform: scale(1); } 50% { transform: scale(1); } 100% { transform: scale(.5); } }
+.jm-phase { position: relative; z-index: 1; color: #fff; font-family: var(--serif); font-weight: 500; font-size: 22px;
+  text-shadow: 0 1px 10px rgba(0,0,0,.3); pointer-events: none; }
+.jm-prompt { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--c-ink); line-height: 1.5;
+  margin: 16px auto 10px; max-width: 30ch; min-height: 52px; animation: jmFade 1s var(--ease-out); }
+@keyframes jmFade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.jm-with { font-size: 12px; color: var(--c-ink-3); letter-spacing: .03em; }
+
+/* complete */
+.jm-done { padding: 18px 0 8px; }
+.jm-done-mark { font-size: 46px; }
+.jm-done-title { font-family: var(--serif); font-size: 26px; margin: 6px 0 4px; }
+.jm-done-actions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+.jm-done-actions .btn { min-width: 120px; }
+
+@media (prefers-reduced-motion: reduce) { .jm-wait-pulse, .jm-prompt { animation: none; } }

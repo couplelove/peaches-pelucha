@@ -24,13 +24,14 @@ function lazyTab(loader, name) {
 const MemoriesTab = lazyTab(() => import("./memories.js"), "MemoriesTab");
 const WatchTab = lazyTab(() => import("./watch.js"), "WatchTab");
 const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
+const JoinMe = lazyTab(() => import("./joinme.js"), "JoinMe");
 
 // Tab order drives the gesture-first navigation (swipe = step through this list)
 // and the floating dock. Score stays first — its warm Phase-10 world is home base.
-const TAB_ORDER = ["score", "plans", "memories", "schmoney", "more"];
+const TAB_ORDER = ["score", "plans", "memories", "schmoney", "joinme", "more"];
 const TAB_META = {
-  score: ["🏆", "Score"], plans: ["📅", "Plans"],
-  memories: ["📸", "Memories"], schmoney: ["💸", "Schmoney"], more: ["⚙️", "More"],
+  score: ["🏆", "Score"], plans: ["📅", "Plans"], memories: ["📸", "Memories"],
+  schmoney: ["💸", "Schmoney"], joinme: ["🧘", "Join Me"], more: ["⚙️", "More"],
 };
 
 // Rotating photo-collage backdrop drawn from the couple's own memories. Heavily
@@ -497,6 +498,7 @@ function App({ client, onResetCreds }) {
             <${BetsTab} ...${ctx} />
             <${ShopTab} ...${ctx} />
           <//>`}
+          ${tab === "joinme" && html`<${JoinMe} client=${client} me=${me} players=${players} flash=${flash} />`}
           ${tab === "more" && html`<${MoreTab} ...${ctx} onResetCreds=${onResetCreds} />`}
         <//>
       </div>
