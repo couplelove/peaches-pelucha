@@ -579,7 +579,7 @@ export function MemoriesTab({ client, me, flash }) {
               : html`<img src=${thumbUrl(it)} loading="lazy" decoding="async" alt=""
                   onLoad=${(e) => e.target.classList.add("ld")}
                   ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
-            ${it.kind === "video" && html`<span class="memplay">▶</span>`}
+            ${it.kind === "video" && html`<span class="memplay">🎥</span>`}
             ${sel && html`<span class="selbadge">${sel.has(it.id) ? "✓" : ""}</span>`}
           </button>`)}
         </div>
@@ -602,7 +602,7 @@ export function MemoriesTab({ client, me, flash }) {
             ${sheet.kind === "video" && !sheet.thumb_path
               ? html`<video src=${pubUrl(sheet.path) + "#t=0.1"} preload="metadata" muted playsinline></video>`
               : html`<img src=${thumbUrl(sheet)} alt="" />`}
-            ${sheet.kind === "video" && html`<span class="memplay" style="font-size:30px">▶</span>`}
+            ${sheet.kind === "video" && html`<span class="memplay">🎥</span>`}
           </span>
           <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}${sheet.place ? " · 📍 " + sheet.place : ""}</div>
         </div>
@@ -738,8 +738,8 @@ function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions, origin }) {
       ? (current
           ? html`<video src=${pubUrl(item.path)} poster=${item.thumb_path ? pubUrl(item.thumb_path) : undefined} controls playsinline autoplay muted=${false}></video>`
           : item.thumb_path
-            ? html`<img src=${pubUrl(item.thumb_path)} alt="" /><span class="lb-play">▶</span>`
-            : html`<video src=${pubUrl(item.path) + "#t=0.1"} preload="metadata" muted playsinline></video><span class="lb-play">▶</span>`)
+            ? html`<img src=${pubUrl(item.thumb_path)} alt="" /><span class="lb-play">🎥</span>`
+            : html`<video src=${pubUrl(item.path) + "#t=0.1"} preload="metadata" muted playsinline></video><span class="lb-play">🎥</span>`)
       : html`<span class="lb-frame">
           ${item.blur && html`<span class="lb-blur" style=${`background-image:url(${item.blur})`}></span>`}
           <img src=${current ? pubUrl(item.path) : (item.thumb_path ? pubUrl(item.thumb_path) : pubUrl(item.path))} alt=""

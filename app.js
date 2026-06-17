@@ -27,9 +27,9 @@ const PlansTab = lazyTab(() => import("./events.js"), "PlansTab");
 
 // Tab order drives the gesture-first navigation (swipe = step through this list)
 // and the floating dock. Score stays first — its warm Phase-10 world is home base.
-const TAB_ORDER = ["score", "watch", "plans", "memories", "schmoney", "more"];
+const TAB_ORDER = ["score", "plans", "memories", "schmoney", "more"];
 const TAB_META = {
-  score: ["🏆", "Score"], watch: ["📺", "Watch"], plans: ["📅", "Plans"],
+  score: ["🏆", "Score"], plans: ["📅", "Plans"],
   memories: ["📸", "Memories"], schmoney: ["💸", "Schmoney"], more: ["⚙️", "More"],
 };
 
@@ -196,6 +196,7 @@ function App({ client, onResetCreds }) {
 
   const [meId, setMeId] = useState(localStorage.getItem(LS.me) || "");
   const [tab, setTab] = useState("score");
+  const [memUnseen, setMemUnseen] = useState(false);   // 📸 dot when partner added photos you haven't seen
   const [modal, setModal] = useState(null);       // {type, ...props}
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
@@ -217,7 +218,7 @@ function App({ client, onResetCreds }) {
   const onSwipeDown = useCallback((e) => {
     // never hijack the Phase 10 game (its block is marked [data-noswipe]), the
     // full-screen board, a modal, or a text field.
-    if (document.querySelector(".gamefs, .modal-bg, .lightbox")) return;   // board / modal / photo lightbox own their gestures
+    if (document.querySelector(".gamefs, .modal-bg, .lightbox, .viewer")) return;   // board / modal / photo lightbox / video viewer own their gestures
     if (e.target.closest("input, textarea, [data-noswipe]")) return;
     // bail if the touch starts inside a horizontal scroller (carousels etc.)
     let n = e.target;
@@ -363,6 +364,30 @@ function App({ client, onResetCreds }) {
   // Keep push alive: iOS quietly expires web-push subscriptions, so re-verify
   // (and silently re-subscribe) on every app open once a player is chosen.
   useEffect(() => { if (me) ensurePush(client, me.id); }, [client, me?.id]);
+
+  // 📸 Unseen-memories dot: light the Memories tab when the OTHER player has
+  // added photos/videos since you last opened the gallery; clears when you do.
+  const checkMem = useCallback(async () => {
+    if (!meId) return;
+    const { data } = await client.from("memories").select("created_at,uploaded_by")
+      .order("created_at", { ascending: false }).limit(25);
+    const seen = localStorage.getItem("pp.memSeen." + meId) || "";
+    const newestOther = (data || []).find((m) => m.uploaded_by && m.uploaded_by !== meId);
+    setMemUnseen(!!(newestOther && newestOther.created_at > seen));
+  }, [client, meId]);
+  useEffect(() => { checkMem(); }, [checkMem]);
+  useEffect(() => {
+    let ch = null;
+    try {
+      ch = client.channel("pp-mem-" + Math.random().toString(36).slice(2, 6))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "memories" }, checkMem).subscribe();
+    } catch {}
+    return () => { try { client.removeChannel(ch); } catch {} };
+  }, [client, checkMem]);
+  // opening the gallery = seeing what's new
+  useEffect(() => {
+    if (tab === "memories" && meId) { localStorage.setItem("pp.memSeen." + meId, new Date().toISOString()); setMemUnseen(false); }
+  }, [tab, meId]);
   const pickMe = (id) => { localStorage.setItem(LS.me, id); setMeId(id); };
 
   // Self-updating app: the deployed sw.js carries the version beacon (pp-vN).
@@ -448,7 +473,6 @@ function App({ client, onResetCreds }) {
         onPointerUp=${onSwipeUp} onPointerCancel=${onSwipeUp}>
         <${ErrorBoundary} key=${tab}>
           ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
-          ${tab === "watch" && html`<${WatchTab} client=${client} me=${me} players=${players} flash=${flash} />`}
           ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
           ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
           ${tab === "schmoney" && html`<${Fragment}>
@@ -466,6 +490,7 @@ function App({ client, onResetCreds }) {
         ${TAB_ORDER.map((k) => html`
           <button class=${tab === k ? "active" : ""} aria-label=${TAB_META[k][1]} onClick=${() => goTab(k)}>
             ${TAB_META[k][0]}
+            ${k === "memories" && memUnseen ? html`<span class="dock-dot"></span>` : ""}
           </button>`)}
       </nav>
 
@@ -592,6 +617,7 @@ function ScoreTab(ctx) {
     <${LifetimeCard} ...${ctx} />
     <${HoroscopeCard} players=${ctx.players} />
     <${ScriptureCard} />
+    <${WatchTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
     <${DateRoulette} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash}
       onPlan=${(pick) => { window.__ppPlanPrefill = pick; ctx.setTab("plans"); }} />
   <//>`;

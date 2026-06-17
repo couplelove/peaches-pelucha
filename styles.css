@@ -415,8 +415,11 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .memblur { position: absolute; inset: 0; z-index: 0; background-size: cover; background-position: center;
   filter: blur(10px) saturate(1.15); transform: scale(1.1); }
 .memcell:active { transform: scale(.95); box-shadow: 0 1px 1px rgba(43,37,33,.12); }
-.memplay { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; color: #fff;
-  font-size: 22px; text-shadow: 0 1px 8px rgba(0,0,0,.55); pointer-events: none; }
+/* video indicator: a small frosted corner chip (not a big centered play triangle) */
+.memplay { position: absolute; bottom: 6px; left: 6px; z-index: 2; width: 24px; height: 24px;
+  border-radius: 8px; background: rgba(20,33,46,.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: grid; place-content: center; font-size: 12px; line-height: 1; pointer-events: none;
+  box-shadow: 0 1px 5px rgba(0,0,0,.25); }
 
 /* select mode: drag across cells to sweep-select; pan-y keeps scrolling alive */
 .memday { display: flex; align-items: center; justify-content: space-between; }
@@ -475,8 +478,10 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .lb-frame img.ld { opacity: 1; }
 .lb-blur { position: absolute; inset: 0; z-index: 0; background-size: contain; background-position: center;
   background-repeat: no-repeat; filter: blur(22px) saturate(1.2); transform: scale(.96); border-radius: 12px; }
-.lb-play { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; color: #fff;
-  font-size: 40px; text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; }
+.lb-play { position: absolute; bottom: 16px; left: 16px; z-index: 2; width: 36px; height: 36px;
+  border-radius: 11px; background: rgba(20,33,46,.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: grid; place-content: center; font-size: 17px; line-height: 1; pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 .lb-close { position: absolute; top: calc(var(--safe-top) + 10px); right: 14px; z-index: 2; width: 38px; height: 38px;
   border-radius: 50%; border: none; background: rgba(255,255,255,.14); color: #fff; font-size: 17px; cursor: pointer;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: transform .15s ease, background .15s ease; }
@@ -996,3 +1001,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* Memories header: stack the title above its controls so nothing clips on narrow phones */
 .app-shell.mem .shead { flex-direction: column; align-items: stretch; gap: 13px; }
 .app-shell.mem .shead-actions { justify-content: space-between; }
+
+/* unseen-memories notification dot on the dock */
+.dock-dot { position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%;
+  background: #e5484d; border: 2px solid var(--glass-strong); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
