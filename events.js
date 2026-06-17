@@ -87,11 +87,7 @@ function summarize(upcoming) {
       : `And on the horizon: ${beyond.length} more plans, stretching all the way to ${far.title} in ${month}.`);
   }
 
-  const title =
-    first.starts_on === today ? "Tonight’s the night" :
-    dayLabel(first.starts_on) === "Tomorrow" ? "Tomorrow, and beyond" :
-    upcoming.length >= 5 ? "So much to look forward to" : "The weeks ahead";
-  return { title, body: s.join(" ") };
+  return { body: s.join(" ") };
 }
 
 /* ✅ couple to-dos & reminders — a row with a date is a reminder (due chip,
@@ -386,7 +382,6 @@ export function PlansTab({ client, me, players, flash }) {
 
       ${view === "home" && events !== null && html`
         <div class="deck">
-          <div class="deck-title">${deck.title}</div>
           <p class="deck-body">${deck.body}</p>
         </div>
         ${featured.length > 0 && html`<div class="fcar">${featured.map(FCard)}</div>`}
