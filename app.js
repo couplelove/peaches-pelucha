@@ -33,6 +33,42 @@ const TAB_META = {
   memories: ["📸", "Memories"], schmoney: ["💸", "Schmoney"], more: ["⚙️", "More"],
 };
 
+// Rotating photo-collage backdrop drawn from the couple's own memories. Heavily
+// blurred + cool-scrimmed (in CSS) so the glass panels and all text stay legible
+// on top. Falls back to the plain cool gradient until there are photos.
+const COLLAGE_TILES = 9;
+function PhotoBackdrop({ client }) {
+  const [photos, setPhotos] = useState(null);
+  const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    let live = true;
+    client.from("memories").select("id,path,thumb_path,kind")
+      .eq("kind", "photo").order("created_at", { ascending: false }).limit(30)
+      .then(({ data }) => {
+        if (!live) return;
+        const urls = (data || []).map((d) => {
+          try { return client.storage.from("memories").getPublicUrl(d.thumb_path || d.path).data.publicUrl; }
+          catch { return null; }
+        }).filter(Boolean);
+        setPhotos(urls);
+      });
+    return () => { live = false; };
+  }, [client]);
+  useEffect(() => {
+    if (!photos || photos.length <= COLLAGE_TILES) return;   // no need to rotate a single screenful
+    const id = setInterval(() => setOffset((o) => (o + COLLAGE_TILES) % photos.length), 9000);
+    return () => clearInterval(id);
+  }, [photos]);
+  if (!photos || !photos.length) return html`<div class="canvas-cool on"></div>`;
+  const tiles = Array.from({ length: COLLAGE_TILES }, (_, i) => photos[(offset + i) % photos.length]);
+  return html`<div class="photobg">
+    <div class="collage" key=${offset}>
+      ${tiles.map((u, i) => html`<div class="ctile" style=${`background-image:url(${u}); animation-delay:${i * 40}ms`}></div>`)}
+    </div>
+    <div class="photoscrim"></div>
+  </div>`;
+}
+
 // One tab crashing shouldn't blank the whole app. Keyed by tab so it resets on
 // navigation (a crashed section recovers when you leave and come back).
 class ErrorBoundary extends Component {
@@ -179,10 +215,9 @@ function App({ client, onResetCreds }) {
   const swipeRef = useRef(null);
   const dragRef = useRef(null);
   const onSwipeDown = useCallback((e) => {
-    // Score is the warm Phase-10 home — never hijack its draggable cards. Swipe
-    // navigation lives on the cool tabs only (.app-shell gets .cool off Score).
-    if (!document.querySelector(".app-shell.cool")) return;
-    if (document.querySelector(".gamefs, .modal-bg")) return;       // never over the board / a modal
+    // never hijack the Phase 10 game (its block is marked [data-noswipe]), the
+    // full-screen board, a modal, or a text field.
+    if (document.querySelector(".gamefs, .modal-bg")) return;
     if (e.target.closest("input, textarea, [data-noswipe]")) return;
     // bail if the touch starts inside a horizontal scroller (carousels etc.)
     let n = e.target;
@@ -393,11 +428,9 @@ function App({ client, onResetCreds }) {
 
   const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
 
-  const cool = tab !== "score";   // Score = warm Phase-10 home; the rest = cool-glass world
-
   return html`
-    <div class=${`canvas-cool ${cool ? "on" : ""}`}></div>
-    <div class=${`app-shell ${cool ? "cool" : ""}`}>
+    <${PhotoBackdrop} client=${client} />
+    <div class="app-shell cool">
       <div class="topbar">
         <div class="brand script">peaches & pelucha</div>
         <button class="whoami" onClick=${() => setModal({ type: "switch" })}>
@@ -553,7 +586,7 @@ function ScoreTab(ctx) {
   // The home page: Phase 10 at the top, then lifetime, horoscopes, scripture,
   // and the date roulette.
   return html`<${Fragment}>
-    <${PlayTab} ...${ctx} />
+    <div data-noswipe><${PlayTab} ...${ctx} /></div>
     <${LifetimeCard} ...${ctx} />
     <${HoroscopeCard} players=${ctx.players} />
     <${ScriptureCard} />

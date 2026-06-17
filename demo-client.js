@@ -35,7 +35,18 @@ function seed() {
     social_links: [],
     watch_state: [],
     trash_talk: [],
-    memories: [],
+    // Demo memories (placeholder photos) so the gallery + the photo-collage
+    // backdrop have something to show. Real app uses Supabase Storage.
+    memories: [
+      "1015", "1016", "1018", "1024", "1025", "1039", "1043", "1059", "1068", "1074", "1080", "1084",
+    ].map((id, i) => ({
+      id: uid(), kind: "photo",
+      path: `https://picsum.photos/id/${id}/600/800`,
+      thumb_path: `https://picsum.photos/id/${id}/300/400`,
+      blur: null, place: null, lat: null, lng: null,
+      taken_on: new Date(Date.now() - i * 3 * 864e5).toISOString().slice(0, 10),
+      uploaded_by: i % 2 ? pelucha : peaches, created_at: new Date(Date.now() - i * 3 * 864e5).toISOString(),
+    })),
     todos: [],
     push_subscriptions: [],
     date_ideas: [
@@ -163,7 +174,7 @@ export function createDemoClient() {
     channel() { return { on() { return this; }, subscribe() { return this; } }; },
     removeChannel() {},
     functions: { invoke: async () => ({ data: null, error: null }) }, // push no-op in demo
-    storage: { from: () => ({ upload: async () => ({ error: { message: "demo mode — no storage" } }), remove: async () => ({ data: null, error: null }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
+    storage: { from: () => ({ upload: async () => ({ error: { message: "demo mode — no storage" } }), remove: async () => ({ data: null, error: null }), getPublicUrl: (p) => ({ data: { publicUrl: typeof p === "string" && /^https?:/.test(p) ? p : "" } }) }) },
     _db: db,
   };
   // Demo-only handle so the app's in-memory data can be inspected/crafted from
