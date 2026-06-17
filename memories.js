@@ -278,6 +278,14 @@ export function MemoriesTab({ client, me, flash }) {
       const add = rows.filter((r) => !seen.has(r.id));
       return [...(cur || []), ...add];
     });
+    // A day-grouped feed can collapse a 60-row page into just a few tiles,
+    // leaving the sentinel still on-screen. IntersectionObserver won't re-fire
+    // while it stays intersecting, so keep pulling pages until the feed grows
+    // tall enough to push the sentinel below the fold (or we reach the end).
+    if (!m.done) requestAnimationFrame(() => {
+      const el = sentinel.current;
+      if (el && el.getBoundingClientRect().top < window.innerHeight + 800) loadMore();
+    });
   }, [pageQuery]);
 
   // re-pull page 0 and upsert — catches anything realtime missed while the phone
@@ -332,7 +340,7 @@ export function MemoriesTab({ client, me, flash }) {
     const io = new IntersectionObserver((es) => { if (es[0].isIntersecting) loadMore(); }, { rootMargin: "800px" });
     io.observe(el);
     return () => io.disconnect();
-  }, [loadMore, view, items === null]);
+  }, [loadMore, view, items === null, dayOpen]);
 
   // Concurrent upload queue (2 lanes) with per-file status — photos shrink
   // on-device first; videos go as-is. Two lanes (not three) keeps fewer large
