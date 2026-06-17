@@ -105,7 +105,7 @@ export function HoroscopeCard({ players }) {
     <p class="horo-text">${r.mood} — ${r.focus}. <span class="horo-closer">${r.closer}</span></p>
   </div>`;
   return html`<div class="card">
-    <div class="hsec-head"><span class="hsec-title">Cancer, today <span class="muted-glyph">♋</span></span><span class="hsec-rule"></span></div>
+    <h2>Cancer, today <span class="muted-glyph">♋</span></h2>
     <div class="horo">
       ${Reading(pelucha, "July 10", his)}
       ${Reading(peaches, "July 11", hers)}

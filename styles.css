@@ -22,6 +22,11 @@
   --serif: "Fraunces", "Hoefler Text", Georgia, "Times New Roman", serif;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
+  /* spacing scale — one rhythm for every section. --sp-4 = card padding,
+     --gap = vertical space between stacked cards, --sp-3 = title→body gap. */
+  --sp-1: 6px; --sp-2: 10px; --sp-3: 14px; --sp-4: 18px; --sp-5: 24px;
+  --gap: 16px;
+
   --r: 14px; --r-sm: 10px; --r-pill: 999px;
   --shadow: 0 1px 1px rgba(43,37,33,.03), 0 14px 34px -16px rgba(43,37,33,.12);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -79,12 +84,12 @@ body {
 .muted { color: var(--ink-2); }
 .tiny { font-size: 12px; letter-spacing: 0; }
 .center { text-align: center; }
-.mt { margin-top: 14px; }
+.mt { margin-top: var(--sp-3); }
 hr.soft { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
 
 /* standardized section header: serif title left; toggles then ONE primary
    action right — same grammar on every screen */
-.shead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; min-height: 38px; }
+.shead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 var(--sp-3); min-height: 38px; }
 .shead h2 { margin: 0; }
 .shead-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 
@@ -231,13 +236,13 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .gamehero-btn { margin-top: 14px; min-width: 170px; }
 
 .muted-glyph { color: var(--ink-3); font-size: 14px; }
-.horo { display: grid; gap: 14px; margin-top: 12px; }
+.horo { display: grid; gap: 14px; margin-top: 0; }
 .horo-half .eyebrow { margin-bottom: 4px; }
 .horo-text { font-family: var(--serif); font-size: 15.5px; line-height: 1.55; color: var(--ink); margin: 0; font-style: italic; }
 .horo-closer { color: var(--accent); font-style: normal; font-size: 13.5px; }
 
-.verse { margin: 4px 0 0; padding: 0; text-align: center; }
-.verse-text { font-family: var(--serif); font-size: 18px; line-height: 1.5; font-style: italic; color: var(--ink); margin: 0 0 8px; }
+.verse { margin: 2px 0; padding: 0; text-align: center; }
+.verse-text { font-family: var(--serif); font-size: 22px; line-height: 1.5; font-style: italic; color: var(--ink); margin: 0 0 12px; }
 
 /* ---- magazine home ---- */
 .lbword { font-family: "Caveat", cursive; font-weight: 500; font-size: 26px; color: var(--ink-2); line-height: 1; }
@@ -864,7 +869,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .app-shell.cool .whoami .av { background: rgba(255,255,255,.6); }
 
 /* type hierarchy — bigger, more confident, more air */
-.app-shell.cool h2 { font-size: 25px; letter-spacing: -.022em; color: var(--c-ink); margin: 4px 0 14px; }
+.app-shell.cool h2 { font-size: 25px; letter-spacing: -.022em; color: var(--c-ink); margin: 0 0 var(--sp-3); }
 .app-shell.cool .eyebrow, .app-shell.cool .weyebrow {
   color: var(--c-accent); letter-spacing: .12em; font-weight: 700; text-transform: uppercase; font-size: 11px;
 }
@@ -876,7 +881,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   background: var(--glass); border: 1px solid var(--glass-line); border-radius: 22px;
   box-shadow: var(--glass-shadow); color: var(--c-ink);
   -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
-  padding: 18px; margin-bottom: 16px;
+  padding: var(--sp-4); margin-bottom: var(--gap);
 }
 
 /* buttons → tactile, cool accent */
