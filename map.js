@@ -68,8 +68,9 @@ const stopIcon = (L, n, visited) => L.divIcon({ className: "mkr", html: `<div cl
 // A self-contained Leaflet map. interactive=false → a frozen preview (can't pan,
 // so it never steals the swipe-nav gesture). fitMode "always" refits on every
 // data change (preview); "once" fits a single time on open (full-screen).
-function LeafletMap({ interactive, fitMode, initialCenter, focus, mode, pins, memDays, stops, route, listFilter, onMapClick, onPinClick, onStopClick }) {
+function LeafletMap({ interactive, fitMode, initialCenter, focus, pending, mode, pins, memDays, stops, route, listFilter, onMapClick, onPinClick, onStopClick }) {
   const elRef = useRef(null), mapRef = useRef(null), layerRef = useRef(null), LRef = useRef(null), clickRef = useRef(() => {});
+  const pendRef = useRef(null), pendKey = useRef("");
   const [ready, setReady] = useState(false);
   const fitSig = useRef("");
 
@@ -95,12 +96,35 @@ function LeafletMap({ interactive, fitMode, initialCenter, focus, mode, pins, me
 
   useEffect(() => { clickRef.current = (e) => { if (onMapClick) onMapClick(e.latlng); }; }, [onMapClick]);
 
-  // runtime fly-to (search result picked) — after mount, so it won't fight the fit
+  // runtime fly-to (a list row tapped) — after mount, so it won't fight the fit
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map || !focus) return;
     try { map.flyTo([focus.lat, focus.lng], Math.max(map.getZoom(), 13), { duration: .6 }); } catch {}
   }, [focus, ready]);
+
+  // a PROVISIONAL marker for a pin/stop being confirmed — so you see exactly
+  // where it'll land. Recenter only when the location changes (not while you
+  // edit the title/emoji), and lift it above the bottom sheet so it stays visible.
+  useEffect(() => {
+    const map = mapRef.current, L = LRef.current;
+    if (!ready || !map || !L) return;
+    if (pendRef.current) { try { map.removeLayer(pendRef.current); } catch {} pendRef.current = null; }
+    if (!pending) { pendKey.current = ""; return; }
+    const icon = L.divIcon({ className: "mkr", html: `<div class="mkr-pending">${pending.emoji || "📍"}</div>`, iconSize: [42, 50], iconAnchor: [21, 48] });
+    pendRef.current = L.marker([pending.lat, pending.lng], { icon, zIndexOffset: 1000, interactive: false }).addTo(map);
+    const key = pending.lat + "," + pending.lng;
+    if (key !== pendKey.current) {
+      pendKey.current = key;
+      // center ~150px BELOW the marker so it sits in the upper map, clear of the
+      // bottom confirm sheet (project→shift→unproject = deterministic offset).
+      try {
+        const z = Math.max(map.getZoom(), 14);
+        const c = map.unproject(map.project([pending.lat, pending.lng], z).add([0, 150]), z);
+        map.setView(c, z, { animate: true });
+      } catch {}
+    }
+  }, [pending && pending.lat, pending && pending.lng, pending && pending.emoji, ready]);
 
   useEffect(() => {
     const L = LRef.current, map = mapRef.current, lg = layerRef.current;
@@ -264,12 +288,13 @@ export function MapCard({ client, me, players, flash }) {
     return () => { live = false; clearTimeout(t); };
   }, [query, full]);
 
-  // picking a search result: fly there, and if adding, open the sheet pre-filled
+  // picking a search result ALWAYS drops a provisional pin to confirm/rename
+  // (searching means you want to save it). Memories / no-trip → just fly.
   const onSearchPick = (r) => {
-    setQuery(""); setResults([]);
-    setFocus({ lat: r.lat, lng: r.lng, nonce: Date.now() });
-    if (adding && mode === "places") { setPinSheet({ lat: r.lat, lng: r.lng, title: r.name, note: "", list: listFilter || DEFAULT_LIST, emoji: "📍", visited: false }); setAdding(false); }
-    else if (adding && mode === "trips" && selTrip) { setStopSheet({ trip_id: selTrip, lat: r.lat, lng: r.lng, title: r.name, note: "", seq: stops.length, visited: false }); setAdding(false); }
+    setQuery(""); setResults([]); setAdding(false);
+    if (mode === "places") setPinSheet({ lat: r.lat, lng: r.lng, title: r.name, note: "", list: listFilter || DEFAULT_LIST, emoji: "📍", visited: false });
+    else if (mode === "trips" && selTrip) setStopSheet({ trip_id: selTrip, lat: r.lat, lng: r.lng, title: r.name, note: "", seq: stops.length, visited: false });
+    else setFocus({ lat: r.lat, lng: r.lng, nonce: Date.now() });
   };
   const lists = useMemo(() => { const s = new Set([DEFAULT_LIST]); pins.forEach((p) => s.add(p.list)); return [...s]; }, [pins]);
   const visiblePins = pins.filter((p) => !listFilter || p.list === listFilter);
@@ -279,6 +304,9 @@ export function MapCard({ client, me, players, flash }) {
 
   // shared map props (the same data drives both the preview and the full map)
   const mapData = { mode, pins, memDays, stops, route, listFilter };
+  // a NEW pin/stop awaiting confirmation → show a provisional marker on the map
+  const pending = (pinSheet && !pinSheet.id) ? { lat: pinSheet.lat, lng: pinSheet.lng, emoji: pinSheet.emoji || "📍" }
+    : (stopSheet && !stopSheet.id) ? { lat: stopSheet.lat, lng: stopSheet.lng, emoji: "📌" } : null;
 
   // tapping a row: in full-screen → fly there; on the card → open full-screen there
   const rowGo = (inFull, lat, lng) => inFull ? setFocus({ lat, lng, nonce: Date.now() }) : openFull({ lat, lng });
@@ -382,16 +410,18 @@ export function MapCard({ client, me, players, flash }) {
         </div>`}
       </div>`}
       <div class=${`mapfull-map ${adding ? "adding" : ""}`}>
-        <${LeafletMap} interactive=${true} fitMode="once" initialCenter=${fullCenter} focus=${focus} ...${mapData}
+        <${LeafletMap} interactive=${true} fitMode="once" initialCenter=${fullCenter} focus=${focus} pending=${pending} ...${mapData}
           onMapClick=${onMapTap} onPinClick=${(p) => setPinSheet({ ...p })} onStopClick=${(s) => setStopSheet({ ...s })} />
         ${adding && html`<div class="map-hint">Search above, or tap the map</div>`}
       </div>
       <div class="mapfull-panel">${panel(true)}</div>
     </div>`, document.body)}
 
-    ${pinSheet && html`<${PinSheet} f=${pinSheet} setF=${setPinSheet} lists=${lists} onSave=${savePin} onDelete=${deletePin} />`}
-    ${stopSheet && html`<${StopSheet} f=${stopSheet} setF=${setStopSheet} onSave=${saveStop} onDelete=${deleteStop} />`}
-    ${tripSheet && html`<div class="modal-bg asheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setTripSheet(null); }}>
+    <!-- sheets portal to <body> so they sit ABOVE the full-screen map (z46) and
+         aren't clipped/trapped by the glass card's backdrop-filter -->
+    ${pinSheet && createPortal(html`<${PinSheet} f=${pinSheet} setF=${setPinSheet} lists=${lists} onSave=${savePin} onDelete=${deletePin} />`, document.body)}
+    ${stopSheet && createPortal(html`<${StopSheet} f=${stopSheet} setF=${setStopSheet} onSave=${saveStop} onDelete=${deleteStop} />`, document.body)}
+    ${tripSheet && createPortal(html`<div class="modal-bg asheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setTripSheet(null); }}>
       <div class="modal">
         <div class="handle"></div>
         <div class="eyebrow" style="margin-bottom:10px">🚐 new road trip</div>
@@ -399,7 +429,7 @@ export function MapCard({ client, me, players, flash }) {
         <button class="btn block mt" onClick=${createTrip}>Start trip</button>
         <button class="linkbtn block mt" style="width:100%" onClick=${() => setTripSheet(null)}>Cancel</button>
       </div>
-    </div>`}
+    </div>`, document.body)}
   </div>`;
 }
 
