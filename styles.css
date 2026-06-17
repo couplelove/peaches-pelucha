@@ -221,7 +221,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .evrow .btn.sm { white-space: nowrap; }
 
 /* ---- home screen ---- */
-.lifeline { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 2px 0 18px; border-bottom: 1px solid var(--line-2); }
+.lifeline { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 2px 0 18px; }
 .lifestat { font-size: 14px; color: var(--ink-2); }
 .lifestat b { font-family: var(--serif); font-weight: 500; font-size: 17px; color: var(--ink); }
 
@@ -1054,3 +1054,13 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .jm-done-actions .btn { min-width: 120px; }
 
 @media (prefers-reduced-motion: reduce) { .jm-wait-pulse, .jm-prompt { animation: none; } }
+
+/* lifetime wins: a legible glass strip tucked right under the game card (was
+   loose text floating illegibly on the photo backdrop, with a hanging divider) */
+.app-shell.cool .lifeline {
+  background: var(--glass); border: 1px solid var(--glass-line); border-radius: 20px;
+  box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+  padding: 11px 18px; margin: -10px 0 16px;
+}
+.app-shell.cool .lifestat { color: var(--c-ink-2); }
+.app-shell.cool .lifestat b { color: var(--c-ink); }
