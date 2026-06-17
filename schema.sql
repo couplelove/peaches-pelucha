@@ -373,3 +373,17 @@ create index if not exists games_status             on games (status, created_at
 -- and uno_table were dropped in migration 021; poker_table in migration 022.
 alter table matches add column if not exists room text;
 create index if not exists matches_room on matches (room, status);
+
+-- day_stories (023): cached AI travel-journal narratives, keyed by day
+create table if not exists day_stories (
+  id         uuid primary key default gen_random_uuid(),
+  day        date not null unique,
+  story      text not null,
+  sig        text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table day_stories enable row level security;
+drop policy if exists anon_all on day_stories;
+create policy anon_all on day_stories for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table day_stories; exception when duplicate_object then null; end $$;

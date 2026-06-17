@@ -203,6 +203,13 @@ const memCmp = (a, b) =>
   a.taken_on < b.taken_on ? 1 : a.taken_on > b.taken_on ? -1
   : a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0;
 
+// shown under a day until its AI story is woven (placeholder, never empty)
+const fallbackStory = (g) => {
+  const place = (g.items.find((i) => i.place) || {}).place;
+  const n = g.items.length, moments = n === 1 ? "moment" : "moments";
+  return place ? `${place} — ${n} ${moments} from the day.` : `${n} ${moments} you kept from this day.`;
+};
+
 export function MemoriesTab({ client, me, flash }) {
   const [items, setItems] = useState(null);          // null = loading; else loaded window (paged)
   const [view, setView] = useState("gallery");       // 'gallery' | 'game'
@@ -213,6 +220,8 @@ export function MemoriesTab({ client, me, flash }) {
   // pulled via range(), whether the tail is reached, and an in-flight guard.
   const more = useRef({ offset: 0, done: false, loading: false });
   const sentinel = useRef(null);                     // IntersectionObserver target
+  const [stories, setStories] = useState({});        // day -> AI story text
+  const storyTried = useRef(new Set());              // days we've already asked to generate this session
 
   const pubUrl = useCallback((path) => {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
@@ -536,6 +545,42 @@ export function MemoriesTab({ client, me, flash }) {
     return g;
   }, [items]);
 
+  // ---- AI day-stories: load cached ones, then weave the newest few that are
+  // missing (Claude vision via the `day-story` edge function). Bounded per
+  // session so a lifetime of days doesn't fan out into a flood of calls.
+  useEffect(() => {
+    const days = groups.map((g) => g.date).filter(Boolean);
+    if (!days.length) return;
+    let live = true;
+    client.from("day_stories").select("day,story").in("day", days).then(({ data }) => {
+      if (!live || !data) return;
+      const got = {}; data.forEach((r) => { got[r.day] = r.story; });
+      setStories((s) => ({ ...got, ...s }));
+      // generate for the newest groups still without a story (cap 6/session)
+      let budget = 6;
+      for (const g of groups) {
+        if (budget <= 0) break;
+        if (!g.date || got[g.date] || stories[g.date] || storyTried.current.has(g.date)) continue;
+        budget--; storyTried.current.add(g.date);
+        weaveStory(g);
+      }
+    });
+    return () => { live = false; };
+  }, [groups, client]);
+
+  const weaveStory = useCallback(async (g) => {
+    const images = g.items.filter((it) => it.kind === "photo").map((it) => pubUrl(it.thumb_path || it.path)).filter(Boolean).slice(0, 6);
+    if (!images.length) return;
+    const place = (g.items.find((i) => i.place) || {}).place || null;
+    const sig = g.items.length + ":" + g.items[0].id;
+    try {
+      const { data } = await client.functions.invoke("day-story", {
+        body: { day: g.date, images, context: { date: dayHead(g.date), place, count: g.items.length, sig } },
+      });
+      if (data && data.story) setStories((s) => ({ ...s, [g.date]: data.story }));
+    } catch { /* fall back to the metadata line */ }
+  }, [client, pubUrl]);
+
   const flat = items || [];
 
   return html`<div>
@@ -562,10 +607,11 @@ export function MemoriesTab({ client, me, flash }) {
       ${items === null && html`<div class="memskel">${[...Array(9)].map((_, i) => html`<div class="memskel-cell" key=${i}></div>`)}</div>`}
       ${items !== null && items.length === 0 && html`<div class="empty"><span class="big">📸</span>No memories yet — add your first.</div>`}
 
-      ${view === "gallery" && groups.map((g) => html`<div key=${g.date}>
+      ${view === "gallery" && groups.map((g) => html`<div class="daycard" key=${g.date}>
         <div class="memday">${dayHead(g.date)}
           ${sel && html`<button class=${`dayall ${g.items.every((i) => sel.has(i.id)) ? "on" : ""}`} onClick=${dayToggle(g)}>✓</button>`}
         </div>
+        ${!sel && html`<p class=${`dc-story ${stories[g.date] ? "" : "dim"}`}>${stories[g.date] || fallbackStory(g)}</p>`}
         <div class="memgrid">
           ${g.items.map((it) => html`<button class=${`memcell ${sel ? "selble" : ""} ${sel && sel.has(it.id) ? "selon" : ""}`} key=${it.id} data-id=${it.id}
             onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}

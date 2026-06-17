@@ -1064,3 +1064,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 }
 .app-shell.cool .lifestat { color: var(--c-ink-2); }
 .app-shell.cool .lifestat b { color: var(--c-ink); }
+
+/* ---- 📸 Memories Day Cards (travel-journal): each day = a page with a story ---- */
+.daycard { margin: 0 0 28px; }
+.dc-story { font-family: var(--serif); font-style: italic; font-size: 16px; line-height: 1.55;
+  color: var(--ink); margin: 2px 0 13px; max-width: 62ch; }
+.dc-story.dim { font-style: normal; font-size: 12.5px; letter-spacing: .01em; color: var(--ink-3); }
