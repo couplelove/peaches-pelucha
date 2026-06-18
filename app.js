@@ -475,10 +475,11 @@ function App({ client, onResetCreds }) {
   const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
 
   const mem = tab === "memories";   // Memories is its own white, full-bleed space — no glass container, no photo backdrop (that container broke the photo carousel)
+  const mapTab = tab === "map";     // Map is full-bleed too (edge-to-edge preview), but keeps the cool glass world
 
   return html`
     ${mem ? html`<div class="mem-bg"></div>` : html`<${PhotoBackdrop} client=${client} />`}
-    <div class=${`app-shell cool ${mem ? "mem" : ""}`}>
+    <div class=${`app-shell cool ${mem ? "mem" : ""} ${mapTab ? "map" : ""}`}>
       <div class="topbar">
         <div class="brand script">peaches & pelucha</div>
         <button class="whoami" onClick=${() => goTab("more")}>

@@ -407,14 +407,11 @@ export function MapCard({ client, me, players, flash }) {
   return html`<div class="card mapcard">
     <div class="shead">
       <h2>Map <span class="muted-glyph">🗺️</span></h2>
-      <div class="shead-actions">
-        <button class="btn sm ghost" onClick=${() => openFull(null)}>⤢ Explore</button>
-      </div>
     </div>
 
     <div class="seg map-modes">
       ${modeBtn("places", "📍 Places")}
-      ${modeBtn("trips", "🚐 Road trips")}
+      ${modeBtn("trips", "🚐 Trips")}
       ${modeBtn("memories", "📸 Memories")}
     </div>
 
