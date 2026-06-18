@@ -94,6 +94,11 @@ function seed() {
     { id: uid(), lat: 48.8566, lng: 2.3522, title: "That little café", note: null, list: "Places We Want to Go", emoji: "☕", visited: false, created_by: peaches, created_at: nowISO() },
     { id: uid(), lat: 41.9028, lng: 12.4964, title: "Rome someday", note: "the pasta one", list: "Places We Want to Go", emoji: "🏛️", visited: false, created_by: pelucha, created_at: nowISO() },
   ];
+  db.radio_seeds = [
+    { id: uid(), term: "Fleetwood Mac", video_id: null, title: "Fleetwood Mac", added_by: peaches, created_at: nowISO() },
+    { id: uid(), term: "Dreams", video_id: null, title: "Dreams", added_by: pelucha, created_at: nowISO() },
+  ];
+  db.radio_state = [];
   return db;
 }
 
@@ -119,6 +124,8 @@ const DEFAULTS = {
   map_pins: { note: null, list: "Places We Want to Go", emoji: "📍", visited: false, created_by: null },
   trips: { emoji: "🚐", created_by: null },
   trip_stops: { note: null, seq: 0, visited: false },
+  radio_seeds: { term: "", video_id: null, title: null, added_by: null },
+  radio_state: { state: {}, version: 0 },
 };
 
 function matches(row, filters) {
