@@ -46,7 +46,11 @@ function useMatch(client, room = null) {
           const row = p.new;
           if (!sameScope(row)) return;                                   // ignore other rooms' matches
           if (window.__ppDragging) { setTimeout(load, 1200); return; }   // catch up right after the drag
-          if (row.status === "playing") setMatch(row);
+          // Supabase echoes our OWN writes back, and they can arrive late — after
+          // we've already made the next optimistic move. Never let an older
+          // snapshot overwrite a newer one on screen (that revert looked like the
+          // deck/turn "acting on its own"). version is monotonic per match row.
+          if (row.status === "playing") setMatch((cur) => (cur && typeof cur.version === "number" && row.version < cur.version ? cur : row));
           else load();
         })
         .subscribe((status) => {
