@@ -600,18 +600,31 @@ export function MemoriesTab({ client, me, flash }) {
     const days = groups.map((g) => g.date).filter(Boolean);
     if (!days.length) return;
     let live = true;
-    client.from("day_stories").select("day,title,story").in("day", days).then(({ data }) => {
+    client.from("day_stories").select("day,title,story,sig").in("day", days).then(({ data }) => {
       if (!live || !data) return;
-      const got = {}; data.forEach((r) => { got[r.day] = { title: r.title, story: r.story }; });
-      setStories((s) => ({ ...got, ...s }));
-      // queue the newest storyless days (cap 6) — but weave them DEFERRED and
-      // ONE AT A TIME, so these long edge-function calls never compete with the
-      // feed's image loading on the same origin (faster first paint on mobile).
+      const got = {}; data.forEach((r) => { got[r.day] = { title: r.title, story: r.story, sig: r.sig }; });
+      setStories((s) => { const merged = {}; for (const k in got) merged[k] = { title: got[k].title, story: got[k].story }; return { ...merged, ...s }; });
+      // Queue days that need a story woven — DEFERRED and ONE AT A TIME so these
+      // long edge-function calls never compete with the feed's image loading.
+      // A day re-weaves when enough NEW content arrived since it was last told:
+      // ≥3 new photos, or ≥2 that grew the day by half. A stray photo or two
+      // keeps the existing story (the words still fit, and re-weaving costs an
+      // AI call + churns the partner's view). The guard key is day+count so a
+      // grown day re-runs but the same volume never weaves twice. (sig = "count:firstId".)
       const queue = [];
       for (const g of groups) {
         if (queue.length >= 6) break;
-        if (!g.date || got[g.date] || stories[g.date] || storyTried.current.has(g.date)) continue;
-        storyTried.current.add(g.date); queue.push(g);
+        if (!g.date) continue;
+        const cur = g.items.length;
+        const key = g.date + ":" + cur;
+        if (storyTried.current.has(key)) continue;
+        const stored = got[g.date];
+        if (stored) {
+          const was = parseInt(String(stored.sig || "").split(":")[0], 10) || 0;
+          const added = cur - was;
+          if (!(added >= 3 || (added >= 2 && added >= was * 0.5))) continue;   // not enough new content → keep it
+        }
+        storyTried.current.add(key); queue.push(g);
       }
       if (queue.length) {
         const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1400));
