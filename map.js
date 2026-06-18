@@ -186,7 +186,7 @@ function LeafletMap({ interactive, fitMode, initialCenter, focus, pending, mode,
 }
 
 export function MapCard({ client, me, players, flash }) {
-  const [mode, setMode] = useState("places");
+  const [mode, setMode] = useState("memories");
   const [pins, setPins] = useState([]);
   const [trips, setTrips] = useState([]);
   const [selTrip, setSelTrip] = useState(null);
@@ -410,9 +410,9 @@ export function MapCard({ client, me, players, flash }) {
     </div>
 
     <div class="seg map-modes">
+      ${modeBtn("memories", "📸 Memories")}
       ${modeBtn("places", "📍 Places")}
       ${modeBtn("trips", "🚐 Trips")}
-      ${modeBtn("memories", "📸 Memories")}
     </div>
 
     <!-- preview: frozen (can't pan → never fights swipe-nav); tap to explore -->
@@ -429,9 +429,9 @@ export function MapCard({ client, me, players, flash }) {
       <div class="mapfull-bar">
         <button class="vw-x" onClick=${closeFull}>✕</button>
         <div class="seg map-modes mf-modes">
+          ${modeBtn("memories", "📸")}
           ${modeBtn("places", "📍")}
           ${modeBtn("trips", "🚐")}
-          ${modeBtn("memories", "📸")}
         </div>
       </div>
       ${mode !== "memories" && html`<div class="mapsearch">
