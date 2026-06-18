@@ -1074,6 +1074,12 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 }
 .app-shell.cool .lifestat { color: var(--c-ink-2); }
 .app-shell.cool .lifestat b { color: var(--c-ink); }
+/* lifetime line living INSIDE the game card: a quiet footer, not a glass strip */
+.app-shell.cool .lifeline.inset {
+  background: none; border: none; border-top: 1px solid var(--c-line); border-radius: 0;
+  box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  margin: 16px 0 0; padding: 13px 0 0;
+}
 
 /* ---- 📸 Memories: title-card journey feed → tap a day → its photo grid ---- */
 .dayfeed { display: grid; gap: 14px; padding-top: 2px; }

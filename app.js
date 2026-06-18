@@ -648,7 +648,6 @@ function ScoreTab(ctx) {
   // and the date roulette.
   return html`<${Fragment}>
     <div data-noswipe><${PlayTab} ...${ctx} /></div>
-    <${LifetimeCard} ...${ctx} />
     <${HoroscopeCard} players=${ctx.players} />
     <${ScriptureCard} />
     <${WatchTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
@@ -657,24 +656,6 @@ function ScoreTab(ctx) {
   <//>`;
 }
 
-// One quiet line, not a whole card.
-function LifetimeCard({ txns, players, client }) {
-  const [wins, setWins] = useState(null);
-  useEffect(() => {
-    let live = true;
-    client.from("games").select("winner_id").eq("status", "finished").then(({ data }) => {
-      if (!live) return;
-      const w = {};
-      (data || []).forEach((g) => { if (g.winner_id) w[g.winner_id] = (w[g.winner_id] || 0) + 1; });
-      setWins(w);
-    });
-    return () => { live = false; };
-  }, [client, txns]);
-  return html`<div class="lifeline">
-    <span class="eyebrow">Lifetime</span>
-    ${players.map((p) => html`<span class="lifestat" key=${p.id}>${p.emoji} <b>${wins ? (wins[p.id] || 0) : "·"}</b></span>`)}
-  </div>`;
-}
 
 /* ============================================================ Wallet ====== */
 

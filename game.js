@@ -310,10 +310,28 @@ export function PlayTab(ctx) {
       ${floats.map((f) => html`<span key=${f.id} class="floatemoji" style=${`left:${f.x}%`}>${f.emoji}</span>`)}
     </div>`;
   }
-  return html`<${ResumeCard} match=${match} me=${me} players=${players} onOpen=${() => setImmersive(true)} />`;
+  return html`<${ResumeCard} match=${match} me=${me} players=${players} client=${client} onOpen=${() => setImmersive(true)} />`;
 }
 
-function ResumeCard({ match, me, players, onOpen }) {
+// Lifetime wins, shown INSIDE the game card (not a separate strip).
+function LifetimeLine({ client, players }) {
+  const [wins, setWins] = useState(null);
+  useEffect(() => {
+    let live = true;
+    client.from("games").select("winner_id").eq("status", "finished").then(({ data }) => {
+      if (!live) return;
+      const w = {}; (data || []).forEach((g) => { if (g.winner_id) w[g.winner_id] = (w[g.winner_id] || 0) + 1; });
+      setWins(w);
+    });
+    return () => { live = false; };
+  }, [client]);
+  return html`<div class="lifeline inset">
+    <span class="eyebrow">Lifetime</span>
+    ${players.map((p) => html`<span class="lifestat" key=${p.id}>${p.emoji} <b>${wins ? (wins[p.id] || 0) : "·"}</b></span>`)}
+  </div>`;
+}
+
+function ResumeCard({ match, me, players, client, onOpen }) {
   const s = match.state;
   const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
   const oppId = s.players.find((p) => p !== me.id) || s.players[0];
@@ -329,6 +347,7 @@ function ResumeCard({ match, me, players, onOpen }) {
       ${s.players.map((pid) => `${pinfo(pid).emoji} P${s.phaseOf[pid]} · ${s.scores[pid]}`).join("   ·   ")}
     </div>
     <button class="btn gamehero-btn" onClick=${(e) => { e.stopPropagation(); onOpen(); }}>${yourTurn ? "Play your turn" : "Open game"}</button>
+    <${LifetimeLine} client=${client} players=${players} />
   </div>`;
 }
 
@@ -357,6 +376,7 @@ function StartMatch({ players, client, onStarted, flash, room = null }) {
         </div>`)}
       </div>
       <button class="btn block mt" disabled=${sel.length !== 2} onClick=${start}>Deal first hand</button>
+      <${LifetimeLine} client=${client} players=${players} />
     </div>`;
 }
 
