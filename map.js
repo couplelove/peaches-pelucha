@@ -247,6 +247,8 @@ export function MapCard({ client, me, players, flash }) {
   }, [client, loadPins, loadTrips, loadMemDays, loadStops]);
 
   useEffect(() => { loadStops(selTrip); }, [selTrip, loadStops]);
+  // entering Trips with nothing selected → default to the first trip
+  useEffect(() => { if (mode === "trips" && !selTrip && trips.length) setSelTrip(trips[0].id); }, [mode, trips, selTrip]);
   useEffect(() => {
     let live = true;
     if (mode !== "trips" || stops.length < 1) { setRoute(null); return; }
