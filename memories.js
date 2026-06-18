@@ -652,7 +652,16 @@ export function MemoriesTab({ client, me, flash }) {
   // opts.fresh = the day's current story → asks the function for a NEW take.
   // Returns true on success so a manual rewrite can confirm/flash.
   const weaveStory = useCallback(async (g, opts = {}) => {
-    const images = g.items.filter((it) => it.kind === "photo").map((it) => pubUrl(it.thumb_path || it.path)).filter(Boolean).slice(0, 6);
+    // Hand the AI SMALL images: the thumbnail if we have one, else a resized
+    // Storage render of the full image — never a multi-MB original (6 of those
+    // blew the Edge Function's memory: WORKER_RESOURCE_LIMIT, e.g. on days with
+    // thumbless HEIC-fallback uploads).
+    const aiImg = (it) => {
+      if (it.thumb_path) return pubUrl(it.thumb_path);
+      const full = pubUrl(it.path);
+      return full.includes("/object/public/") ? full.replace("/object/public/", "/render/image/public/") + "?width=480&quality=68" : full;
+    };
+    const images = g.items.filter((it) => it.kind === "photo").map(aiImg).filter(Boolean).slice(0, 6);
     if (!images.length) return false;
     const place = (g.items.find((i) => i.place) || {}).place || null;
     const sig = g.items.length + ":" + g.items[0].id;

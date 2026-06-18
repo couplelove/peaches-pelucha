@@ -55,8 +55,13 @@ Deno.serve(async (req) => {
         if (!r.ok) return null;
         const ct = (r.headers.get("content-type") || "image/jpeg").split(";")[0];
         if (!ct.startsWith("image/")) return null;
-        const bytes = new Uint8Array(await r.arrayBuffer());
-        let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        const buf = await r.arrayBuffer();
+        if (buf.byteLength > 3_000_000) return null;            // skip multi-MB originals (would blow the worker's memory)
+        const bytes = new Uint8Array(buf);
+        // chunked base64 — building the binary string char-by-char churned memory
+        // hard enough on big images to trip WORKER_RESOURCE_LIMIT.
+        let bin = ""; const CH = 0x8000;
+        for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode(...bytes.subarray(i, i + CH));
         return { type: "image", source: { type: "base64", media_type: ct, data: btoa(bin) } };
       } catch { return null; }
     }))).filter(Boolean);
