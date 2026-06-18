@@ -1,5 +1,5 @@
 import { h } from "https://esm.sh/preact@10.23.2";
-import { useState, useEffect, useCallback, useRef, useMemo } from "https://esm.sh/preact@10.23.2/hooks";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
 
 const html = htm.bind(h);
@@ -237,6 +237,13 @@ export function MemoriesTab({ client, me, flash }) {
   const [dayOpen, setDayOpen] = useState(null);      // the day whose photo grid is open (null = title-card feed)
   const [events, setEvents] = useState([]);          // calendar events, to cite the ones that fell on a day
   const [reweaving, setReweaving] = useState(false); // a manual story rewrite is in flight
+  // remember how far down the day-feed you'd scrolled, so returning from a day
+  // lands you back there instead of at the top (the feed unmounts while a day
+  // is open). contain-intrinsic-size on the tiles keeps the height stable so the
+  // restore is exact even before off-screen cards paint.
+  const feedScroll = useRef(0);
+  const openDay = useCallback((date) => { feedScroll.current = window.scrollY || 0; setDayOpen(date); window.scrollTo(0, 0); }, []);
+  useLayoutEffect(() => { if (!dayOpen) window.scrollTo(0, feedScroll.current || 0); }, [dayOpen]);
 
   const pubUrl = useCallback((path) => {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
@@ -707,7 +714,7 @@ export function MemoriesTab({ client, me, flash }) {
           const heroSrc = cover.thumb_path ? pubUrl(cover.thumb_path) : (cover.kind === "photo" ? pubUrl(cover.path) : null);
           const evs = events.filter((e) => e.starts_on === g.date);
           // blur-up placeholder (instant) under a natively lazy hero (off-screen cards never fetch)
-          return html`<button class="daytile" key=${g.date} style=${cover.blur ? `background-image:url(${cover.blur})` : ""} onClick=${() => setDayOpen(g.date)}>
+          return html`<button class="daytile" key=${g.date} style=${cover.blur ? `background-image:url(${cover.blur})` : ""} onClick=${() => openDay(g.date)}>
             ${heroSrc && html`<img class="dt-img" src=${heroSrc} alt="" decoding="async" crossorigin="anonymous"
               loading=${gi === 0 ? "eager" : "lazy"} fetchpriority=${gi === 0 ? "high" : "auto"}
               onLoad=${(e) => e.target.classList.add("ld")}
