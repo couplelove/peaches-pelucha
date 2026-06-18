@@ -222,6 +222,17 @@ function App({ client, onResetCreds }) {
   const toastTimer = useRef(null);
   const netDone = useRef(false);   // first network load won → don't let cached data overwrite
 
+  // Warm every tab's module on idle so the first swipe to a tab renders instantly
+  // (no "Loading…" card flash, no skipped pane animation).
+  useEffect(() => {
+    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500));
+    const h = idle(() => {
+      import("./events.js"); import("./map.js"); import("./memories.js");
+      import("./watch.js"); import("./joinme.js");
+    });
+    return () => { try { (window.cancelIdleCallback || clearTimeout)(h); } catch {} };
+  }, []);
+
   // ---- gesture-first navigation: swipe between tabs with spring physics ----
   const [navDir, setNavDir] = useState(1);   // +1 = next (slide from right), -1 = prev
   const tabIdx = TAB_ORDER.indexOf(tab);
@@ -508,9 +519,8 @@ function App({ client, onResetCreds }) {
         <//>
       </div>
 
-      <div class="dock-label" key=${tab}>${TAB_META[tab][1]}</div>
       <nav class="dock">
-        <div class="dock-puck" style=${tabIdx < 0 ? "opacity:0" : `transform:translateX(${tabIdx * 48}px)`}></div>
+        <div class="dock-puck" style=${tabIdx < 0 ? "opacity:0" : `transform:translateX(${tabIdx * 56}px)`}></div>
         ${TAB_ORDER.map((k) => html`
           <button class=${tab === k ? "active" : ""} aria-label=${TAB_META[k][1]} onClick=${() => goTab(k)}>
             ${TAB_META[k][0]}

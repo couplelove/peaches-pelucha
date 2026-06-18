@@ -776,8 +776,8 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   --c-line:  rgba(20,33,46,.09);
   --c-accent: #1f8c8a;          /* lagoon teal */
   --c-accent-press: #167572;
-  --glass:        rgba(255,255,255,.58);
-  --glass-strong: rgba(255,255,255,.80);
+  --glass:        rgba(255,255,255,.72);
+  --glass-strong: rgba(255,255,255,.86);
   --glass-line:   rgba(255,255,255,.72);
   --glass-shadow: 0 18px 50px -18px rgba(20,33,46,.34), 0 3px 10px -5px rgba(20,33,46,.14);
   --spring:   cubic-bezier(.34, 1.56, .64, 1);   /* gentle overshoot */
@@ -817,17 +817,17 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   z-index: 40; display: flex; align-items: center; gap: 2px; padding: 7px;
   background: var(--glass-strong); border: 1px solid var(--glass-line); border-radius: var(--r-pill);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
 }
 .dock-puck {
-  position: absolute; left: 7px; top: 7px; width: 46px; height: calc(100% - 14px);
+  position: absolute; left: 7px; top: 7px; width: 54px; height: calc(100% - 14px);
   border-radius: var(--r-pill); background: var(--c-accent); z-index: 0;
   box-shadow: 0 8px 18px -7px var(--c-accent), inset 0 1px 0 rgba(255,255,255,.25);
   transition: transform .52s var(--spring);
 }
 .dock button {
   position: relative; z-index: 1; border: 0; background: none; cursor: pointer;
-  width: 46px; height: 44px; display: grid; place-content: center; font-size: 21px; line-height: 1;
+  width: 54px; height: 52px; display: grid; place-content: center; font-size: 22px; line-height: 1;
   border-radius: var(--r-pill); transition: transform .4s var(--spring), filter .3s ease, opacity .3s ease;
   filter: grayscale(.45); opacity: .62;
 }
@@ -847,7 +847,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .glass {
   background: var(--glass); border: 1px solid var(--glass-line); border-radius: var(--r);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 .tap { transition: transform .3s var(--spring); }
 .tap:active { transform: scale(.97); }
@@ -880,7 +880,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .app-shell.cool .card {
   background: var(--glass); border: 1px solid var(--glass-line); border-radius: 22px;
   box-shadow: var(--glass-shadow); color: var(--c-ink);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   padding: var(--sp-4); margin-bottom: var(--gap);
 }
 
@@ -962,11 +962,12 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px;
   filter: blur(3px) saturate(1.12); transform: scale(1.05);
   opacity: 0; transition: opacity 1.4s ease;
-  animation: collageDrift 50s ease-in-out infinite alternate;
+  /* NO continuous drift animation — a constantly-moving blurred backdrop forces
+     every backdrop-filter card above it to re-rasterize each frame (major jank).
+     The 9s opacity crossfade between the two layers gives the motion instead. */
 }
 .collage.on { opacity: 1; }
 .ctile { background-size: cover; background-position: center; border-radius: 20px; }
-@keyframes collageDrift { from { transform: scale(1.05) translate3d(-1.3%, -1.5%, 0); } to { transform: scale(1.12) translate3d(1.3%, 1.5%, 0); } }
 /* cool wash so the photos read as soft ambient texture and everything on top stays legible */
 .photoscrim {
   position: absolute; inset: 0;
