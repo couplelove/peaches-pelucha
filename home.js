@@ -115,7 +115,7 @@ export function HoroscopeCard({ players }) {
 
 export function ScriptureCard() {
   const v = dailyVerse();
-  return html`<div class="card">
+  return html`<div class="card versecard">
     <blockquote class="verse">
       <p class="verse-text">“${v.text}”</p>
       <div class="eyebrow">${v.ref}</div>

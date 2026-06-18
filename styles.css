@@ -241,7 +241,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .horo-text { font-family: var(--serif); font-size: 15.5px; line-height: 1.55; color: var(--ink); margin: 0; font-style: italic; }
 .horo-closer { color: var(--accent); font-style: normal; font-size: 13.5px; }
 
-.verse { margin: 2px 0; padding: 0; text-align: center; }
+.verse { margin: 0; padding: 0; text-align: center; }
 .verse-text { font-family: var(--serif); font-size: 22px; line-height: 1.5; font-style: italic; color: var(--ink); margin: 0 0 12px; }
 
 /* ---- magazine home ---- */
@@ -1271,3 +1271,15 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .emoji-pick.on { border-color: var(--c-accent); background: color-mix(in srgb, var(--c-accent) 16%, transparent); }
 .map-toggle { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--c-ink); cursor: pointer; }
 .map-toggle input { width: auto; }
+
+/* ---- dark verse card (home) — like the "Next event" hero. Placed last + with
+   .card.versecard specificity so it beats .app-shell.cool .card and the
+   .card + .card padding-top:0 polish rule. ---- */
+.app-shell.cool .card.versecard {
+  background: linear-gradient(158deg, #15323a 0%, #102329 100%);
+  border: none; box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  padding: 26px 22px;
+}
+.app-shell.cool .card.versecard .verse-text { color: #f4efe7; }
+.app-shell.cool .card.versecard .eyebrow { color: #86b3ac; }
