@@ -276,6 +276,19 @@ export function MapCard({ client, me, players, flash }) {
   };
   const deleteStop = async () => { if (stopSheet.id) await client.from("trip_stops").delete().eq("id", stopSheet.id); setStopSheet(null); loadStops(selTrip); };
   const toggleStopVisited = async (s) => { await client.from("trip_stops").update({ visited: !s.visited }).eq("id", s.id); loadStops(selTrip); };
+  // reorder: swap a stop's seq with its neighbour (optimistic, then persist both)
+  const moveStop = async (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= stops.length) return;
+    const a = stops[i], b = stops[j];
+    setStops((cur) => { const n = cur.slice(); [n[i], n[j]] = [n[j], n[i]]; return n; });   // instant feedback + route recompute
+    try {
+      await Promise.all([
+        client.from("trip_stops").update({ seq: b.seq }).eq("id", a.id),
+        client.from("trip_stops").update({ seq: a.seq }).eq("id", b.id),
+      ]);
+    } finally { loadStops(selTrip); }
+  };
 
   const createTrip = async () => {
     const t = (tripSheet.title || "").trim(); if (!t) { flash("Name the trip"); return; }
@@ -387,6 +400,10 @@ export function MapCard({ client, me, players, flash }) {
               ? html`<div class="map-empty">No stops yet — ＋ Stop, then ${inFull ? "search or tap the map" : "open the map"}.</div>`
               : html`<div class="map-list">${stops.map((s, i) => html`<div class="map-row" role="button" key=${s.id} onClick=${() => rowGo(inFull, s.lat, s.lng)}>
                   <span class=${`mr-seq ${s.visited ? "done" : ""}`}>${s.visited ? "✓" : i + 1}</span>
+                  <span class="mr-reorder">
+                    <span class=${`mr-arrow ${i === 0 ? "dis" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); moveStop(i, -1); }}>▲</span>
+                    <span class=${`mr-arrow ${i === stops.length - 1 ? "dis" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); moveStop(i, 1); }}>▼</span>
+                  </span>
                   <span class="mr-main"><span class=${`mr-title ${s.visited ? "done" : ""}`}>${s.title}</span>${s.note ? html`<span class="mr-sub">${s.note}</span>` : ""}</span>
                   <span class=${`mr-check ${s.visited ? "on" : ""}`} role="button" onClick=${(e) => { e.stopPropagation(); toggleStopVisited(s); }}>${s.visited ? "been" : "plan"}</span>
                   <span class="mr-edit" role="button" onClick=${(e) => { e.stopPropagation(); setStopSheet({ ...s }); }}>⋯</span>

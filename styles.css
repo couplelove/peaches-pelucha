@@ -1232,6 +1232,12 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .mr-seq { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-content: center;
   font-weight: 800; font-size: 12px; color: var(--c-accent); border: 2px solid var(--c-accent); }
 .mr-seq.done { background: var(--c-accent); color: #fff; }
+/* reorder a trip stop: a compact ▲▼ column */
+.mr-reorder { flex: none; display: flex; flex-direction: column; gap: 1px; margin-left: -4px; }
+.mr-arrow { width: 22px; height: 17px; display: grid; place-content: center; font-size: 10px;
+  color: var(--c-accent); cursor: pointer; border-radius: 5px; }
+.mr-arrow:active { background: rgba(31,140,138,.14); }
+.mr-arrow.dis { color: var(--c-ink-3); opacity: .35; pointer-events: none; }
 .mr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .mr-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mr-title.done { color: var(--c-ink-2); text-decoration: line-through; text-decoration-color: var(--c-ink-3); }
