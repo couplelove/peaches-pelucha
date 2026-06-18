@@ -236,6 +236,7 @@ export function MemoriesTab({ client, me, flash }) {
   const storyTried = useRef(new Set());              // days we've already asked to generate this session
   const [dayOpen, setDayOpen] = useState(null);      // the day whose photo grid is open (null = title-card feed)
   const [events, setEvents] = useState([]);          // calendar events, to cite the ones that fell on a day
+  const [reweaving, setReweaving] = useState(false); // a manual story rewrite is in flight
 
   const pubUrl = useCallback((path) => {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
@@ -731,6 +732,11 @@ export function MemoriesTab({ client, me, flash }) {
           <div class="dd-date">${dayHead(openGroup.date)}</div>
           <div class="dd-title">${(stories[openGroup.date] && stories[openGroup.date].title) || fallbackTitle(openGroup)}</div>
           <p class="dd-story">${(stories[openGroup.date] && stories[openGroup.date].story) || fallbackStory(openGroup)}</p>
+          <button class="dd-rewrite" disabled=${reweaving} onClick=${async () => {
+            if (reweaving) return; setReweaving(true);
+            storyTried.current.add(openGroup.date + ":" + openGroup.items.length);   // keep the auto-weaver from racing it
+            try { await weaveStory(openGroup); } finally { setReweaving(false); }
+          }}>${reweaving ? "rewriting…" : "↻ rewrite"}</button>
           ${(() => { const evs = events.filter((e) => e.starts_on === openGroup.date); return evs.length ? html`<div class="dd-events">
             <span class="dd-ev-label">📌 that day</span>
             ${evs.map((e) => html`<span class="dd-ev" key=${e.id}>${e.emoji || "•"} ${e.title}</span>`)}
