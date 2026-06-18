@@ -649,17 +649,20 @@ export function MemoriesTab({ client, me, flash }) {
     return () => { live = false; };
   }, [client]);
 
-  const weaveStory = useCallback(async (g) => {
+  // opts.fresh = the day's current story → asks the function for a NEW take.
+  // Returns true on success so a manual rewrite can confirm/flash.
+  const weaveStory = useCallback(async (g, opts = {}) => {
     const images = g.items.filter((it) => it.kind === "photo").map((it) => pubUrl(it.thumb_path || it.path)).filter(Boolean).slice(0, 6);
-    if (!images.length) return;
+    if (!images.length) return false;
     const place = (g.items.find((i) => i.place) || {}).place || null;
     const sig = g.items.length + ":" + g.items[0].id;
+    const body = { day: g.date, images, context: { date: dayHead(g.date), place, count: g.items.length, sig } };
+    if (opts.fresh && (opts.fresh.story || opts.fresh.title)) body.fresh = { title: opts.fresh.title || null, story: opts.fresh.story || null };
     try {
-      const { data } = await client.functions.invoke("day-story", {
-        body: { day: g.date, images, context: { date: dayHead(g.date), place, count: g.items.length, sig } },
-      });
-      if (data && data.story) setStories((s) => ({ ...s, [g.date]: { title: data.title, story: data.story } }));
-    } catch { /* fall back to the metadata line */ }
+      const { data } = await client.functions.invoke("day-story", { body });
+      if (data && data.story) { setStories((s) => ({ ...s, [g.date]: { title: data.title, story: data.story } })); return true; }
+      return false;
+    } catch { return false; }
   }, [client, pubUrl]);
 
   const flat = items || [];
@@ -742,7 +745,9 @@ export function MemoriesTab({ client, me, flash }) {
           <button class="dd-rewrite" disabled=${reweaving} onClick=${async () => {
             if (reweaving) return; setReweaving(true);
             storyTried.current.add(openGroup.date + ":" + openGroup.items.length);   // keep the auto-weaver from racing it
-            try { await weaveStory(openGroup); } finally { setReweaving(false); }
+            let ok = false;
+            try { ok = await weaveStory(openGroup, { fresh: stories[openGroup.date] }); } finally { setReweaving(false); }
+            flash(ok ? "Rewritten ✨" : "⚠️ Couldn't rewrite — try again");
           }}>${reweaving ? "rewriting…" : "↻ rewrite"}</button>
           ${(() => { const evs = events.filter((e) => e.starts_on === openGroup.date); return evs.length ? html`<div class="dd-events">
             <span class="dd-ev-label">📌 that day</span>

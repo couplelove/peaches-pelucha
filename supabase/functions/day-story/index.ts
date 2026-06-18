@@ -41,7 +41,7 @@ const SCHEMA = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { day, images = [], context = {}, revise = null } = await req.json();
+    const { day, images = [], context = {}, revise = null, fresh = null } = await req.json();
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY not set" }, 500);
     if (!images.length) return json({ error: "no images" }, 400);
@@ -61,17 +61,25 @@ Deno.serve(async (req) => {
       } catch { return null; }
     }))).filter(Boolean);
     if (!imgs.length) return json({ error: "could not load images" }, 502);
+    const ctxLines = [
+      context.date ? `Date: ${context.date}.` : "",
+      context.place ? `Place: ${context.place}.` : "",
+      context.count ? `${context.count} photo${context.count === 1 ? "" : "s"} from this day.` : "",
+    ];
     // revise mode: fix ONLY who-is-who in an existing entry; keep the wording.
+    // fresh mode: a manual "rewrite" — same day & photos, but a deliberately
+    // DIFFERENT take so the new story doesn't echo the old one.
     const hint = revise && (revise.story || revise.title)
       ? "Here is an existing journal entry for this day:\n" +
         `title: ${revise.title || ""}\nstory: ${revise.story || ""}\n\n` +
         "Return it again, almost verbatim — same voice, same length, same wording. Change ONLY the names/pronouns that mis-identify who is who, using the photos and the descriptions above (light-skinned woman with brown hair = Peaches; darker-skinned man with a beard = Pelucha). If it's already correct, return it unchanged. Do not improve, shorten, restyle, or re-title it (keep the title unless it names the wrong person)."
-      : [
-          context.date ? `Date: ${context.date}.` : "",
-          context.place ? `Place: ${context.place}.` : "",
-          context.count ? `${context.count} photo${context.count === 1 ? "" : "s"} from this day.` : "",
-          "Write the storybook entry for this day.",
-        ].filter(Boolean).join(" ");
+      : fresh && (fresh.story || fresh.title)
+        ? [
+            ...ctxLines,
+            "Write a FRESH storybook entry for this day — a noticeably DIFFERENT take from the previous one below: a new opening, a new angle, and a new title. Notice details in the photos you didn't dwell on before, and do NOT reuse the previous phrasing.",
+            `Previous entry — title: ${fresh.title || ""}; story: ${fresh.story || ""}`,
+          ].filter(Boolean).join(" ")
+        : [...ctxLines, "Write the storybook entry for this day."].filter(Boolean).join(" ");
 
     const resp = await fetch(ANTHROPIC_URL, {
       method: "POST",
