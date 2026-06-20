@@ -36,6 +36,7 @@ function seed() {
     watch_state: [],
     trash_talk: [],
     day_stories: [],
+    horoscope_cache: [],
     // Demo memories (placeholder photos) so the gallery + the photo-collage
     // backdrop have something to show. Real app uses Supabase Storage.
     memories: [

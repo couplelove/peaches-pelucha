@@ -463,3 +463,12 @@ alter table gratitudes enable row level security;
 drop policy if exists anon_all on gratitudes;
 create policy anon_all on gratitudes for all to anon, authenticated using (true) with check (true);
 do $$ begin alter publication supabase_realtime add table gratitudes; exception when duplicate_object then null; end $$;
+
+-- horoscope (028): cached daily AI Cancer readings (keyed by date)
+create table if not exists horoscope_cache (
+  day date primary key, data jsonb not null,
+  created_at timestamptz not null default now()
+);
+alter table horoscope_cache enable row level security;
+drop policy if exists anon_all on horoscope_cache;
+create policy anon_all on horoscope_cache for all to anon, authenticated using (true) with check (true);

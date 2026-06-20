@@ -649,7 +649,7 @@ function ScoreTab(ctx) {
   // and the date roulette.
   return html`<${Fragment}>
     <div data-noswipe><${PlayTab} ...${ctx} /></div>
-    <${HoroscopeCard} players=${ctx.players} />
+    <${HoroscopeCard} players=${ctx.players} client=${ctx.client} />
     <${ScriptureCard} />
     <${GratitudeCard} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
     <${WatchTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />

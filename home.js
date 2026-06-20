@@ -1,4 +1,5 @@
 import { h } from "https://esm.sh/preact@10.23.2";
+import { useState, useEffect } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
 
 const html = htm.bind(h);
@@ -95,20 +96,43 @@ export function dailyVerse() {
 }
 
 /* ---- components ---- */
-export function HoroscopeCard({ players }) {
+export function HoroscopeCard({ players, client }) {
   // Pelucha 🧸 · July 10 (him) — Peaches 🍑 · July 11 (her)
   const pelucha = players.find((p) => p.name === "Pelucha") || players[1] || { emoji: "🧸", name: "Pelucha" };
   const peaches = players.find((p) => p.name === "Peaches") || players[0] || { emoji: "🍑", name: "Peaches" };
-  const his = cancerDaily(0), hers = cancerDaily(1);
+  // AI-written, varied, cached-per-day readings (with the local generator as a
+  // graceful fallback if the function/cache is unavailable).
+  const [gen, setGen] = useState(null);   // { readings: [{reading,closer}, ...] } | null
+  useEffect(() => {
+    if (!client) return;
+    let live = true;
+    const day = new Date().toISOString().slice(0, 10);
+    const people = [{ name: "Pelucha", birthday: "July 10" }, { name: "Peaches", birthday: "July 11" }];
+    (async () => {
+      try {
+        const { data: rows } = await client.from("horoscope_cache").select("data").eq("day", day).limit(1);
+        if (live && rows && rows[0] && rows[0].data && rows[0].data.readings) { setGen(rows[0].data); return; }
+      } catch {}
+      try {
+        const { data } = await client.functions.invoke("horoscope", { body: { day, people } });
+        if (live && data && data.readings) setGen(data);
+      } catch {}
+    })();
+    return () => { live = false; };
+  }, [client]);
+
+  const fb = (off) => { const c = cancerDaily(off); return { reading: `${c.mood} — ${c.focus}.`, closer: c.closer }; };
+  const r0 = (gen && gen.readings && gen.readings[0]) || fb(0);
+  const r1 = (gen && gen.readings && gen.readings[1]) || fb(1);
   const Reading = (who, date, r) => html`<div class="horo-half">
     <div class="eyebrow">${who.emoji} ${who.name} · ${date}</div>
-    <p class="horo-text">${r.mood} — ${r.focus}. <span class="horo-closer">${r.closer}</span></p>
+    <p class="horo-text">${r.reading} <span class="horo-closer">${r.closer}</span></p>
   </div>`;
   return html`<div class="card">
     <h2>Cancer, today <span class="muted-glyph">♋</span></h2>
     <div class="horo">
-      ${Reading(pelucha, "July 10", his)}
-      ${Reading(peaches, "July 11", hers)}
+      ${Reading(pelucha, "July 10", r0)}
+      ${Reading(peaches, "July 11", r1)}
     </div>
   </div>`;
 }
