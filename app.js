@@ -8,6 +8,7 @@ import { PlayTab } from "./game.js";
 import { DateRoulette } from "./roulette.js";
 import { ScriptureCard } from "./home.js";
 import { GratitudeCard } from "./gratitude.js";
+import { FightMode, FightToggle } from "./fight.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 import { get as idbGet, set as idbSet } from "https://esm.sh/idb-keyval@6";
 
@@ -484,7 +485,8 @@ function App({ client, onResetCreds }) {
       modal=${modal} setModal=${setModal} api=${api} />`;
   }
 
-  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
+  const [fightOpen, setFightOpen] = useState(false);
+  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab, openFight: () => setFightOpen(true) };
 
   const mem = tab === "memories";   // Memories is its own white, full-bleed space — no glass container, no photo backdrop (that container broke the photo carousel)
   const mapTab = tab === "map";     // Map is full-bleed too (edge-to-edge preview), but keeps the cool glass world
@@ -529,6 +531,7 @@ function App({ client, onResetCreds }) {
           </button>`)}
       </nav>
 
+      <${FightMode} client=${client} me=${me} players=${players} open=${fightOpen} setOpen=${setFightOpen} />
       ${modal && html`<${Modal} modal=${modal} close=${() => setModal(null)} ...${ctx} pickMe=${pickMe} onResetCreds=${onResetCreds} />`}
       ${toast && html`<div class="toast">${toast}</div>`}
       ${updateReady && html`<button class="updbar" onClick=${() => location.reload()}>✨ Update ready — tap to refresh</button>`}
@@ -807,6 +810,8 @@ function MoreTab(ctx) {
         <button class="btn ghost block" onClick=${() => setModal({ type: "editPlayer" })}>＋ Add player</button>
       </div>
     </div>
+
+    <${FightToggle} client=${client} me=${me} players=${players} onOpen=${ctx.openFight} />
 
     <div class="card">
       <h2>Customise</h2>

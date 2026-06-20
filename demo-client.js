@@ -37,6 +37,8 @@ function seed() {
     trash_talk: [],
     day_stories: [],
     horoscope_cache: [],
+    app_settings: [],
+    fights: [],
     // Demo memories (placeholder photos) so the gallery + the photo-collage
     // backdrop have something to show. Real app uses Supabase Storage.
     memories: [
@@ -133,6 +135,8 @@ const DEFAULTS = {
   radio_seeds: { term: "", video_id: null, title: null, added_by: null },
   radio_state: { state: {}, version: 0 },
   gratitudes: { created_by: null },
+  app_settings: { value: {} },
+  fights: { status: "venting", started_by: null, entries: {}, translations: {}, together: null, acks: {}, version: 0, resolved_at: null },
 };
 
 function matches(row, filters) {
