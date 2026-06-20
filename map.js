@@ -233,6 +233,9 @@ export function MapCard({ client, me, players, flash }) {
   useEffect(() => {
     loadPins(); loadTrips(); loadMemDays();
     let ch = null;
+    // new/changed memories should appear on the map without leaving the tab
+    const wake = () => { if (document.visibilityState === "visible") loadMemDays(); };
+    document.addEventListener("visibilitychange", wake);
     try {
       ch = client.channel("pp-map")
         .on("postgres_changes", { event: "*", schema: "public", table: "map_pins" }, () => loadPins())
@@ -241,9 +244,10 @@ export function MapCard({ client, me, players, flash }) {
           const tid = (p.new && p.new.trip_id) || (p.old && p.old.trip_id);
           if (tid === selTripRef.current) loadStops(selTripRef.current);
         })
+        .on("postgres_changes", { event: "*", schema: "public", table: "memories" }, () => loadMemDays())
         .subscribe();
     } catch {}
-    return () => { try { ch && client.removeChannel(ch); } catch {} };
+    return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
   }, [client, loadPins, loadTrips, loadMemDays, loadStops]);
 
   useEffect(() => { loadStops(selTrip); }, [selTrip, loadStops]);
