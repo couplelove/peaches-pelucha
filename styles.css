@@ -1331,7 +1331,7 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .gratcard { cursor: pointer; }
 .grat-line { margin: 4px 0 2px; }
 .grat-line + .grat-line { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--c-line); }
-.grat-text { font-family: var(--serif); font-style: italic; font-size: 17px; line-height: 1.5; color: var(--c-ink); margin: 0; }
+.grat-text { font-family: var(--serif); font-style: italic; font-size: 22px; line-height: 1.5; color: var(--c-ink); margin: 0; }
 .grat-by { font-size: 12.5px; color: var(--c-ink-2); margin-top: 4px; }
 .grat-empty { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--c-ink-2); margin: 2px 0 0; }
 .grat-cta { margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--c-accent); }
