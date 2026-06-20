@@ -6,14 +6,20 @@ import { notifyTurn } from "./push.js";
 
 const html = htm.bind(h);
 
-/* 🕊️ Fight Mode — an opt-in, AI-mediated "mend" flow.
-   Turn it on in settings. When you're in a fight, start a mend: you each
+/* 🕊️ Fight Mode — an opt-in, AI-mediated "mend" that TAKES OVER the app.
+   Turn it on in settings. When you're fighting, start a mend and the whole app
+   locks behind a full-screen flow until you BOTH come together: you each
    privately vent + answer a few questions; once you've both shared, Claude
    translates each of you to the other (what to HEAR + what to FOCUS on, never
-   taking sides), then you both acknowledge and it closes gently. One shared
-   `fights` row drives the steps; realtime keeps both phones in lockstep. */
+   taking sides); you both tap "I hear you" and it releases. A timer counts the
+   time you're spending apart, to nudge you back together fast. */
 
-// shared on/off setting
+const clock = (s) => {
+  s = Math.max(0, Math.floor(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(ss).padStart(2, "0");
+};
+
 function useFightSetting(client) {
   const [on, setOn] = useState(false);
   const load = useCallback(async () => {
@@ -37,7 +43,6 @@ function useFightSetting(client) {
   return [on, set];
 }
 
-// the latest active (un-resolved) mend session
 function useActiveFight(client) {
   const [fight, setFight] = useState(null);
   const load = useCallback(async () => {
@@ -52,43 +57,57 @@ function useActiveFight(client) {
     try { ch = client.channel("pp-fights").on("postgres_changes", { event: "*", schema: "public", table: "fights" }, () => load()).subscribe(); } catch {}
     const wake = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", wake);
-    return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
+    window.addEventListener("focus", wake);
+    return () => { document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); try { ch && client.removeChannel(ch); } catch {} };
   }, [client, load]);
   return [fight, setFight, load];
 }
 
-/* ---- settings toggle (More page) ---- */
-export function FightToggle({ client, me, players, onOpen }) {
+/* ---- settings: toggle + start a mend ---- */
+export function FightToggle({ client, me, players }) {
   const [on, setOn] = useFightSetting(client);
+  const [fight] = useActiveFight(client);
+  const partner = players.find((p) => p.id !== me.id) || null;
+  const start = async () => {
+    if (fight) return;
+    const { data } = await client.from("fights").insert({ status: "venting", started_by: me.id, entries: {}, translations: {}, acks: {} }).select().single();
+    if (data && partner) { try { notifyTurn(client, partner.id, "🕊️ Let's mend", `${me.name} started Fight Mode — the app is paused until you come back together.`); } catch {} }
+  };
   return html`<div class="card">
     <div class="shead"><h2>Fight Mode <span class="muted-glyph">🕊️</span></h2>
       <label class="switch"><input type="checkbox" checked=${on} onChange=${(e) => setOn(e.target.checked)} /><span class="switch-track"></span></label>
     </div>
-    <p class="sub" style="margin-top:-4px">When you're in a rough spot, take turns sharing what happened and how you feel — and let a gentle hand translate it so you really hear each other.</p>
-    ${on && html`<button class="btn block" onClick=${onOpen}>🕊️ Open Fight Mode</button>`}
+    <p class="sub" style="margin-top:-4px">When you're in a rough spot, start a mend — the app pauses for both of you until you've heard each other and come back together. A timer counts the time apart.</p>
+    ${on && html`<button class="btn block" disabled=${!!fight} onClick=${start}>${fight ? "A mend is in progress…" : "🕊️ Start a mend"}</button>`}
   </div>`;
 }
 
-/* ---- the mend flow (full-screen) + active-session banner ---- */
-export function FightMode({ client, me, players, open, setOpen }) {
-  const [on] = useFightSetting(client);
+/* ---- the takeover: locks the app until both come together ---- */
+export function FightMode({ client, me, players }) {
   const [fight, setFight, reload] = useActiveFight(client);
   const partner = players.find((p) => p.id !== me.id) || null;
   const ordered = useMemo(() => players.slice().sort((a, b) => (a.id < b.id ? -1 : 1)), [players]);
   const isHost = ordered[0] && me.id === ordered[0].id;
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);          // both acknowledged → closing screen
+  const [done, setDone] = useState(false);
   const [form, setForm] = useState({ happened: "", feeling: "", need: "", love: "" });
+  const [nowT, setNowT] = useState(Date.now());
   const triggered = useRef(false);
-  // catch the partner finishing last (our active-fight query drops resolved rows)
-  const prevStatus = useRef(null);
-  useEffect(() => {
-    if (prevStatus.current === "revealed" && !fight && open) setDone(true);
-    prevStatus.current = fight && fight.status;
-  }, [fight, open]);
-  useEffect(() => { if (!fight || fight.status !== "venting") triggered.current = false; }, [fight && fight.id, fight && fight.status]);
+  const startedAtRef = useRef(null);
 
-  // version-guarded update on the fight row (re-reads latest each try)
+  useEffect(() => { if (!fight || fight.status !== "venting") triggered.current = false; }, [fight && fight.id, fight && fight.status]);
+  // remember when this fight began (for the closing screen, after the row drops)
+  useEffect(() => { if (fight) startedAtRef.current = fight.created_at; }, [fight && fight.id]);
+  // catch the partner finishing last
+  const prevStatus = useRef(null);
+  useEffect(() => { if (prevStatus.current === "revealed" && !fight) setDone(true); prevStatus.current = fight && fight.status; }, [fight]);
+  // tick the timer while a mend is active
+  useEffect(() => {
+    if (!fight && !done) return;
+    const id = setInterval(() => setNowT(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [!!fight, done]);
+
   const update = useCallback(async (id, mut) => {
     for (let i = 0; i < 4; i++) {
       const { data: row } = await client.from("fights").select("*").eq("id", id).single();
@@ -102,14 +121,6 @@ export function FightMode({ client, me, players, open, setOpen }) {
     reload();
   }, [client, setFight, reload]);
 
-  const startMend = async () => {
-    setDone(false); setBusy(true);
-    const { data } = await client.from("fights").insert({ status: "venting", started_by: me.id, entries: {}, translations: {}, acks: {} }).select().single();
-    setBusy(false);
-    if (data) { setFight(data); setForm({ happened: "", feeling: "", need: "", love: "" }); }
-    if (partner) { try { notifyTurn(client, partner.id, "🕊️ Let's mend", `${me.name} opened Fight Mode — come share when you're ready.`); } catch {} }
-  };
-
   const mine = fight && fight.entries && fight.entries[me.id];
   const submitEntry = async () => {
     if (!fight) return;
@@ -120,7 +131,6 @@ export function FightMode({ client, me, players, open, setOpen }) {
     setBusy(false);
   };
 
-  // host: once both have shared, ask Claude to translate, then reveal
   useEffect(() => {
     if (!fight || fight.status !== "venting" || !isHost || triggered.current) return;
     const both = ordered.every((p) => fight.entries && fight.entries[p.id]);
@@ -128,9 +138,7 @@ export function FightMode({ client, me, players, open, setOpen }) {
     triggered.current = true;
     (async () => {
       try {
-        const { data } = await client.functions.invoke("mend", {
-          body: { people: ordered.map((p) => ({ name: p.name })), entries: ordered.map((p) => fight.entries[p.id]) },
-        });
+        const { data } = await client.functions.invoke("mend", { body: { people: ordered.map((p) => ({ name: p.name })), entries: ordered.map((p) => fight.entries[p.id]) } });
         if (!data || !data.a || !data.b) { triggered.current = false; return; }
         const translations = { [ordered[0].id]: data.a, [ordered[1].id]: data.b };
         await update(fight.id, (row) => row.status !== "venting" ? null : ({ translations, together: data.together || null, status: "revealed" }));
@@ -149,35 +157,25 @@ export function FightMode({ client, me, players, open, setOpen }) {
     setBusy(false);
     if (res && res.status === "resolved") setDone(true);
   };
-  const cancel = async () => { if (fight && confirm("Leave this mend? Your shares will clear.")) { await client.from("fights").update({ status: "resolved", resolved_at: new Date().toISOString() }).eq("id", fight.id); setFight(null); setOpen(false); } };
 
-  const pe = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
+  // safety valve: never permanently brick the app. Quiet, confirm-gated, ends for both.
+  const endMend = async () => {
+    if (!fight) return;
+    if (!confirm("End the mend for both of you without finishing? Try to come back together instead 💗")) return;
+    await client.from("fights").update({ status: "resolved", resolved_at: new Date().toISOString() }).eq("id", fight.id);
+    setFight(null);
+  };
 
-  // gentle banner while a mend is active in the background (only when on)
-  const banner = (on && fight && !open) ? html`<button class="fight-banner" onClick=${() => setOpen(true)}>
-    🕊️ ${fight.status === "revealed" && fight.translations && fight.translations[me.id] ? "Your mend is ready — tap to read" : "You're mending — tap to continue"}
-  </button>` : null;
+  if (!fight && !done) return null;   // app is normal when there's no active mend
 
-  // the overlay renders whenever explicitly opened (opening already required the
-  // setting to be on, via the settings button or the banner)
-  if (!open) return banner;
-
-  // ----- overlay -----
-  const closeOverlay = () => { setDone(false); setOpen(false); };
+  const elapsed = (nowT - new Date((fight && fight.created_at) || startedAtRef.current || Date.now()).getTime()) / 1000;
   let body;
   if (done) {
     body = html`<div class="fight-intro">
       <div class="fight-bigmark">💗</div>
       <h2>You found your way back.</h2>
-      <p class="fight-lede">You both showed up and listened. That's the whole thing. Maybe sit close for a minute — or breathe together in Join Me.</p>
-      <button class="btn block" onClick=${closeOverlay}>Done</button>
-    </div>`;
-  } else if (!fight) {
-    body = html`<div class="fight-intro">
-      <div class="fight-bigmark">🕊️</div>
-      <h2>Let's find our way back</h2>
-      <p class="fight-lede">You'll each share what happened and how you feel — privately. Then you'll hear what the other most needs you to understand. No blame, no sides.</p>
-      <button class="btn block" disabled=${busy} onClick=${startMend}>${busy ? "…" : "Start a mend"}</button>
+      <p class="fight-lede">You both showed up and listened. That's the whole thing. Sit close for a minute — or breathe together in Join Me.</p>
+      <button class="btn block" onClick=${() => setDone(false)}>We're good</button>
     </div>`;
   } else if (fight.status === "venting") {
     body = !mine ? html`<div class="fight-step">
@@ -187,12 +185,10 @@ export function FightMode({ client, me, players, open, setOpen }) {
       <${Q} label="What do you need?" v=${form.need} set=${(x) => setForm({ ...form, need: x })} ph="What would help you feel okay again?" />
       <${Q} label="One thing you still love about them (optional)" v=${form.love} set=${(x) => setForm({ ...form, love: x })} ph="Even now…" />
       <button class="btn block mt" disabled=${busy || !(form.happened.trim() || form.feeling.trim() || form.need.trim())} onClick=${submitEntry}>${busy ? "Sharing…" : "Share with the mediator"}</button>
-      <button class="linkbtn block mt" style="width:100%" onClick=${cancel}>Leave this mend</button>
     </div>` : html`<div class="fight-wait">
       <div class="fight-bigmark">🤍</div>
       <h2>Thank you for sharing.</h2>
-      <p class="fight-lede">${ordered.every((p) => fight.entries[p.id]) ? "Reading you both, gently…" : `Waiting for ${partner ? partner.emoji + " " + partner.name : "your partner"} to share their side.`}</p>
-      <button class="linkbtn block mt" style="width:100%" onClick=${cancel}>Leave this mend</button>
+      <p class="fight-lede">${ordered.every((p) => fight.entries[p.id]) ? "Reading you both, gently…" : `Waiting for ${partner ? partner.emoji + " " + partner.name : "your partner"} to share their side. The app stays paused until you're both ready.`}</p>
     </div>`;
   } else if (fight.status === "revealed") {
     const t = (fight.translations && fight.translations[me.id]) || { hear: "", focus: "" };
@@ -204,19 +200,19 @@ export function FightMode({ client, me, players, open, setOpen }) {
       <p class="fight-focus">${t.focus}</p>
       ${fight.together && html`<p class="fight-together">${fight.together}</p>`}
       ${acked
-        ? html`<div class="fight-acked">💗 You said you hear them. ${ordered.every((p) => fight.acks && fight.acks[p.id]) ? "" : `Waiting for ${partner ? partner.name : "your partner"}…`}</div>`
-        : html`<button class="btn block mt" disabled=${busy} onClick=${ack}>💗 I hear you</button>`}
+        ? html`<div class="fight-acked">💗 You said you hear them. ${ordered.every((p) => fight.acks && fight.acks[p.id]) ? "" : `Waiting for ${partner ? partner.name : "your partner"} to come together…`}</div>`
+        : html`<button class="btn block mt" onClick=${ack} disabled=${busy}>💗 I hear you</button>`}
     </div>`;
   }
 
-  return html`${banner}${createPortal(html`<div class="fightfull">
+  return createPortal(html`<div class="fightfull lock">
     <div class="fightfull-bar">
-      <button class="vw-x" onClick=${closeOverlay}>✕</button>
       <span class="fightfull-title">Mend 🕊️</span>
-      <span style="width:38px"></span>
+      ${!done && html`<span class="fight-timer" title="Time you're spending apart">⏱ ${clock(elapsed)} apart</span>`}
     </div>
     <div class="fightfull-body">${body}</div>
-  </div>`, document.body)}`;
+    ${!done && fight && html`<button class="fight-end" onClick=${endMend}>Step away (ends the mend for both)</button>`}
+  </div>`, document.body);
 }
 
 function Q({ label, v, set, ph }) {
@@ -225,6 +221,3 @@ function Q({ label, v, set, ph }) {
     <textarea rows="2" value=${v} onInput=${(e) => set(e.target.value)} placeholder=${ph} maxlength="600"></textarea>
   </label>`;
 }
-
-/* a warm "you're back" card after both acknowledge — shown briefly via the
-   resolved state is handled by the active-fight query dropping it, so we close. */

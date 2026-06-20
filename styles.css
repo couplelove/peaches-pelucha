@@ -1374,11 +1374,13 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   background: linear-gradient(180deg, #15323a, #102329); color: #f4efe7; border: 0; border-radius: 999px; padding: 10px 18px;
   font-size: 13px; font-weight: 600; box-shadow: 0 10px 26px -10px rgba(0,0,0,.5); cursor: pointer; animation: pop .2s ease; max-width: calc(100% - 28px); }
 
-.fightfull { position: fixed; inset: 0; z-index: 62; display: flex; flex-direction: column;
+/* z-index 9000 → a true takeover: covers tabs, dock, modals, everything */
+.fightfull { position: fixed; inset: 0; z-index: 9000; display: flex; flex-direction: column;
   background: linear-gradient(180deg, #fbf6ef 0%, #f1e9dd 100%); color: var(--ink); animation: fade .15s ease; }
-.fightfull-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(var(--safe-top) + 10px) 14px 8px; }
-.fightfull-bar .vw-x { position: static; flex: none; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 16px; cursor: pointer; }
+.fightfull-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(var(--safe-top) + 12px) 18px 8px; }
 .fightfull-title { font-family: var(--serif); font-weight: 500; font-size: 19px; letter-spacing: -.01em; }
+.fight-timer { font-size: 13px; font-weight: 700; letter-spacing: .02em; color: var(--bad); font-variant-numeric: tabular-nums; background: #f7e3df; border-radius: 999px; padding: 5px 11px; }
+.fight-end { display: block; margin: 4px auto calc(14px + var(--safe-bottom)); background: none; border: 0; font-size: 12px; color: var(--ink-3); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .fightfull-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 8px 20px calc(28px + var(--safe-bottom)); }
 
 .fight-intro, .fight-wait { text-align: center; padding: 26px 6px; }

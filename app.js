@@ -485,8 +485,7 @@ function App({ client, onResetCreds }) {
       modal=${modal} setModal=${setModal} api=${api} />`;
   }
 
-  const [fightOpen, setFightOpen] = useState(false);
-  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab, openFight: () => setFightOpen(true) };
+  const ctx = { client, players, game, earnRules, rewards, txns, bets, balances, me, api, setModal, flash, setTab };
 
   const mem = tab === "memories";   // Memories is its own white, full-bleed space — no glass container, no photo backdrop (that container broke the photo carousel)
   const mapTab = tab === "map";     // Map is full-bleed too (edge-to-edge preview), but keeps the cool glass world
@@ -531,7 +530,7 @@ function App({ client, onResetCreds }) {
           </button>`)}
       </nav>
 
-      <${FightMode} client=${client} me=${me} players=${players} open=${fightOpen} setOpen=${setFightOpen} />
+      <${FightMode} client=${client} me=${me} players=${players} />
       ${modal && html`<${Modal} modal=${modal} close=${() => setModal(null)} ...${ctx} pickMe=${pickMe} onResetCreds=${onResetCreds} />`}
       ${toast && html`<div class="toast">${toast}</div>`}
       ${updateReady && html`<button class="updbar" onClick=${() => location.reload()}>✨ Update ready — tap to refresh</button>`}
@@ -811,7 +810,7 @@ function MoreTab(ctx) {
       </div>
     </div>
 
-    <${FightToggle} client=${client} me=${me} players=${players} onOpen=${ctx.openFight} />
+    <${FightToggle} client=${client} me=${me} players=${players} />
 
     <div class="card">
       <h2>Customise</h2>
