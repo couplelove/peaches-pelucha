@@ -1,70 +1,15 @@
 import { h } from "https://esm.sh/preact@10.23.2";
-import { useState, useEffect } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
 
 const html = htm.bind(h);
 
-/* Daily home-screen content: His & Hers Cancer horoscopes ♋ and a rotating
-   scripture. Everything is deterministic from the DATE — both phones show the
-   same words all day, and they change overnight. No APIs, no internet. */
+/* Daily home-screen content: a rotating scripture, deterministic from the DATE
+   so both phones show the same words all day and they change overnight. */
 
 const dayIndex = () => {
   const d = new Date();
   return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
 };
-
-/* ---- Cancer horoscope generator -------------------------------------------
-   Composed from fragment pools with different strides for him/her, so the two
-   readings are different but both rotate daily. */
-const MOODS = [
-  "The moon leans your way today",
-  "A soft-shell day — guard it gently",
-  "Your intuition runs a degree warmer than usual",
-  "Home is the strongest room in the house today",
-  "The tide pulls inward; let it",
-  "Something nostalgic resurfaces, kindly",
-  "Today rewards the quiet move, not the loud one",
-  "Your patience is the rare currency today",
-  "The crab walks sideways for a reason — so can you",
-  "Small comforts carry surprising weight today",
-  "An old feeling visits; greet it, don't keep it",
-  "You're more persuasive than you realize before noon",
-];
-const FOCUSES = [
-  "say the warm thing out loud instead of just thinking it",
-  "finish the small task that's been humming in the background",
-  "let the plan stay loose — the best part isn't scheduled",
-  "trade one hour of scrolling for one hour of making",
-  "ask the question you've been sitting on",
-  "feed people; it's your love language and it works",
-  "protect the evening — it wants to be slow",
-  "take the walk; the answer is somewhere on it",
-  "be first to soften — it costs nothing today",
-  "trust the gut read over the spreadsheet",
-  "leave room for a detour; it's the good kind",
-  "tidy one corner and the whole day follows",
-];
-const CLOSERS = [
-  "Lucky hour: just after dinner.",
-  "Wear something soft. Trust it.",
-  "A 💗 spent today returns double.",
-  "The discard pile knows. Watch it.",
-  "Tonight favors the bold lay-down.",
-  "Someone owes you a back rub. Collect.",
-  "Phone down, eyes up — that's the magic window.",
-  "Dessert is not optional today.",
-  "Your wild card is literal tonight.",
-  "Say yes to the second round.",
-];
-
-export function cancerDaily(offset) {
-  const d = dayIndex() + offset * 7;             // his/hers diverge
-  return {
-    mood: MOODS[d % MOODS.length],
-    focus: FOCUSES[(d * 5 + 3) % FOCUSES.length],
-    closer: CLOSERS[(d * 3 + 1) % CLOSERS.length],
-  };
-}
 
 /* ---- rotating scripture (KJV, short) ---- */
 const VERSES = [
@@ -93,48 +38,6 @@ const VERSES = [
 export function dailyVerse() {
   const [text, ref] = VERSES[dayIndex() % VERSES.length];
   return { text, ref };
-}
-
-/* ---- components ---- */
-export function HoroscopeCard({ players, client }) {
-  // Pelucha 🧸 · July 10 (him) — Peaches 🍑 · July 11 (her)
-  const pelucha = players.find((p) => p.name === "Pelucha") || players[1] || { emoji: "🧸", name: "Pelucha" };
-  const peaches = players.find((p) => p.name === "Peaches") || players[0] || { emoji: "🍑", name: "Peaches" };
-  // AI-written, varied, cached-per-day readings (with the local generator as a
-  // graceful fallback if the function/cache is unavailable).
-  const [gen, setGen] = useState(null);   // { readings: [{reading,closer}, ...] } | null
-  useEffect(() => {
-    if (!client) return;
-    let live = true;
-    const day = new Date().toISOString().slice(0, 10);
-    const people = [{ name: "Pelucha", birthday: "July 10" }, { name: "Peaches", birthday: "July 11" }];
-    (async () => {
-      try {
-        const { data: rows } = await client.from("horoscope_cache").select("data").eq("day", day).limit(1);
-        if (live && rows && rows[0] && rows[0].data && rows[0].data.readings) { setGen(rows[0].data); return; }
-      } catch {}
-      try {
-        const { data } = await client.functions.invoke("horoscope", { body: { day, people } });
-        if (live && data && data.readings) setGen(data);
-      } catch {}
-    })();
-    return () => { live = false; };
-  }, [client]);
-
-  const fb = (off) => { const c = cancerDaily(off); return { reading: `${c.mood} — ${c.focus}.`, closer: c.closer }; };
-  const r0 = (gen && gen.readings && gen.readings[0]) || fb(0);
-  const r1 = (gen && gen.readings && gen.readings[1]) || fb(1);
-  const Reading = (who, date, r) => html`<div class="horo-half">
-    <div class="eyebrow">${who.emoji} ${who.name} · ${date}</div>
-    <p class="horo-text">${r.reading} <span class="horo-closer">${r.closer}</span></p>
-  </div>`;
-  return html`<div class="card">
-    <h2>Cancer, today <span class="muted-glyph">♋</span></h2>
-    <div class="horo">
-      ${Reading(pelucha, "July 10", r0)}
-      ${Reading(peaches, "July 11", r1)}
-    </div>
-  </div>`;
 }
 
 export function ScriptureCard() {
