@@ -1326,3 +1326,38 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .lt-seed-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
 .lt-seed-x { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-content: center;
   font-size: 11px; color: var(--c-ink-2); background: rgba(20,33,46,.08); cursor: pointer; }
+
+/* ---- 🙏 Gratitude: rotating home card + full-screen journal ---- */
+.gratcard { cursor: pointer; }
+.grat-line { margin: 4px 0 2px; }
+.grat-line + .grat-line { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--c-line); }
+.grat-text { font-family: var(--serif); font-style: italic; font-size: 17px; line-height: 1.5; color: var(--c-ink); margin: 0; }
+.grat-by { font-size: 12.5px; color: var(--c-ink-2); margin-top: 4px; }
+.grat-empty { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--c-ink-2); margin: 2px 0 0; }
+.grat-cta { margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--c-accent); }
+
+/* full-screen journal — warm, calm, paper-toned (distinct from the cool app) */
+.gratfull { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #fbf6ef 0%, #f1e9dd 100%); color: var(--ink); animation: fade .15s ease; }
+.gratfull-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: calc(var(--safe-top) + 10px) 14px 8px; }
+.gratfull-bar .vw-x { position: static; flex: none; width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 16px; cursor: pointer; }
+.gratfull-title { font-family: var(--serif); font-weight: 500; font-size: 19px; letter-spacing: -.01em; }
+.gratfull-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 6px 18px calc(24px + var(--safe-bottom)); }
+.grat-compose { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.grat-compose textarea { font: inherit; font-size: 15.5px; line-height: 1.5; padding: 13px 14px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); width: 100%; resize: none; }
+.grat-compose textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.grat-blank { text-align: center; color: var(--ink-2); font-family: var(--serif); font-style: italic; font-size: 16px; padding: 30px 16px; }
+.grat-list { display: flex; flex-direction: column; gap: 12px; }
+.grat-item { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px;
+  box-shadow: 0 6px 18px -14px rgba(43,37,33,.3); }
+.grat-item.mine { background: var(--accent-soft); border-color: transparent; }
+.grat-item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
+.grat-item-who { font-size: 12px; font-weight: 700; color: var(--ink); }
+.grat-item-date { font-size: 11px; color: var(--ink-3); }
+.grat-item-text { font-family: var(--serif); font-size: 17px; line-height: 1.5; color: var(--ink); margin: 0; }
+.grat-item-del { margin-top: 8px; background: none; border: 0; padding: 0; font-size: 12px; color: var(--ink-3); cursor: pointer; }
+.grat-item-del:active { color: var(--bad); }

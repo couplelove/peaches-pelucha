@@ -450,3 +450,16 @@ do $$ declare t text; begin
     begin execute format('alter publication supabase_realtime add table %I;', t); exception when duplicate_object then null; end;
   end loop;
 end $$;
+
+-- gratitudes (027): shared gratitude notes (home rotates one/day; full-screen lists all)
+create table if not exists gratitudes (
+  id uuid primary key default gen_random_uuid(),
+  text text not null,
+  created_by uuid references players(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists gratitudes_recent on gratitudes (created_at desc);
+alter table gratitudes enable row level security;
+drop policy if exists anon_all on gratitudes;
+create policy anon_all on gratitudes for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table gratitudes; exception when duplicate_object then null; end $$;

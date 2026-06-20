@@ -99,6 +99,11 @@ function seed() {
     { id: uid(), term: "Dreams", video_id: null, title: "Dreams", added_by: pelucha, created_at: nowISO() },
   ];
   db.radio_state = [];
+  db.gratitudes = [
+    { id: uid(), text: "The way you make coffee before I'm even up.", created_by: peaches, created_at: new Date(Date.now() - 2 * 864e5).toISOString() },
+    { id: uid(), text: "Your laugh through the wall while you're on a call.", created_by: pelucha, created_at: new Date(Date.now() - 1 * 864e5).toISOString() },
+    { id: uid(), text: "How you always save me the last bite.", created_by: peaches, created_at: nowISO() },
+  ];
   return db;
 }
 
@@ -126,6 +131,7 @@ const DEFAULTS = {
   trip_stops: { note: null, seq: 0, visited: false },
   radio_seeds: { term: "", video_id: null, title: null, added_by: null },
   radio_state: { state: {}, version: 0 },
+  gratitudes: { created_by: null },
 };
 
 function matches(row, filters) {

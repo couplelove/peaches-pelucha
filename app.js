@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2?bundle";
 import { PlayTab } from "./game.js";
 import { DateRoulette } from "./roulette.js";
 import { HoroscopeCard, ScriptureCard } from "./home.js";
+import { GratitudeCard } from "./gratitude.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 import { get as idbGet, set as idbSet } from "https://esm.sh/idb-keyval@6";
 
@@ -650,6 +651,7 @@ function ScoreTab(ctx) {
     <div data-noswipe><${PlayTab} ...${ctx} /></div>
     <${HoroscopeCard} players=${ctx.players} />
     <${ScriptureCard} />
+    <${GratitudeCard} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
     <${WatchTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
     <${DateRoulette} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash}
       onPlan=${(pick) => { window.__ppPlanPrefill = pick; ctx.setTab("plans"); }} />
