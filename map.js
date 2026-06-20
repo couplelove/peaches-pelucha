@@ -211,21 +211,40 @@ export function MapCard({ client, me, players, flash }) {
   const loadTrips = useCallback(async () => { const { data } = await client.from("trips").select("*").order("created_at", { ascending: false }); setTrips(data || []); }, [client]);
   const loadStops = useCallback(async (tripId) => { if (!tripId) { setStops([]); return; } const { data } = await client.from("trip_stops").select("*").eq("trip_id", tripId).order("seq"); setStops(data || []); }, [client]);
   const loadMemDays = useCallback(async () => {
-    const { data } = await client.from("memories").select("id,taken_on,lat,lng,place").order("taken_on", { ascending: false });
+    const { data } = await client.from("memories").select("id,taken_on,lat,lng,place").order("taken_on", { ascending: false }).limit(2000);
+    // group every day; a day's location is the CENTROID of its geotagged photos
     const byDay = new Map();
     for (const m of data || []) {
-      if (m.lat == null || m.lng == null) continue;
-      const g = byDay.get(m.taken_on);
-      if (g) g.count++; else byDay.set(m.taken_on, { date: m.taken_on, lat: m.lat, lng: m.lng, place: m.place, count: 1 });
+      let g = byDay.get(m.taken_on);
+      if (!g) { g = { date: m.taken_on, count: 0, sumLat: 0, sumLng: 0, geo: 0, place: null }; byDay.set(m.taken_on, g); }
+      g.count++;
+      if (m.lat != null && m.lng != null) { g.sumLat += m.lat; g.sumLng += m.lng; g.geo++; }
+      if (!g.place && m.place) g.place = m.place;
     }
-    // pull each day's AI chapter title so the list reads as a journey, not the
-    // same city name repeated.
-    const days = [...byDay.keys()];
+    const all = [...byDay.values()];
+    const geoDays = all.filter((g) => g.geo > 0).map((g) => ({ date: g.date, lat: g.sumLat / g.geo, lng: g.sumLng / g.geo, place: g.place }));
+    const t = (iso) => new Date(iso + "T12:00:00").getTime();
+    // small deterministic spread so many approximated days don't stack on one pin
+    const jit = (iso, k) => { let h = 0; for (let i = 0; i < iso.length; i++) h = (h * 31 + iso.charCodeAt(i) + k) >>> 0; return ((h % 1000) / 1000 - 0.5) * 0.012; };
+    const out = [];
+    for (const g of all) {
+      if (g.geo > 0) {
+        out.push({ date: g.date, lat: g.sumLat / g.geo, lng: g.sumLng / g.geo, place: g.place, count: g.count, approx: false });
+      } else if (geoDays.length) {
+        // no location that day → borrow the nearest geotagged day's center (approx)
+        let best = geoDays[0], bd = Infinity;
+        for (const gd of geoDays) { const d = Math.abs(t(gd.date) - t(g.date)); if (d < bd) { bd = d; best = gd; } }
+        out.push({ date: g.date, lat: best.lat + jit(g.date, 1), lng: best.lng + jit(g.date, 7), place: g.place, count: g.count, approx: true });
+      }
+    }
+    // pull each day's AI chapter title so the list reads as a journey
+    const days = out.map((d) => d.date);
     if (days.length) {
       const { data: st } = await client.from("day_stories").select("day,title").in("day", days);
-      (st || []).forEach((s) => { const g = byDay.get(s.day); if (g && s.title) g.title = s.title; });
+      const titles = {}; (st || []).forEach((s) => { if (s.title) titles[s.day] = s.title; });
+      out.forEach((d) => { if (titles[d.date]) d.title = titles[d.date]; });
     }
-    setMemDays([...byDay.values()]);
+    setMemDays(out);
   }, [client]);
 
   const selTripRef = useRef(null);
@@ -419,7 +438,7 @@ export function MapCard({ client, me, players, flash }) {
       ${memDays.length === 0
         ? html`<div class="map-empty">Geotagged photo days show up here automatically.</div>`
         : html`<div class="map-list">${memDays.map((d) => {
-            const sub = [d.title && d.place ? d.place : null, fmtDay(d.date), `${d.count} ${d.count === 1 ? "photo" : "photos"}`].filter(Boolean).join(" · ");
+            const sub = [d.title && d.place ? d.place : null, fmtDay(d.date), `${d.count} ${d.count === 1 ? "photo" : "photos"}`, d.approx ? "approx." : null].filter(Boolean).join(" · ");
             return html`<div class="map-row" role="button" key=${d.date} onClick=${() => rowGo(inFull, d.lat, d.lng)}>
               <span class="mr-emoji">📸</span>
               <span class="mr-main"><span class="mr-title">${d.title || d.place || "A day together"}</span><span class="mr-sub">${sub}</span></span>
