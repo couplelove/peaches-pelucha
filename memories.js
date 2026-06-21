@@ -229,6 +229,50 @@ const uploadWithRetry = (client, path, blob, contentType) =>
   withRetry(() => client.storage.from("memories")
     .upload(path, blob, { contentType, cacheControl: "31536000", upsert: true }));
 
+// Resumable (TUS) upload for LARGE files — i.e. videos. A one-shot upload of a
+// 160MB clip over a phone uplink restarts from zero if the connection drops at
+// 90%. TUS checkpoints in 6MB chunks (the size Supabase requires): on a dropped
+// chunk we re-sync the server's true offset via HEAD and continue from there,
+// not from the start. Covers the common case (a flaky network during one
+// upload); we don't persist across app restarts. Falls back to the one-shot
+// path if the TUS endpoint is ever unavailable, so it can only add reliability.
+const TUS_CHUNK = 6 * 1024 * 1024;                   // Supabase requires exactly 6MB chunks
+const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
+async function uploadResumable(path, blob, contentType, onProgress) {
+  const creds = window.PP_CREDS;
+  if (!creds || !creds.url || !creds.key) throw new Error("no creds for resumable upload");
+  const endpoint = `${creds.url}/storage/v1/upload/resumable`;
+  const auth = { authorization: `Bearer ${creds.key}`, apikey: creds.key, "Tus-Resumable": "1.0.0" };
+  const total = blob.size;
+  // 1) create the upload — server hands back a Location to PATCH chunks into
+  const meta = [["bucketName", "memories"], ["objectName", path], ["contentType", contentType], ["cacheControl", "31536000"]]
+    .map(([k, v]) => `${k} ${b64(v)}`).join(",");
+  const create = await fetch(endpoint, { method: "POST", headers: { ...auth, "Upload-Length": String(total), "Upload-Metadata": meta, "x-upsert": "true" } });
+  if (!create.ok) throw new Error("tus create " + create.status);
+  const loc = create.headers.get("location");
+  if (!loc) throw new Error("tus: no upload location (CORS?)");
+  const url = loc.startsWith("http") ? loc : new URL(loc, endpoint).href;
+  // 2) stream the chunks, re-syncing the offset on any hiccup
+  let offset = 0, tries = 0;
+  while (offset < total) {
+    try {
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { ...auth, "Upload-Offset": String(offset), "Content-Type": "application/offset+octet-stream", "x-upsert": "true" },
+        body: blob.slice(offset, Math.min(offset + TUS_CHUNK, total)),
+      });
+      if (!res.ok) throw new Error("tus patch " + res.status);
+      offset = parseInt(res.headers.get("upload-offset"), 10) || Math.min(offset + TUS_CHUNK, total);
+      tries = 0;
+      if (onProgress) onProgress(offset, total);
+    } catch (e) {
+      if (++tries > 6) throw e;                       // give up → caller falls back to one-shot
+      await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** tries, 15000) + Math.random() * 400));
+      try { const h = await fetch(url, { method: "HEAD", headers: auth }); if (h.ok) { const o = parseInt(h.headers.get("upload-offset"), 10); if (!isNaN(o)) offset = o; } } catch {}
+    }
+  }
+}
+
 // the grid needs only these columns — never pull the (large, unused) lat/lng or
 // any future heavy column into the list query. blur is a tiny inline data-URL.
 const SELECT_COLS = "id,path,thumb_path,blur,kind,taken_on,place,created_at";
@@ -435,7 +479,13 @@ export function MemoriesTab({ client, me, flash }) {
     const jobs = files.map((f, i) => ({ i, f, status: "queued" }));
     const forceDay = dayOpen;                         // picking inside an open day → the file belongs to THAT day
     const added = [];                                 // inserted rows, merged in immediately (survives pagination)
-    const paint = () => setUploads({ done: jobs.filter((j) => j.status === "done" || j.status === "failed").length, total: jobs.length, failed: jobs.filter((j) => j.status === "failed").length });
+    const paint = () => {
+      const done = jobs.filter((j) => j.status === "done" || j.status === "failed").length;
+      // fractional progress so a single big video animates the bar instead of
+      // sitting at 0% until it finishes (each job contributes 0..1).
+      const frac = jobs.reduce((s, j) => s + (j.status === "done" || j.status === "failed" ? 1 : (j.prog || 0)), 0);
+      setUploads({ done, total: jobs.length, failed: jobs.filter((j) => j.status === "failed").length, pct: Math.round((frac / jobs.length) * 100) });
+    };
     paint();
     const runJob = async (j) => {
       const f = j.f;
@@ -467,7 +517,20 @@ export function MemoriesTab({ client, me, flash }) {
           }
         }
         const path = `${base}.${ext}`;
-        await uploadWithRetry(client, path, blob, ct);
+        // Videos are big & uploaded over a phone → resumable (TUS) so a dropped
+        // connection resumes instead of restarting. Photos/thumbs are tiny → the
+        // one-shot upload (resumable's 6MB-chunk floor would only add overhead).
+        if (isVideo && window.PP_CREDS && window.PP_CREDS.url) {
+          try {
+            await uploadResumable(path, blob, ct, (sent, tot) => { j.prog = tot ? sent / tot : 0; paint(); });
+          } catch {
+            j.prog = 0; paint();
+            await uploadWithRetry(client, path, blob, ct);   // TUS unavailable → one-shot fallback
+          }
+        } else {
+          await uploadWithRetry(client, path, blob, ct);
+        }
+        j.prog = 1; paint();
         // thumbnail/poster is a separate small object; failure here is non-fatal
         // (grid falls back to the full image), so don't sink the whole upload.
         let thumb_path = null;
@@ -785,7 +848,7 @@ export function MemoriesTab({ client, me, flash }) {
       </div>
       <input ref=${fileInput} type="file" accept="image/*,video/*" multiple style="display:none" onChange=${onPick} />
 
-      ${uploads && html`<div class="upbar"><div class="upbar-fill" style=${`width:${Math.round((uploads.done / uploads.total) * 100)}%`}></div></div>`}
+      ${uploads && html`<div class="upbar"><div class="upbar-fill" style=${`width:${uploads.pct != null ? uploads.pct : Math.round((uploads.done / uploads.total) * 100)}%`}></div></div>`}
       ${uploads && html`<div class="tiny muted" style="margin:-6px 0 10px">uploading ${uploads.done}/${uploads.total}${uploads.failed ? ` · ${uploads.failed} failed` : ""}</div>`}
 
       ${items === null && html`<div class="memskel">${[...Array(9)].map((_, i) => html`<div class="memskel-cell" key=${i}></div>`)}</div>`}

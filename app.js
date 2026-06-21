@@ -152,6 +152,8 @@ function Root() {
     if (creds.url && creds.key) {
       try {
         setClient(createClient(creds.url, creds.key, { auth: { persistSession: false } }));
+        // expose resolved creds for the resumable (TUS) video upload path in memories.js
+        window.PP_CREDS = { url: creds.url, key: creds.key };
         setCredError("");
       } catch (e) {
         setCredError(String(e.message || e));
