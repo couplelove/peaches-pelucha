@@ -98,6 +98,32 @@ function videoPoster(file) {
     v.src = url;
   });
 }
+// Same capture, but from a Storage URL (for backfilling posters onto legacy
+// videos that predate on-device poster generation). preload=metadata + a short
+// seek only pulls the first frames via range requests — not the whole file —
+// and crossOrigin keeps the captured frame untainted so it can be encoded. Run
+// it OFF-DOM and one-at-a-time; many video elements at once is what crashed the
+// day grid. Any CORS/decode hiccup resolves null and is simply skipped.
+function posterFromUrl(url) {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.muted = true; v.playsInline = true; v.preload = "metadata"; v.crossOrigin = "anonymous";
+    let done = false;
+    const finish = (val) => { if (done) return; done = true; clearTimeout(wd); try { v.removeAttribute("src"); v.load(); } catch {} resolve(val); };
+    const grab = async () => {
+      try {
+        const thumb = await encodeCanvas(canvasOf(v, 400, true), 0.8);
+        const blur = blurDataURL(v);
+        finish({ thumb, blur });
+      } catch { finish(null); }
+    };
+    v.onloadeddata = () => { try { v.currentTime = Math.min(0.1, (v.duration || 1) / 2); } catch { grab(); } };
+    v.onseeked = grab;
+    v.onerror = () => finish(null);
+    const wd = setTimeout(() => finish(null), 8000);
+    v.src = url;
+  });
+}
 
 /* ---- capture metadata: the photo knows when and where it was taken -------
    EXIF lives as a TIFF block after an "Exif\0\0" marker — in JPEGs and HEICs
@@ -249,9 +275,21 @@ export function MemoriesTab({ client, me, flash }) {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
     catch { return ""; }
   }, [client]);
-  // the grid/game load the small thumb; fall back to the full image for legacy
-  // rows that predate thumbnails (thumb_path null).
-  const thumbUrl = useCallback((it) => pubUrl(it.thumb_path || it.path), [pubUrl]);
+  // On-the-fly resized render of a stored image (Supabase image transform). Used
+  // so a legacy full-size original is served as a small thumbnail instead of
+  // shipping a multi-MB JPEG into a grid tile (a 5MB original → ~290KB @ w=400).
+  const renderUrl = useCallback((path, width, quality = 70) => {
+    const u = pubUrl(path);
+    return u.includes("/object/public/")
+      ? u.replace("/object/public/", "/render/image/public/") + `?width=${width}&quality=${quality}`
+      : u;
+  }, [pubUrl]);
+  // The grid/game preview image: the stored thumb if we have one; else a RESIZED
+  // render of a legacy photo. Thumbless videos have no preview image (null) — the
+  // grid shows a poster tile, never a heavyweight <video> (many at once crash iOS).
+  const thumbUrl = useCallback((it) =>
+    it.thumb_path ? pubUrl(it.thumb_path) : (it.kind === "photo" ? renderUrl(it.path, 400) : null),
+    [pubUrl, renderUrl]);
 
   const pageQuery = useCallback((from, to) =>
     client.from("memories").select(SELECT_COLS)
@@ -340,6 +378,42 @@ export function MemoriesTab({ client, me, flash }) {
     document.addEventListener("visibilitychange", wake);
     return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
   }, [client, load, refresh, mergeRow]);
+
+  // Backfill posters for legacy videos that predate on-device poster generation
+  // (no thumb_path). The grid shows a clean poster tile for these instead of a
+  // crashy live <video>; here we quietly mint a real thumbnail so it — and the
+  // day feed and the Map — get a still. OFF-DOM, idle-gated, one at a time, a
+  // few per pass; the effect re-fires as state settles so it works through the
+  // whole library across a session without ever mounting concurrent videos.
+  const bf = useRef({ running: false, done: new Set() });
+  useEffect(() => {
+    if (!items || bf.current.running) return;
+    const need = items.filter((it) => it.kind === "video" && !it.thumb_path && !bf.current.done.has(it.id));
+    if (!need.length) return;
+    bf.current.running = true;
+    let live = true;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+    idle(async () => {
+      try {
+        let made = 0;
+        for (const it of need) {
+          if (!live || made >= 6) break;              // bounded per pass; spreads the work + data
+          bf.current.done.add(it.id);                 // never retry the same row this session
+          const poster = await posterFromUrl(pubUrl(it.path));
+          if (!live) return;
+          if (!poster) continue;
+          const thumb_path = it.path.replace(/(\.[^.]+)?$/, "") + ".thumb." + poster.thumb.ext;
+          try {
+            await uploadWithRetry(client, thumb_path, poster.thumb.blob, poster.thumb.ct);
+            await client.from("memories").update({ thumb_path, blur: poster.blur }).eq("id", it.id);
+            setItems((cur) => (cur || []).map((r) => r.id === it.id ? { ...r, thumb_path, blur: poster.blur } : r));
+            made++;
+          } catch {}
+        }
+      } finally { bf.current.running = false; }
+    });
+    return () => { live = false; bf.current.running = false; };
+  }, [items, client, pubUrl]);
 
   // infinite scroll: a sentinel below the grid pulls the next page as it nears.
   useEffect(() => {
@@ -678,21 +752,20 @@ export function MemoriesTab({ client, me, flash }) {
   const openGroup = dayOpen ? groups.find((g) => g.date === dayOpen) : null;
 
   // one photo/video tile (used in a day's grid)
-  const cell = (it) => html`<button class=${`memcell ${sel ? "selble" : ""} ${sel && sel.has(it.id) ? "selon" : ""}`} key=${it.id} data-id=${it.id}
-    onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}
-    onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selCancel : holdCancel}
-    onContextMenu=${(e) => e.preventDefault()}>
-    ${it.blur && html`<span class="memblur" style=${`background-image:url(${it.blur})`}></span>`}
-    ${it.kind === "video" && !it.thumb_path
-      ? html`<video src=${pubUrl(it.path) + "#t=0.1"} preload="metadata" muted playsinline
-          onLoadedData=${(e) => e.target.classList.add("ld")}
-          ref=${(el) => { if (el && el.readyState >= 2) el.classList.add("ld"); }}></video>`
-      : html`<img src=${thumbUrl(it)} loading="lazy" decoding="async" alt="" crossorigin="anonymous"
+  const cell = (it) => {
+    const src = thumbUrl(it);                         // null only for a thumbless video → poster tile
+    return html`<button class=${`memcell ${sel ? "selble" : ""} ${sel && sel.has(it.id) ? "selon" : ""}`} key=${it.id} data-id=${it.id}
+      onPointerDown=${sel ? selDown(it) : holdStart(it)} onPointerUp=${sel ? selUp : holdEnd(it)}
+      onPointerMove=${sel ? selMove : holdCancel} onPointerCancel=${sel ? selCancel : holdCancel}
+      onContextMenu=${(e) => e.preventDefault()}>
+      ${it.blur && html`<span class="memblur" style=${`background-image:url(${it.blur})`}></span>`}
+      ${src && html`<img src=${src} loading="lazy" decoding="async" alt="" crossorigin="anonymous"
           onLoad=${(e) => e.target.classList.add("ld")}
           ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />`}
-    ${it.kind === "video" && html`<span class="memplay">🎥</span>`}
-    ${sel && html`<span class="selbadge">${sel.has(it.id) ? "✓" : ""}</span>`}
-  </button>`;
+      ${it.kind === "video" && html`<span class="memplay">🎥</span>`}
+      ${sel && html`<span class="selbadge">${sel.has(it.id) ? "✓" : ""}</span>`}
+    </button>`;
+  };
 
   return html`<div>
     <div class="card">
@@ -723,7 +796,7 @@ export function MemoriesTab({ client, me, flash }) {
         ${groups.map((g, gi) => {
           const s = stories[g.date];
           const cover = g.items.find((i) => i.kind === "photo") || g.items[0];
-          const heroSrc = cover.thumb_path ? pubUrl(cover.thumb_path) : (cover.kind === "photo" ? pubUrl(cover.path) : null);
+          const heroSrc = cover.thumb_path ? pubUrl(cover.thumb_path) : (cover.kind === "photo" ? renderUrl(cover.path, 700) : null);
           const evs = events.filter((e) => e.starts_on === g.date);
           // blur-up placeholder (instant) under a natively lazy hero (off-screen cards never fetch)
           return html`<button class="daytile" key=${g.date} style=${cover.blur ? `background-image:url(${cover.blur})` : ""} onClick=${() => openDay(g.date)}>
@@ -770,17 +843,15 @@ export function MemoriesTab({ client, me, flash }) {
       ${view === "game" && items !== null && html`<${MatchGame} items=${items} pubUrl=${pubUrl} thumbUrl=${thumbUrl} />`}
     </div>
 
-    ${lightbox !== null && html`<${Lightbox} items=${flat} index=${lightbox} pubUrl=${pubUrl} origin=${origin.current}
+    ${lightbox !== null && html`<${Lightbox} items=${flat} index=${lightbox} pubUrl=${pubUrl} renderUrl=${renderUrl} origin=${origin.current}
       onClose=${() => setLightbox(null)} onNav=${(i) => setLightbox(i)} onOptions=${(it) => setSheet(it)} />`}
 
     ${sheet && html`<div class="modal-bg asheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setSheet(null); }}>
       <div class="modal">
         <div class="handle"></div>
         <div class="asheet-preview">
-          <span class="apv-media">
-            ${sheet.kind === "video" && !sheet.thumb_path
-              ? html`<video src=${pubUrl(sheet.path) + "#t=0.1"} preload="metadata" muted playsinline></video>`
-              : html`<img src=${thumbUrl(sheet)} alt="" crossorigin="anonymous" />`}
+          <span class="apv-media" style=${!thumbUrl(sheet) && sheet.blur ? `background-image:url(${sheet.blur});background-size:cover;background-position:center` : ""}>
+            ${thumbUrl(sheet) && html`<img src=${thumbUrl(sheet)} alt="" crossorigin="anonymous" />`}
             ${sheet.kind === "video" && html`<span class="memplay">🎥</span>`}
           </span>
           <div class="tiny muted" style="margin-top:8px">${dayHead(sheet.taken_on)}${sheet.place ? " · 📍 " + sheet.place : ""}</div>
@@ -824,7 +895,7 @@ export function MemoriesTab({ client, me, flash }) {
      spring release that commits or snaps back
    - dragging DOWN scales the media and fades the backdrop under your finger
      (release past the threshold dismisses, otherwise it springs home)      */
-function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions, origin }) {
+function Lightbox({ items, index, pubUrl, renderUrl, onClose, onNav, onOptions, origin }) {
   const it = items[index];
   const track = useRef(null);
   const bg = useRef(null);
@@ -912,20 +983,29 @@ function Lightbox({ items, index, pubUrl, onClose, onNav, onOptions, origin }) {
   // Neighbour panes load only their POSTER/blur — the heavy full image or video
   // streams in only for the pane you're actually on. Full-res images develop in
   // over the blur (no white flash, no layout pop).
-  const pane = (item, current) => item ? html`<div class="lb-pane" key=${item.id}>
-    ${item.kind === "video"
-      ? (current
-          ? html`<video src=${pubUrl(item.path)} poster=${item.thumb_path ? pubUrl(item.thumb_path) : undefined} controls playsinline autoplay muted=${false}></video>`
-          : item.thumb_path
-            ? html`<img src=${pubUrl(item.thumb_path)} alt="" crossorigin="anonymous" /><span class="lb-play">🎥</span>`
-            : html`<video src=${pubUrl(item.path) + "#t=0.1"} preload="metadata" muted playsinline></video><span class="lb-play">🎥</span>`)
-      : html`<span class="lb-frame">
-          ${item.blur && html`<span class="lb-blur" style=${`background-image:url(${item.blur})`}></span>`}
-          <img src=${current ? pubUrl(item.path) : (item.thumb_path ? pubUrl(item.thumb_path) : pubUrl(item.path))} alt="" crossorigin="anonymous"
-            onLoad=${(e) => e.target.classList.add("ld")}
-            ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />
-        </span>`}
-  </div>` : html`<div class="lb-pane"></div>`;
+  // Only the CURRENT pane streams the heavy media (full image / the video). The
+  // two neighbours show a light poster (thumb, or a resized render, or the blur)
+  // so swiping never has more than one <video> mounted — and never a multi-MB
+  // original just to sit off-screen.
+  const pane = (item, current) => {
+    if (!item) return html`<div class="lb-pane"></div>`;
+    return html`<div class="lb-pane" key=${item.id}>
+      ${item.kind === "video"
+        ? (current
+            ? html`<video src=${pubUrl(item.path)} poster=${item.thumb_path ? pubUrl(item.thumb_path) : undefined} controls playsinline autoplay muted=${false}></video>`
+            : html`<span class="lb-frame">
+                ${item.blur && html`<span class="lb-blur" style=${`background-image:url(${item.blur})`}></span>`}
+                ${item.thumb_path && html`<img src=${pubUrl(item.thumb_path)} alt="" crossorigin="anonymous" />`}
+                <span class="lb-play">🎥</span>
+              </span>`)
+        : html`<span class="lb-frame">
+            ${item.blur && html`<span class="lb-blur" style=${`background-image:url(${item.blur})`}></span>`}
+            <img src=${current ? pubUrl(item.path) : (item.thumb_path ? pubUrl(item.thumb_path) : renderUrl(item.path, 500))} alt="" crossorigin="anonymous"
+              onLoad=${(e) => e.target.classList.add("ld")}
+              ref=${(el) => { if (el && el.complete && el.naturalWidth) el.classList.add("ld"); }} />
+          </span>`}
+    </div>`;
+  };
 
   const ox = origin ? origin.x : W() / 2;
   const oy = origin ? origin.y : window.innerHeight / 2;

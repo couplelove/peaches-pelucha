@@ -406,9 +406,11 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 /* ---- 📸 memories: gallery, lightbox, match game ---- */
 .memday { font-family: var(--serif); font-weight: 500; font-size: 15px; color: var(--ink); margin: 16px 0 8px; }
-.memgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-  content-visibility: auto; contain-intrinsic-size: auto 360px; }
+.memgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* per-cell content-visibility: a 100+ photo day only decodes the tiles near the
+   viewport, not the whole grid at once (off-screen cells reserve ~33vw square). */
 .memcell { position: relative; border: none; padding: 0; background: var(--paper-2); border-radius: 10px;
+  content-visibility: auto; contain-intrinsic-size: auto 33vw;
   overflow: hidden; aspect-ratio: 1; cursor: pointer;
   box-shadow: 0 1px 2px rgba(43,37,33,.07);
   transition: transform .28s cubic-bezier(.22,.9,.3,1.02), box-shadow .28s ease; }
