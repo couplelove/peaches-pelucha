@@ -399,7 +399,7 @@ function artFor(card) {
   return arts[h % arts.length];
 }
 
-function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
+function Card({ card, sel, isNew, onClick, small, cid, fan, dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   let face, bg = "#fff", color = "#fff8f3";
   if (E.isNumber(card)) { bg = CARD_BG[card.color]; face = card.num; }
   else if (E.isWild(card)) { bg = "#2b2521"; color = "#e7c98a"; face = "★"; }      // ink card, gold star
@@ -416,7 +416,7 @@ function Card({ card, sel, onClick, small, cid, fan, dragging, onPointerDown, on
   // the discard because your finger always lands on the card art.
   const Tag = interactive ? "button" : "div";
   return html`<${Tag} data-cid=${cid} data-tf=${f.tf || ""}
-    class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${dragging ? "dragging" : ""} ${interactive ? "" : "static"}`}
+    class=${`pcard ${small ? "sm" : ""} ${sel ? "sel" : ""} ${isNew ? "justdrew" : ""} ${dragging ? "dragging" : ""} ${interactive ? "" : "static"}`}
     style=${`background:${bg};color:${color};${f.css || ""}`} onClick=${onClick}
     onPointerDown=${onPointerDown} onPointerMove=${onPointerMove} onPointerUp=${onPointerUp} onPointerCancel=${onPointerCancel}>
     ${!small && html`<span class="pcorner">${face}</span>`}${art ? html`<span class="cart">${art}</span>` : face}<//>`;
@@ -444,7 +444,7 @@ function fanOf(i, n, sel) {
 //   dies when iOS interrupts a gesture); pointerup/cancel/blur/visibility all
 //   end the drag, and a watchdog force-ends it if events stop arriving
 // - on release the ghost glides into the card's slot, then evaporates
-function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard, canTargetMelds }) {
+function Hand({ cards, flat, interactive, selectedId, drawnId, onSelect, onReorder, canDropOnMeld, onDropOnMeld, canDropOnDiscard, onDropOnDiscard, canTargetMelds }) {
   const drag = useRef(null);
   const wrap = useRef(null);
 
@@ -603,7 +603,7 @@ function Hand({ cards, flat, interactive, selectedId, onSelect, onReorder, canDr
   };
 
   return html`<div ref=${wrap} class=${`hand ${flat ? "flat" : ""}`}>
-    ${cards.map((c, i) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id}
+    ${cards.map((c, i) => html`<${Card} key=${c.id} card=${c} cid=${c.id} sel=${selectedId === c.id} isNew=${drawnId === c.id}
       fan=${flat ? null : fanOf(i, cards.length, selectedId === c.id)}
       onPointerDown=${(e) => down(e, c.id)} />`)}
   </div>`;
@@ -689,6 +689,10 @@ function Board(props) {
   const [mode, setMode] = useState("normal"); // normal | laying
   const [pick, setPick] = useState(null);      // selected hand card id (discard/hit)
   useEffect(() => { setMode("normal"); setPick(null); }, [s.turn, s.turnPhase, s.status, s.handNumber]);
+  // the card you just drew this turn — highlighted in the fan so you can spot it
+  // at once. Persists through your turn; cleared when the turn passes / new hand.
+  const [drawnId, setDrawnId] = useState(null);
+  useEffect(() => { setDrawnId(null); }, [s.turn, s.handNumber, s.status]);
 
   const [showPhases, setShowPhases] = useState(false);  // 📋 all-phases sheet
 
@@ -893,8 +897,11 @@ function Board(props) {
   };
 
   const draw = (src) => {
-    const drawn = src === "discard" ? s.discard[s.discard.length - 1] : null;   // pile draw stays hidden
-    commit(tagMove(E.drawFrom(s, meId, src), { by: meId, kind: "draw", src, card: drawn }, true));
+    const drawn = src === "discard" ? s.discard[s.discard.length - 1] : null;   // pile draw stays hidden (turnLog)
+    const next = E.drawFrom(s, meId, src);
+    const justDrew = next.hands[meId][next.hands[meId].length - 1];              // the card the engine just added
+    setDrawnId(justDrew ? justDrew.id : null);                                  // local only → mark it in MY fan
+    commit(tagMove(next, { by: meId, kind: "draw", src, card: drawn }, true));
   };
   const doDiscard = () => {
     if (!pick) return;
@@ -1003,7 +1010,7 @@ function Board(props) {
                 : null}
           `}
           <${Hand} cards=${myHand} flat=${flatHand} interactive=${myTurn && s.turnPhase === "play"}
-            selectedId=${pick} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
+            selectedId=${pick} drawnId=${drawnId} onSelect=${(id) => setPick(pick === id ? null : id)} onReorder=${setOrderSaved}
             canDropOnMeld=${canDropOnMeld} onDropOnMeld=${onDropOnMeld} canTargetMelds=${() => myTurn && s.turnPhase === "play" && !!s.laidDown[meId]}
             canDropOnDiscard=${canDropOnDiscard} onDropOnDiscard=${onDropOnDiscard} />
           <div class="phasereq">${s.laidDown[meId]
