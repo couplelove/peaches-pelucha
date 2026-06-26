@@ -877,19 +877,29 @@ function Board(props) {
   if (s.status === "handOver") return html`<${HandOver} ...${props} oppId=${oppId} pinfo=${pinfo} />`;
   if (s.status === "matchOver") return html`<${MatchOver} ...${props} pinfo=${pinfo} />`;
 
-  // When a move ENDS the hand/match, tag the going-out move onto lastHand so the
-  // winning-moment screen can replay HOW it ended — even for the partner who
-  // wasn't watching. Pure metadata; the engine never reads finalMove.
-  const withFinal = (next, fm) => {
-    if ((next.status === "handOver" || next.status === "matchOver") && next.lastHand && !next.lastHand.finalMove) next.lastHand.finalMove = fm;
+  // Record the WHOLE going-out turn so the winning-moment screen can replay every
+  // move (draw → lay/hits → discard), not just the last card — closure for the
+  // partner who wasn't watching. `turnLog` accumulates the actor's moves and
+  // resets on their draw (the first action of any turn); when a move ends the
+  // hand/match the log is frozen onto lastHand.moves. Pure metadata; the engine
+  // never reads it. Pile-draws carry no card (face-down) so nothing leaks.
+  const tagMove = (next, entry, reset) => {
+    next.turnLog = reset ? [entry] : [...(s.turnLog || []), entry];
+    if ((next.status === "handOver" || next.status === "matchOver") && next.lastHand) {
+      next.lastHand.moves = next.turnLog;
+      next.lastHand.finalMove = entry;            // back-compat + emphasis on the last move
+    }
     return next;
   };
 
-  const draw = (src) => commit(E.drawFrom(s, meId, src));
+  const draw = (src) => {
+    const drawn = src === "discard" ? s.discard[s.discard.length - 1] : null;   // pile draw stays hidden
+    commit(tagMove(E.drawFrom(s, meId, src), { by: meId, kind: "draw", src, card: drawn }, true));
+  };
   const doDiscard = () => {
     if (!pick) return;
     const card = (s.hands[meId] || []).find((c) => c.id === pick);
-    commit(withFinal(E.discard(s, meId, pick), { by: meId, kind: "discard", card }));
+    commit(tagMove(E.discard(s, meId, pick), { by: meId, kind: "discard", card }));
   };
   // returns whether the hit was legal — the meld shakes itself on false
   const doHit = (ownerId, idx) => {
@@ -897,7 +907,7 @@ function Board(props) {
     const card = (s.hands[meId] || []).find((c) => c.id === pick);
     const meld = (s.table[ownerId] || [])[idx];
     if (!(card && meld && E.canHit(meld, card))) return false;
-    commit(withFinal(E.hit(s, meId, pick, ownerId, idx), { by: meId, kind: "hit", card, owner: ownerId, idx }));
+    commit(tagMove(E.hit(s, meId, pick, ownerId, idx), { by: meId, kind: "hit", card, owner: ownerId, idx }));
     setPick(null);
     return true;
   };
@@ -915,7 +925,7 @@ function Board(props) {
     myDragAt.current = Date.now();          // the drag already moved the card → don't double it
     const card = (s.hands[meId] || []).find((c) => c.id === cardId);
     setPick(null);
-    commit(withFinal(E.hit(s, meId, cardId, owner, idx), { by: meId, kind: "hit", card, owner, idx }));
+    commit(tagMove(E.hit(s, meId, cardId, owner, idx), { by: meId, kind: "hit", card, owner, idx }));
   };
 
   // Discard pile is also a drop target: drag any card onto it to end your turn.
@@ -925,7 +935,7 @@ function Board(props) {
     myDragAt.current = Date.now();          // the drag already moved the card → don't double it
     const card = (s.hands[meId] || []).find((c) => c.id === cardId);
     setPick(null);
-    commit(withFinal(E.discard(s, meId, cardId), { by: meId, kind: "discard", card }));
+    commit(tagMove(E.discard(s, meId, cardId), { by: meId, kind: "discard", card }));
   };
 
   // With a card selected, melds become tappable TARGETS — but never reveal
@@ -1097,7 +1107,9 @@ function LayDown({ state, meId, hand, flat, commit, cancel }) {
     <button class="btn good block mt" disabled=${!ok}
       onClick=${() => {
         const next = E.layDown(state, meId, assign);
-        if ((next.status === "handOver" || next.status === "matchOver") && next.lastHand && !next.lastHand.finalMove) next.lastHand.finalMove = { by: meId, kind: "lay" };
+        const entry = { by: meId, kind: "lay" };
+        next.turnLog = [...(state.turnLog || []), entry];
+        if ((next.status === "handOver" || next.status === "matchOver") && next.lastHand) { next.lastHand.moves = next.turnLog; next.lastHand.finalMove = entry; }
         commit(next); cancel();
       }}>
       Lay down${ok ? " ✓" : ""}
@@ -1111,20 +1123,19 @@ function LayDown({ state, meId, hand, flat, commit, cancel }) {
    many times as you like before moving on. Reconstructed from the preserved
    end-of-hand state (s.table + lastHand.finalMove), so the partner who missed
    the live move sees it too. */
-const FINAL_CAPTION = {
-  discard: "discarded their last card to go out",
-  hit: "laid their last card on a meld to go out",
-  lay: "laid down their whole phase to go out",
-};
+const MOVE_VERB = { draw: "drew", lay: "laid down", hit: "hit a meld", discard: "discarded" };
 function WinReplay({ s, pinfo, big }) {
   const fm = s.lastHand && s.lastHand.finalMove;
   const outPid = s.lastHand && s.lastHand.outPid;
   const melds = (outPid && s.table[outPid]) || [];
   const out = pinfo(outPid);
-  const [play, setPlay] = useState(0);                 // bump → remount the stage → replay the animation
-  const caption = `${out.name} ${(fm && FINAL_CAPTION[fm.kind]) || "went out"}`;
+  // the whole going-out turn (draw → lay/hits → discard); fall back to the last
+  // move alone for matches/hands that ended before turn-logging shipped.
+  const moves = (s.lastHand && s.lastHand.moves && s.lastHand.moves.length) ? s.lastHand.moves : (fm ? [fm] : []);
+  const [play, setPlay] = useState(0);                 // bump → remount the stage → replay from the top
   const conf = big ? ["🎉", "👑", "✨", "💗", "🍑", "🧸", "⭐", "🎊"] : ["🎉", "✨", "💗", "🍑", "🧸"];
   const pieces = big ? 22 : 14;
+  const meldDelay = melds.length * 130;
   return html`<div class="winstage" key=${play}>
     <div class="wm-burst" aria-hidden="true">
       ${[...Array(pieces)].map((_, i) => html`<span key=${i}
@@ -1137,10 +1148,19 @@ function WinReplay({ s, pinfo, big }) {
           </div>`)
         : html`<div class="wm-meld empty">🎴</div>`}
     </div>
-    ${fm && fm.card && html`<div class=${`wm-final ${fm.kind}`} style=${`animation-delay:${melds.length * 130 + 140}ms`}>
-      <${Card} card=${fm.card} />
+    ${moves.length > 0 && html`<div class="wm-trail">
+      ${moves.map((mv, i) => {
+        const last = i === moves.length - 1;
+        const verb = last ? "went out 🎉" : (MOVE_VERB[mv.kind] || "played");
+        return html`<div class=${`wm-step ${last ? "out" : ""}`} key=${i} style=${`animation-delay:${meldDelay + 160 + i * 220}ms`}>
+          ${mv.card
+            ? html`<${Card} card=${mv.card} />`
+            : html`<div class="wm-facedown">${mv.kind === "lay" ? "🎴" : "🂠"}</div>`}
+          <span class="wm-step-lbl">${verb}</span>
+        </div>`;
+      })}
     </div>`}
-    <div class="wm-cap">${caption}</div>
+    <div class="wm-cap">${out.name}'s winning turn</div>
     <button class="btn ghost sm wm-replay" onClick=${() => setPlay((p) => p + 1)}>↻ Replay the win</button>
   </div>`;
 }
