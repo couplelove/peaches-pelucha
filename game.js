@@ -697,23 +697,54 @@ function Board(props) {
   const toggleFlat = () => setFlatHand((v) => { const n = !v; try { localStorage.setItem("pp.flatHand", n ? "1" : "0"); } catch {} return n; });
 
   // POW 💥 — when anyone lays down their phase, slam the melds onto the table:
-  // screenshake + aggressive card landing + dust. Fires on whichever phone is
-  // watching when the state lands (the slammer immediately, the partner via
-  // realtime). Only on the false→true transition, never on mount.
+  // screenshake + aggressive card landing + dust. Crucially, only play it when
+  // you're actually LOOKING: if your partner laid down while you were away (app
+  // backgrounded, or not on the board), don't waste the moment on a screen you
+  // can't see — QUEUE it and fire it the instant you return, so you feel it.
+  // "Seen" is tracked per device (localStorage) per hand+player, so each
+  // lay-down slams exactly once and survives leaving/returning to the board.
   const [slam, setSlam] = useState(null);
-  const prevLaid = useRef({});
+  const slamSeenKey = `pp.slamSeen.${match.id}`;
+  const slamSeen = useRef(new Set());
+  const slamQueue = useRef([]);
+  const slamming = useRef(false);
+
+  const pumpSlam = useCallback(() => {
+    if (slamming.current || document.visibilityState !== "visible") return;   // hold until they're back
+    const next = slamQueue.current.shift();
+    if (!next) return;
+    slamming.current = true;
+    slamSeen.current.add(next.key);
+    try { localStorage.setItem(slamSeenKey, JSON.stringify([...slamSeen.current])); } catch {}
+    setSlam(next.pid);
+    try { navigator.vibrate && navigator.vibrate([90, 40, 130]); } catch {}
+    setTimeout(() => { setSlam(null); slamming.current = false; pumpSlam(); }, 1000);   // chain if more are waiting
+  }, [slamSeenKey]);
+
+  // (re)load this device's "already felt it" set when the match changes
   useEffect(() => {
-    let t;
+    try { slamSeen.current = new Set(JSON.parse(localStorage.getItem(slamSeenKey) || "[]")); } catch { slamSeen.current = new Set(); }
+    slamQueue.current = []; slamming.current = false;
+  }, [slamSeenKey]);
+
+  // queue any lay-down this device hasn't celebrated yet, then play if visible
+  useEffect(() => {
     for (const pid of s.players) {
-      if (s.laidDown[pid] && prevLaid.current[pid] === false) {
-        setSlam(pid);
-        try { navigator.vibrate && navigator.vibrate([90, 40, 130]); } catch {}
-        t = setTimeout(() => setSlam(null), 950);
-      }
+      if (!s.laidDown[pid]) continue;
+      const key = `${s.handNumber}:${pid}`;
+      if (slamSeen.current.has(key) || slamQueue.current.some((q) => q.key === key)) continue;
+      slamQueue.current.push({ pid, key });
     }
-    prevLaid.current = { ...s.laidDown };
-    return () => clearTimeout(t);
-  }, [s.laidDown[s.players[0]], s.laidDown[s.players[1]]]);
+    pumpSlam();
+  }, [s.laidDown[s.players[0]], s.laidDown[s.players[1]], s.handNumber, pumpSlam]);
+
+  // returned to the board / app foregrounded → fire any slam we held back
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === "visible") pumpSlam(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
+    return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", onVis); };
+  }, [pumpSlam]);
 
   // Live turn change: when it becomes my turn while I'm watching, buzz the
   // phone (where supported) — the GO badge pop animation covers the eyes.
