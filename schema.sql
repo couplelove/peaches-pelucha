@@ -512,3 +512,24 @@ alter table memory_comments enable row level security;
 drop policy if exists anon_all on memory_comments;
 create policy anon_all on memory_comments for all to anon, authenticated using (true) with check (true);
 do $$ begin alter publication supabase_realtime add table memory_comments; exception when duplicate_object then null; end $$;
+
+-- redemptions (031): one partner cashes out a reward → the other delivers it +
+-- takes a proof photo (a SPECIAL reward card in Memories; photo lives here, not
+-- in the memories table, so it never joins a memory day).
+create table if not exists redemptions (
+  id           uuid primary key default gen_random_uuid(),
+  reward_label text not null,
+  reward_emoji text,
+  cost         int not null default 0,
+  redeemer_id  uuid references players(id) on delete set null,
+  fulfiller_id uuid references players(id) on delete set null,
+  status       text not null default 'pending',
+  photo_path   text, thumb_path text, blur text, note text, taken_on date,
+  created_at   timestamptz not null default now(),
+  fulfilled_at timestamptz
+);
+create index if not exists redemptions_recent on redemptions (created_at desc);
+alter table redemptions enable row level security;
+drop policy if exists anon_all on redemptions;
+create policy anon_all on redemptions for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table redemptions; exception when duplicate_object then null; end $$;

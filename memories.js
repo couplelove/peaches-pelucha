@@ -2,6 +2,7 @@ import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
 import { useMemoryComments, MEM_REACTS } from "./comments.js";
+import { RewardStrip } from "./rewards.js";
 
 const html = htm.bind(h);
 
@@ -229,6 +230,41 @@ async function withRetry(fn, attempts = 5, base = 800) {
 const uploadWithRetry = (client, path, blob, contentType) =>
   withRetry(() => client.storage.from("memories")
     .upload(path, blob, { contentType, cacheControl: "31536000", upsert: true }));
+
+// Process + upload ONE reward proof photo/video. Goes in the memories bucket but
+// NOT the memories table — so it stays a separate "reward" card and never joins
+// a memory day. Returns the stored paths/blur + a taken_on date for the
+// redemption row. (Reuses the same on-device shrink + thumb pipeline.)
+export async function uploadRewardPhoto(client, file) {
+  const base = `r${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const isVideo = file.type.startsWith("video/");
+  const meta = isVideo ? { taken_on: await mp4Date(file) } : await exifMeta(file);
+  let path, thumb_path = null, blur = null;
+  if (isVideo) {
+    const ext = file.name.toLowerCase().endsWith(".mov") ? "mov" : "mp4";
+    path = `${base}.${ext}`;
+    await uploadWithRetry(client, path, file, file.type || "video/mp4");
+    const poster = await videoPoster(file);
+    if (poster) { try { thumb_path = `t${base.slice(1)}.${poster.thumb.ext}`; await uploadWithRetry(client, thumb_path, poster.thumb.blob, poster.thumb.ct); blur = poster.blur; } catch { thumb_path = null; } }
+  } else {
+    try {
+      const out = await processPhoto(file);
+      path = `${base}.jpg`;
+      await uploadWithRetry(client, path, out.full, "image/jpeg");
+      blur = out.blur;
+      thumb_path = `t${base.slice(1)}.${out.thumb.ext}`;
+      try { await uploadWithRetry(client, thumb_path, out.thumb.blob, out.thumb.ct); } catch { thumb_path = null; }
+    } catch {
+      // undecodable on this device → keep the original bytes
+      const ext = ((file.name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "")) || "jpg";
+      path = `${base}.${ext}`;
+      await uploadWithRetry(client, path, file, file.type || "image/jpeg");
+    }
+  }
+  let taken_on = meta.taken_on;
+  if (!taken_on) { const d = new Date(file.lastModified || Date.now()); taken_on = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+  return { path, thumb_path, blur, taken_on };
+}
 
 // Resumable (TUS) upload for LARGE files — i.e. videos. A one-shot upload of a
 // 160MB clip over a phone uplink restarts from zero if the connection drops at
@@ -869,6 +905,9 @@ export function MemoriesTab({ client, me, players = [], flash }) {
 
       ${items === null && html`<div class="memskel">${[...Array(9)].map((_, i) => html`<div class="memskel-cell" key=${i}></div>`)}</div>`}
       ${items !== null && items.length === 0 && html`<div class="empty"><span class="big">📸</span>No memories yet — add your first.</div>`}
+
+      <!-- delivered rewards: special cards, kept apart from the day feed -->
+      ${view === "gallery" && !openGroup && html`<${RewardStrip} client=${client} me=${me} players=${players} />`}
 
       <!-- title-card feed: scroll the days like a journey; tap a card to open the day -->
       ${view === "gallery" && items !== null && !openGroup && html`<div class="dayfeed">

@@ -115,6 +115,12 @@ function seed() {
     { id: uid(), memory_id: m0, author_id: peaches, text: "look how happy we are here 🥹", emoji: null, created_at: new Date(Date.now() - 60 * 6e4).toISOString() },
     { id: uid(), memory_id: m1, author_id: peaches, emoji: "🔥", text: null, created_at: new Date(Date.now() - 20 * 6e4).toISOString() },
   ];
+  db.redemptions = [
+    // pending: Pelucha redeemed, waiting on Peaches → the sweet home card shows for Peaches
+    { id: uid(), reward_label: "Back massage", reward_emoji: "💆", cost: 80, redeemer_id: pelucha, fulfiller_id: peaches, status: "pending", photo_path: null, thumb_path: null, blur: null, note: null, taken_on: null, created_at: nowISO(), fulfilled_at: null },
+    // fulfilled: a delivered reward with a proof photo → a special card in Memories
+    { id: uid(), reward_label: "Breakfast in bed", reward_emoji: "🥞", cost: 100, redeemer_id: peaches, fulfiller_id: pelucha, status: "fulfilled", photo_path: "https://picsum.photos/id/1080/600/800", thumb_path: "https://picsum.photos/id/1080/300/400", blur: null, note: null, taken_on: new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10), created_at: new Date(Date.now() - 3 * 864e5).toISOString(), fulfilled_at: new Date(Date.now() - 3 * 864e5).toISOString() },
+  ];
   return db;
 }
 
@@ -144,6 +150,7 @@ const DEFAULTS = {
   radio_state: { state: {}, version: 0 },
   gratitudes: { created_by: null },
   memory_comments: { author_id: null, text: null, emoji: null },
+  redemptions: { reward_emoji: "🎁", cost: 0, redeemer_id: null, fulfiller_id: null, status: "pending", photo_path: null, thumb_path: null, blur: null, note: null, taken_on: null, fulfilled_at: null },
   app_settings: { value: {} },
   fights: { status: "venting", started_by: null, entries: {}, translations: {}, together: null, acks: {}, version: 0, resolved_at: null },
 };

@@ -9,8 +9,9 @@ import { DateRoulette } from "./roulette.js";
 import { ScriptureCard } from "./home.js";
 import { GratitudeCard } from "./gratitude.js";
 import { MemoryThread } from "./comments.js";
+import { RewardHome } from "./rewards.js";
 import { FightMode, FightToggle } from "./fight.js";
-import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
+import { pushStatus, enablePush, disablePush, ensurePush, notifyTurn } from "./push.js";
 import { get as idbGet, set as idbSet } from "https://esm.sh/idb-keyval@6";
 
 const html = htm.bind(h);
@@ -591,9 +592,18 @@ function makeApi(client, reload, flash) {
       flash(`Gifted ${amount} 💗`);
       reload();
     },
-    cashout: (playerId, cost, label) =>
-      guard(() => client.from("transactions").insert({ player_id: playerId, amount: -cost, type: "cashout", description: `Redeemed: ${label}` }),
-        `Redeemed ${label} 🎁`),
+    cashout: async (playerId, reward, partnerId) => {
+      const { error } = await client.from("transactions").insert({ player_id: playerId, amount: -reward.cost, type: "cashout", description: `Redeemed: ${reward.label}` });
+      if (error) { flash("⚠️ " + error.message); return false; }
+      // a redemption the partner must deliver → their sweet home card + a reward memory
+      try {
+        await client.from("redemptions").insert({ reward_label: reward.label, reward_emoji: reward.emoji || "🎁", cost: reward.cost, redeemer_id: playerId, fulfiller_id: partnerId || null, status: "pending" });
+        if (partnerId) notifyTurn(client, partnerId, "🎁 A reward was redeemed", `Open the app — they're ready for "${reward.label}" 💗`);
+      } catch {}
+      flash(`Redeemed ${reward.label} 🎁`);
+      await reload();
+      return true;
+    },
     deleteTxn: (id) => guard(() => client.from("transactions").delete().eq("id", id), "Entry removed"),
 
     addEarnRule: (label, amount, emoji) => guard(() => client.from("earn_rules").insert({ label, amount, emoji }), "Added"),
@@ -653,6 +663,7 @@ function ScoreTab(ctx) {
   // The home page: Phase 10 at the top, then lifetime, horoscopes, scripture,
   // and the date roulette.
   return html`<${Fragment}>
+    <${RewardHome} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
     <div data-noswipe><${PlayTab} ...${ctx} /></div>
     <${ScriptureCard} />
     <${GratitudeCard} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
@@ -985,14 +996,15 @@ function NewBetModal({ players, me, close, api }) {
   </div>`;
 }
 
-function CashoutModal({ modal, me, balances, close, api }) {
+function CashoutModal({ modal, me, players, balances, close, api }) {
   const r = modal.reward;
   const bal = balances[me.id] || 0;
+  const partner = (players || []).find((p) => p.id !== me.id);
   return html`<div class="center">
     <div style="font-size:46px">${r.emoji}</div>
     <h3>Redeem "${r.label}"?</h3>
-    <p class="sub">This spends <b>${r.cost} 💗</b>. You'll have ${bal - r.cost} 💗 left.</p>
-    <button class="btn gold block mt" disabled=${bal < r.cost} onClick=${async () => { await api.cashout(me.id, r.cost, r.label); close(); }}>Redeem 🎁</button>
+    <p class="sub">This spends <b>${r.cost} 💗</b>. You'll have ${bal - r.cost} 💗 left.${partner ? html`<br/>${partner.emoji} ${partner.name} will get a card to deliver it 💗` : ""}</p>
+    <button class="btn gold block mt" disabled=${bal < r.cost} onClick=${async () => { await api.cashout(me.id, r, partner ? partner.id : null); close(); }}>Redeem 🎁</button>
     <button class="linkbtn mt" onClick=${close}>Cancel</button>
   </div>`;
 }
