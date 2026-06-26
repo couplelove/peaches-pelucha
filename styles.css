@@ -561,6 +561,30 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* decorative card-movement flights: a card glides from source → destination on
    top of the board so every played move (yours or your partner's) visibly moves.
    Pointer-inert, portaled to <body>, never affects layout. */
+/* winning-moment replay (hand/match over) — closure instead of an abrupt cut */
+.winover { text-align: center; }
+.wm-eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.wm-title { font-family: var(--serif); font-weight: 600; font-size: 26px; margin: 4px 0 12px; }
+.wm-crown { font-size: 52px; line-height: 1; animation: wmPop .6s cubic-bezier(.18,1.4,.4,1) backwards; }
+.winstage { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 18px 14px 14px; margin: 8px 0 4px; display: flex; flex-direction: column;
+  align-items: center; gap: 12px; min-height: 150px; }
+.wm-melds { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.wm-meld { display: flex; gap: 3px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 9px;
+  padding: 5px 7px; animation: wmSlam .5s cubic-bezier(.18,1.25,.3,1) backwards; }
+.wm-meld.empty { font-size: 24px; padding: 8px 14px; }
+.wm-final { animation: wmFly .7s cubic-bezier(.2,.9,.3,1.05) backwards; }
+.wm-final .pcard { box-shadow: 0 0 0 2px var(--accent), 0 14px 26px -10px rgba(43,37,33,.5); }
+.wm-cap { font-size: 13px; color: var(--ink-2); }
+.wm-replay { margin-top: 2px; }
+.wm-burst { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.wm-burst span { position: absolute; top: -26px; font-size: 18px; animation-name: wmFall;
+  animation-timing-function: ease-in; animation-fill-mode: forwards; will-change: transform, opacity; }
+@keyframes wmSlam { 0% { transform: translateY(-46px) scale(1.35); opacity: 0; } 60% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes wmFly { 0% { transform: translateY(90px) scale(.5) rotate(-8deg); opacity: 0; } 70% { opacity: 1; } 100% { transform: translateY(0) scale(1) rotate(0); opacity: 1; } }
+@keyframes wmFall { 0% { transform: translateY(0) rotate(0); opacity: 0; } 12% { opacity: 1; } 100% { transform: translateY(320px) rotate(340deg); opacity: 0; } }
+@keyframes wmPop { 0% { transform: scale(0) rotate(-20deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+
 .flightlayer { position: fixed; inset: 0; z-index: 8000; pointer-events: none; }
 .cardflight { position: fixed; left: 0; top: 0; pointer-events: none; will-change: transform, opacity;
   filter: drop-shadow(0 14px 22px rgba(43,37,33,.4)); }
