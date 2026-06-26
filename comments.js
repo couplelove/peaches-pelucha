@@ -122,22 +122,28 @@ export function MemoryThread({ client, me, players, onOpenMemory }) {
 
   return html`<div class="card memthread">
     <div class="shead"><h2>Reactions <span class="muted-glyph">💬</span></h2></div>
-    <div class="mt-list">
+    <!-- swipeable image cards (like the Love Bug Calendar deck): the memory is the
+         backdrop, a dark scrim under the emoji/comment keeps it readable -->
+    <div class="mt-car">
       ${rows.map((r) => {
         const m = mem[r.memory_id];
         const who = pinfo(r.author_id);
         const url = thumbUrl(m);
-        return html`<button class="mt-row" key=${r.id} onClick=${() => onOpenMemory && onOpenMemory(r.memory_id)}>
-          <span class="mt-who" title=${who.name}>${who.emoji}</span>
-          <span class="mt-body">
-            ${r.emoji
-              ? html`<span class="mt-react">${r.emoji}</span><span class="mt-verb">reacted</span>`
-              : html`<span class="mt-text">${r.text}</span>`}
+        return html`<button class=${`mt-card ${r.emoji ? "react" : "comment"}`} key=${r.id}
+          onClick=${() => onOpenMemory && onOpenMemory(r.memory_id)}>
+          ${url
+            ? html`<img class="mt-card-img" src=${url} alt="" loading="lazy" />`
+            : html`<span class="mt-card-img mt-card-noimg">📸</span>`}
+          <span class="mt-card-scrim"></span>
+          ${m && m.kind === "video" && html`<span class="mt-card-play">▶</span>`}
+          <span class="mt-card-top">
+            <span class="mt-card-av" title=${who.name}>${who.emoji}</span>
+            <span class="mt-card-time">${ago(r.created_at)}</span>
           </span>
-          <span class="mt-time">${ago(r.created_at)}</span>
-          <span class="mt-thumb">
-            ${url ? html`<img src=${url} alt="" loading="lazy" />` : html`<span class="mt-noimg">📸</span>`}
-            ${m && m.kind === "video" && html`<span class="mt-vid">🎥</span>`}
+          <span class="mt-card-main">
+            ${r.emoji
+              ? html`<span class="mt-card-react">${r.emoji}</span>`
+              : html`<span class="mt-card-text">${r.text}</span>`}
           </span>
         </button>`;
       })}
