@@ -8,6 +8,7 @@ import { PlayTab } from "./game.js";
 import { DateRoulette } from "./roulette.js";
 import { ScriptureCard } from "./home.js";
 import { GratitudeCard } from "./gratitude.js";
+import { MemoryThread } from "./comments.js";
 import { FightMode, FightToggle } from "./fight.js";
 import { pushStatus, enablePush, disablePush, ensurePush } from "./push.js";
 import { get as idbGet, set as idbSet } from "https://esm.sh/idb-keyval@6";
@@ -512,7 +513,7 @@ function App({ client, onResetCreds }) {
           ${tab === "score" && html`<${ScoreTab} ...${ctx} />`}
           ${tab === "plans" && html`<${PlansTab} client=${client} me=${me} players=${players} flash=${flash} />`}
           ${tab === "map" && html`<${MapTab} client=${client} me=${me} players=${players} flash=${flash} />`}
-          ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} flash=${flash} />`}
+          ${tab === "memories" && html`<${MemoriesTab} client=${client} me=${me} players=${players} flash=${flash} />`}
           ${tab === "schmoney" && html`<${Fragment}>
             <${WalletTab} ...${ctx} />
             <${BetsTab} ...${ctx} />
@@ -655,6 +656,8 @@ function ScoreTab(ctx) {
     <div data-noswipe><${PlayTab} ...${ctx} /></div>
     <${ScriptureCard} />
     <${GratitudeCard} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
+    <${MemoryThread} client=${ctx.client} me=${ctx.me} players=${ctx.players}
+      onOpenMemory=${(id) => { window.__ppFocusMemory = id; ctx.setTab("memories"); }} />
     <${WatchTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
     <${DateRoulette} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash}
       onPlan=${(pick) => { window.__ppPlanPrefill = pick; ctx.setTab("plans"); }} />

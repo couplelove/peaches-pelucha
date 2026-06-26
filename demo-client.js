@@ -107,6 +107,14 @@ function seed() {
     { id: uid(), text: "Your laugh through the wall while you're on a call.", created_by: pelucha, created_at: new Date(Date.now() - 1 * 864e5).toISOString() },
     { id: uid(), text: "How you always save me the last bite.", created_by: peaches, created_at: nowISO() },
   ];
+  // a couple of comments/reactions on the first demo memories so the home thread
+  // and the lightbox have something to show
+  const m0 = db.memories[0] && db.memories[0].id, m1 = db.memories[1] && db.memories[1].id;
+  db.memory_comments = [
+    { id: uid(), memory_id: m0, author_id: pelucha, emoji: "😍", text: null, created_at: new Date(Date.now() - 90 * 6e4).toISOString() },
+    { id: uid(), memory_id: m0, author_id: peaches, text: "look how happy we are here 🥹", emoji: null, created_at: new Date(Date.now() - 60 * 6e4).toISOString() },
+    { id: uid(), memory_id: m1, author_id: peaches, emoji: "🔥", text: null, created_at: new Date(Date.now() - 20 * 6e4).toISOString() },
+  ];
   return db;
 }
 
@@ -135,6 +143,7 @@ const DEFAULTS = {
   radio_seeds: { term: "", video_id: null, title: null, added_by: null },
   radio_state: { state: {}, version: 0 },
   gratitudes: { created_by: null },
+  memory_comments: { author_id: null, text: null, emoji: null },
   app_settings: { value: {} },
   fights: { status: "venting", started_by: null, entries: {}, translations: {}, together: null, acks: {}, version: 0, resolved_at: null },
 };

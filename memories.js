@@ -1,6 +1,7 @@
 import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
+import { useMemoryComments, MEM_REACTS } from "./comments.js";
 
 const html = htm.bind(h);
 
@@ -292,7 +293,7 @@ const fallbackStory = (g) => {
   return place ? `${place} — ${n} ${moments} from the day.` : `${n} ${moments} you kept from this day.`;
 };
 
-export function MemoriesTab({ client, me, flash }) {
+export function MemoriesTab({ client, me, players = [], flash }) {
   const [items, setItems] = useState(null);          // null = loading; else loaded window (paged)
   const [view, setView] = useState("gallery");       // 'gallery' | 'game'
   const [lightbox, setLightbox] = useState(null);    // index into items
@@ -314,6 +315,10 @@ export function MemoriesTab({ client, me, flash }) {
   const feedScroll = useRef(0);
   const openDay = useCallback((date) => { feedScroll.current = window.scrollY || 0; setDayOpen(date); window.scrollTo(0, 0); }, []);
   useLayoutEffect(() => { if (!dayOpen) window.scrollTo(0, feedScroll.current || 0); }, [dayOpen]);
+
+  // private comments + reactions for whichever memory the lightbox is showing
+  const lbItemId = (items && lightbox != null && items[lightbox]) ? items[lightbox].id : null;
+  const lbCom = useMemoryComments(client, me, lbItemId);
 
   const pubUrl = useCallback((path) => {
     try { return client.storage.from("memories").getPublicUrl(path).data.publicUrl; }
@@ -467,6 +472,17 @@ export function MemoriesTab({ client, me, flash }) {
     io.observe(el);
     return () => io.disconnect();
   }, [loadMore, view, items === null, dayOpen]);
+
+  // Opened from the home Reactions thread: jump straight to that memory's
+  // lightbox once it's in the loaded window. Pull more pages if it's older.
+  useEffect(() => {
+    if (!items) return;
+    const want = window.__ppFocusMemory;
+    if (!want) return;
+    const idx = items.findIndex((it) => it.id === want);
+    if (idx >= 0) { window.__ppFocusMemory = null; setView("gallery"); setLightbox(idx); }
+    else if (!more.current.done) loadMore();          // not loaded yet → fetch more, effect re-runs
+  }, [items, loadMore]);
 
   // Concurrent upload queue (2 lanes) with per-file status — photos shrink
   // on-device first; videos go as-is. Two lanes (not three) keeps fewer large
@@ -907,6 +923,7 @@ export function MemoriesTab({ client, me, flash }) {
     </div>
 
     ${lightbox !== null && html`<${Lightbox} items=${flat} index=${lightbox} pubUrl=${pubUrl} renderUrl=${renderUrl} origin=${origin.current}
+      me=${me} players=${players} com=${lbCom}
       onClose=${() => setLightbox(null)} onNav=${(i) => setLightbox(i)} onOptions=${(it) => setSheet(it)} />`}
 
     ${sheet && html`<div class="modal-bg asheet" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setSheet(null); }}>
@@ -958,7 +975,7 @@ export function MemoriesTab({ client, me, flash }) {
      spring release that commits or snaps back
    - dragging DOWN scales the media and fades the backdrop under your finger
      (release past the threshold dismisses, otherwise it springs home)      */
-function Lightbox({ items, index, pubUrl, renderUrl, onClose, onNav, onOptions, origin }) {
+function Lightbox({ items, index, pubUrl, renderUrl, me, players = [], com, onClose, onNav, onOptions, origin }) {
   const it = items[index];
   const track = useRef(null);
   const bg = useRef(null);
@@ -966,7 +983,25 @@ function Lightbox({ items, index, pubUrl, renderUrl, onClose, onNav, onOptions, 
   const drag = useRef(null);
   const [closing, setClosing] = useState(false);
   const [entered, setEntered] = useState(false);
+  const [showCom, setShowCom] = useState(false);     // comments thread open?
+  const [draft, setDraft] = useState("");
+  const [kbLift, setKbLift] = useState(0);
+  const comInput = useRef(null);
   const W = () => window.innerWidth;
+  const pinfo = (id) => players.find((p) => p.id === id) || { emoji: "❔", name: "?" };
+  const c = com || { comments: [], reactions: [], myReaction: null, addComment: () => {}, toggleReaction: () => {} };
+
+  // keep the comment composer above the iOS keyboard
+  useEffect(() => {
+    if (!showCom || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const onVV = () => setKbLift(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    onVV(); vv.addEventListener("resize", onVV); vv.addEventListener("scroll", onVV);
+    return () => { vv.removeEventListener("resize", onVV); vv.removeEventListener("scroll", onVV); setKbLift(0); };
+  }, [showCom]);
+  useEffect(() => { setShowCom(false); }, [index]);   // close the thread when you swipe to another memory
+  const send = () => { const t = draft.trim(); if (!t) return; c.addComment(t); setDraft(""); try { comInput.current && comInput.current.focus(); } catch {} };
+  const stop = { onPointerDown: (e) => e.stopPropagation(), onPointerMove: (e) => e.stopPropagation(), onPointerUp: (e) => e.stopPropagation() };
 
   useEffect(() => { requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true))); }, []);
 
@@ -1083,7 +1118,36 @@ function Lightbox({ items, index, pubUrl, renderUrl, onClose, onNav, onOptions, 
       ${pane(it, true)}
       ${pane(items[index + 1], false)}
     </div>
+
+    <!-- reactions + comments (private, just the two of you) -->
+    <div class="lb-foot" ...${stop}>
+      ${c.reactions.length > 0 && html`<div class="lb-rx">
+        ${c.reactions.map((r) => html`<span class="lb-rxchip" key=${r.id} title=${pinfo(r.author_id).name}>${r.emoji}<i>${pinfo(r.author_id).emoji}</i></span>`)}
+      </div>`}
+      <div class="lb-reactbar">
+        ${MEM_REACTS.map((e) => html`<button key=${e} class=${`lb-react ${c.myReaction && c.myReaction.emoji === e ? "on" : ""}`}
+          onClick=${() => c.toggleReaction(e)}>${e}</button>`)}
+        <button class=${`lb-commentbtn ${showCom ? "on" : ""}`} onClick=${() => setShowCom((v) => !v)}>💬${c.comments.length ? ` ${c.comments.length}` : ""}</button>
+      </div>
+    </div>
     <div class="lb-meta">${dayHead(it.taken_on)}${it.place ? " · 📍 " + it.place : ""} · ${index + 1} / ${items.length}</div>
+
+    ${showCom && html`<div class="lb-comments" style=${kbLift ? `bottom:${kbLift}px` : ""} ...${stop}>
+      <div class="lb-com-head"><span>Comments</span><button class="linkbtn" onClick=${() => setShowCom(false)}>✕</button></div>
+      <div class="lb-com-list">
+        ${c.comments.length === 0
+          ? html`<div class="lb-com-empty">No comments yet — say something 💬</div>`
+          : c.comments.map((m) => html`<div class=${`lb-com ${m.author_id === me.id ? "mine" : ""} ${m.pending ? "pending" : ""}`} key=${m.id}>
+              ${m.author_id !== me.id && html`<span class="lb-com-who">${pinfo(m.author_id).emoji}</span>`}
+              <span class="lb-com-txt">${m.text}</span>
+            </div>`)}
+      </div>
+      <div class="lb-com-bar">
+        <input ref=${comInput} value=${draft} maxlength="500" placeholder="Add a comment…"
+          onInput=${(e) => setDraft(e.target.value)} onKeyDown=${(e) => { if (e.key === "Enter") send(); }} />
+        <button class="btn sm" disabled=${!draft.trim()} onClick=${send}>Send</button>
+      </div>
+    </div>`}
   </div>`;
 }
 
