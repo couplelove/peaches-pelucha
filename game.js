@@ -1,5 +1,6 @@
 import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "https://esm.sh/preact@10.23.2/hooks";
+import { createPortal } from "https://esm.sh/preact@10.23.2/compat";
 import htm from "https://esm.sh/htm@3.1.1";
 import * as E from "./engine.js";
 import { notifyTurn } from "./push.js";
@@ -649,6 +650,33 @@ function Meld({ meld, targetable, onHit, owner, idx }) {
   </div>`;
 }
 
+/* --------------------------------------------------------- card flights ---
+   A purely DECORATIVE flying-card overlay. The board renders the new state as
+   usual; on top of it we fly a card from its source to its destination so a
+   move you didn't make (your partner's draw/discard/lay/hit, delivered by
+   realtime) visibly MOVES — and your own taps do too. It never touches engine
+   rules, the move logic, or sync; if anything goes wrong it just doesn't draw.
+   Portaled to <body> so the board's quake/slam transforms don't drag it. */
+function Flight({ flight, onDone }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) { onDone(flight.id); return; }
+    el.style.transform = `translate(${flight.from.x}px, ${flight.from.y}px) rotate(${flight.fromRot}deg) scale(${flight.fromScale})`;
+    el.style.opacity = "1";
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => {
+      if (!ref.current) return;
+      el.style.transition = `transform ${flight.dur}ms cubic-bezier(.34,.82,.3,1) ${flight.delay}ms, opacity ${flight.dur}ms ease ${flight.delay}ms`;
+      el.style.transform = `translate(${flight.to.x}px, ${flight.to.y}px) rotate(${flight.toRot}deg) scale(${flight.toScale})`;
+      if (flight.fade) el.style.opacity = "0";
+    }); });
+    const t = setTimeout(() => onDone(flight.id), flight.dur + flight.delay + 140);
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); clearTimeout(t); };
+  }, []);
+  return html`<div ref=${ref} class="cardflight" style=${`width:${flight.w}px;height:${flight.h}px`}>${flight.body}</div>`;
+}
+
 /* ----------------------------------------------------------- Board -------- */
 function Board(props) {
   const { match, commit, players, me, oppOnline } = props;
@@ -724,6 +752,96 @@ function Board(props) {
   }, [handCards, order]);
   const me_ = pinfo(meId), opp_ = pinfo(oppId);
 
+  // ---- decorative card-movement flights (additive overlay; see Flight above).
+  // Diff the previous vs new state on each version bump and fly the card(s) that
+  // moved from source to destination. Wrapped so it can never break the board.
+  const boardRef = useRef(null);
+  const prevStateRef = useRef(null);
+  const prevVerRef = useRef(match.version);
+  const myDragAt = useRef(0);                       // suppress double-motion right after a drag-drop
+  const [flights, setFlights] = useState([]);
+  const flightSeq = useRef(0);
+  const doneFlight = useCallback((id) => setFlights((fl) => fl.filter((f) => f.id !== id)), []);
+
+  const rectOf = (sel) => {
+    const root = boardRef.current; if (!root) return null;
+    const el = root.querySelector(sel); if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width, h: r.height };
+  };
+  const cardSize = () => {
+    const r = rectOf(".pile.draw .pcardback") || rectOf('.pile[data-discard] .pcard');
+    return r ? { w: r.w, h: r.h } : { w: 68, h: 94 };
+  };
+  const anchorDraw = () => rectOf(".pile.draw");
+  const anchorDiscard = () => rectOf('.pile[data-discard]');
+  const anchorHand = (p) => p === meId ? (rectOf(".zone.mine .hand") || rectOf(".zone.mine")) : rectOf(".zone.opp");
+  const anchorMelds = (p) => (p === meId ? rectOf(".zone.mine .melds") : rectOf(".zone.opp .melds")) || anchorHand(p);
+  const anchorMeld = (p, idx) => rectOf(`.meld[data-owner="${p}"][data-idx="${idx}"]`) || anchorMelds(p);
+
+  const addFlight = (from, to, opts = {}) => {
+    if (!from || !to) return;
+    const { w, h } = cardSize();
+    const id = "fl" + (flightSeq.current++);
+    const body = opts.card ? html`<${Card} card=${opts.card} />` : html`<div class="pcardback flightback">🂠</div>`;
+    setFlights((fl) => [...fl, {
+      id, w, h, body,
+      dur: opts.dur || 470, delay: opts.delay || 0,
+      from: { x: from.cx - w / 2, y: from.cy - h / 2 },
+      to: { x: to.cx - w / 2, y: to.cy - h / 2 },
+      fromRot: opts.fromRot || 0, toRot: opts.toRot || 0,
+      fromScale: opts.fromScale || 1, toScale: opts.toScale || 1, fade: !!opts.fade,
+    }]);
+  };
+
+  const computeFlights = (a, b) => {
+    const justDragged = Date.now() - myDragAt.current < 700;
+    for (const p of b.players) {
+      const ah = a.hands[p] || [], bh = b.hands[p] || [];
+      const dh = bh.length - ah.length;
+      const isMe = p === meId;
+      if (dh === 1) {
+        if (b.discard.length === a.discard.length - 1) {                  // drew the visible discard
+          addFlight(anchorDiscard(), anchorHand(p), { card: a.discard[a.discard.length - 1], fade: true });
+        } else if (b.draw.length === a.draw.length - 1) {                 // drew from the deck
+          const added = bh.find((c) => !ah.some((x) => x.id === c.id));
+          addFlight(anchorDraw(), anchorHand(p), { card: isMe ? added : null, fade: true });   // face-down for partner
+        }
+      } else if (dh <= -1) {
+        const am = a.table[p] || [], bm = b.table[p] || [];
+        const aCards = am.reduce((n, m) => n + m.cards.length, 0);
+        const bCards = bm.reduce((n, m) => n + m.cards.length, 0);
+        if (bm.length > am.length || (bm.length > 0 && am.length === 0)) {       // laid down a phase
+          const fresh = [];
+          bm.forEach((m, mi) => m.cards.forEach((c) => {
+            if (!am[mi] || !am[mi].cards.some((x) => x.id === c.id)) fresh.push({ c, mi });
+          }));
+          fresh.slice(0, 12).forEach((nc, k) => addFlight(anchorHand(p), anchorMeld(p, nc.mi), { card: nc.c, delay: k * 55, toScale: 0.5, dur: 440 }));
+        } else if (bCards > aCards) {                                            // hit an existing meld
+          if (!(isMe && justDragged)) {
+            let gi = -1, card = null;
+            for (let mi = 0; mi < bm.length; mi++) {
+              const an = am[mi] ? am[mi].cards.length : 0;
+              if (bm[mi].cards.length > an) { gi = mi; card = bm[mi].cards.find((c) => !(am[mi] && am[mi].cards.some((x) => x.id === c.id))); break; }
+            }
+            if (gi >= 0) addFlight(anchorHand(p), anchorMeld(p, gi), { card, toScale: 0.5, dur: 430 });
+          }
+        } else if (b.discard.length === a.discard.length + 1) {                  // discarded
+          if (!(isMe && justDragged)) addFlight(anchorHand(p), anchorDiscard(), { card: b.discard[b.discard.length - 1] });
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    const a = prevStateRef.current, prevVer = prevVerRef.current, b = s, ver = match.version;
+    prevStateRef.current = b; prevVerRef.current = ver;
+    if (!a || ver !== prevVer + 1) return;                 // first paint / missed-states jump → don't animate
+    if (b.status !== "playing" || b.handNumber !== a.handNumber) return;
+    requestAnimationFrame(() => { try { computeFlights(a, b); } catch {} });
+  }, [match.version]);
+
   // ---- hand over / match over panels ----
   if (s.status === "handOver") return html`<${HandOver} ...${props} oppId=${oppId} pinfo=${pinfo} />`;
   if (s.status === "matchOver") return html`<${MatchOver} ...${props} pinfo=${pinfo} />`;
@@ -751,6 +869,7 @@ function Board(props) {
   };
   const onDropOnMeld = (cardId, owner, idx) => {
     if (!canDropOnMeld(cardId, owner, idx)) return;
+    myDragAt.current = Date.now();          // the drag already moved the card → don't double it
     setPick(null);
     commit(E.hit(s, meId, cardId, owner, idx));
   };
@@ -759,6 +878,7 @@ function Board(props) {
   const canDropOnDiscard = () => myTurn && s.turnPhase === "play";
   const onDropOnDiscard = (cardId) => {
     if (!canDropOnDiscard()) return;
+    myDragAt.current = Date.now();          // the drag already moved the card → don't double it
     setPick(null);
     commit(E.discard(s, meId, cardId));
   };
@@ -776,7 +896,7 @@ function Board(props) {
     : null;
 
   return html`
-    <div class=${`board ${slam ? "quake" : ""}`}>
+    <div ref=${boardRef} class=${`board ${slam ? "quake" : ""}`}>
       <!-- opponent zone -->
       <div class="zone opp">
         <div class="pname">
@@ -865,6 +985,10 @@ function Board(props) {
           </div>
         </div>
       </div>`}
+
+      ${flights.length > 0 && createPortal(
+        html`<div class="flightlayer">${flights.map((f) => html`<${Flight} key=${f.id} flight=${f} onDone=${doneFlight} />`)}</div>`,
+        document.body)}
     </div>`;
 }
 

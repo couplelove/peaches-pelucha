@@ -558,6 +558,14 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   pointer-events: none; transition: none; will-change: transform;
   box-shadow: 0 22px 38px -10px rgba(43,37,33,.5); }
 .pcard.lifted { opacity: .28; transition: opacity .12s ease, transform .2s cubic-bezier(.2,.85,.3,1.12); }
+/* decorative card-movement flights: a card glides from source → destination on
+   top of the board so every played move (yours or your partner's) visibly moves.
+   Pointer-inert, portaled to <body>, never affects layout. */
+.flightlayer { position: fixed; inset: 0; z-index: 8000; pointer-events: none; }
+.cardflight { position: fixed; left: 0; top: 0; pointer-events: none; will-change: transform, opacity;
+  filter: drop-shadow(0 14px 22px rgba(43,37,33,.4)); }
+.cardflight > .pcard, .cardflight > .pcardback { width: 100% !important; height: 100% !important; margin: 0 !important; box-shadow: none; }
+.cardflight > .pcardback.flightback { display: grid; place-content: center; }
 .handbar { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
 .handbar .linkbtn { font-size: 12px; padding: 4px 6px; }
 
