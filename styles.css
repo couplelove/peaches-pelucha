@@ -749,6 +749,10 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .vw-stage { width: 100%; max-width: 480px; flex: 1 1 auto; display: grid; place-content: center; }
 .vw-embed { width: 100%; aspect-ratio: 16/9; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 12px 44px rgba(0,0,0,.5); }
 .vw-embed.tall { aspect-ratio: 9/16; max-height: 72vh; margin: 0 auto; }
+/* Instagram's embed renders its own card (header, caption, footer) on white —
+   give it room and let it scroll rather than cropping it to a 9:16 video box. */
+.vw-embed.ig { aspect-ratio: auto; height: 78vh; max-height: 78vh; width: 100%; max-width: 400px; background: #fff; }
+.vw-embed.ig iframe { overflow: auto; }
 .vw-embed iframe, .vw-embed div { width: 100%; height: 100%; border: 0; }
 .vw-openpane { text-align: center; color: #fff; display: grid; gap: 8px; place-items: center; padding: 30px 18px; }
 .vw-bigicon { font-size: 54px; }

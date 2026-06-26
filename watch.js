@@ -36,12 +36,24 @@ function parseLink(raw) {
     const v = u.searchParams.get("v"); if (v) return mk("youtube", v);
     return mk("youtube", null);
   }
-  if (host.endsWith("tiktok.com")) { const m = path.match(/\/video\/(\d+)/); return mk("tiktok", m ? m[1] : null); }
-  if (host.endsWith("instagram.com")) { const m = path.match(/\/(reel|reels|p|tv)\/([^/]+)/); return mk("instagram", m ? m[2] : null); }
+  if (host.endsWith("tiktok.com")) { const m = path.match(/\/(?:video|photo)\/(\d+)/); return mk("tiktok", m ? m[1] : null); }
+  if (host.endsWith("instagram.com") || host === "instagr.am") { const m = path.match(/\/(reel|reels|p|tv)\/([^/]+)/); return mk("instagram", m ? m[2] : null); }
   if (host === "x.com" || host.endsWith("twitter.com")) { const m = path.match(/\/status\/(\d+)/); return mk("twitter", m ? m[1] : null); }
   return mk("other", null);
 }
 const ytThumb = (it) => (it.platform === "youtube" && it.video_id) ? `https://i.ytimg.com/vi/${it.video_id}/hqdefault.jpg` : null;
+
+// TikTok's old /embed/v2/ iframe now 504s — the current embeddable player is
+// /player/v1/<id> (no X-Frame-Options / frame-ancestors, so it frames anywhere).
+const tiktokEmbed = (id) => `https://www.tiktok.com/player/v1/${id}?autoplay=1&controls=1&loop=0&music_info=0&description=0&rel=0`;
+// Instagram posts/reels embed inline via /<type>/<code>/embed/ — derive the
+// path type from the original URL (reel/p/tv), defaulting to /p/ which is the
+// most permissive. Plays in-app (tap to play; IG disables autoplay in embeds).
+const igEmbed = (it) => {
+  let seg = "p";
+  try { const m = new URL(it.url).pathname.match(/\/(reel|reels|p|tv)\//); if (m) seg = m[1] === "reels" ? "reel" : m[1]; } catch {}
+  return `https://www.instagram.com/${seg}/${it.video_id}/embed/`;
+};
 
 // lazy-load the YouTube IFrame API once (only platform with real queue control)
 let ytReady = null;
@@ -98,12 +110,14 @@ function Viewer({ items, index, me, onClose, onNav, onReact }) {
   const stage = it.platform === "youtube" && it.video_id
     ? html`<div class="vw-embed"><div id=${`yt-${it.id}`}></div></div>`
     : it.platform === "tiktok" && it.video_id
-      ? html`<div class="vw-embed tall"><iframe src=${`https://www.tiktok.com/embed/v2/${it.video_id}`} allow="autoplay; encrypted-media; fullscreen" allowfullscreen frameborder="0"></iframe></div>`
-      : html`<div class="vw-openpane">
-          <div class="vw-bigicon">${meta.icon}</div>
-          <div class="vw-pl">${meta.label}${it.platform === "instagram" ? " Reel" : ""}</div>
-          <a class="btn" href=${it.url} target="_blank" rel="noopener">Open ↗</a>
-        </div>`;
+      ? html`<div class="vw-embed tall"><iframe src=${tiktokEmbed(it.video_id)} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen frameborder="0" scrolling="no"></iframe></div>`
+      : it.platform === "instagram" && it.video_id
+        ? html`<div class="vw-embed tall ig"><iframe src=${igEmbed(it)} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen frameborder="0" scrolling="no"></iframe></div>`
+        : html`<div class="vw-openpane">
+            <div class="vw-bigicon">${meta.icon}</div>
+            <div class="vw-pl">${meta.label}</div>
+            <a class="btn" href=${it.url} target="_blank" rel="noopener">Open ↗</a>
+          </div>`;
 
   return createPortal(html`<div class="viewer">
     <div class="vw-bar">
