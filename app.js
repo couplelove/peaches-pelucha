@@ -219,8 +219,8 @@ function SetupScreen({ onSave, error, current }) {
   const [key, setKey] = useState(current?.key || "");
   return html`
     <div class="login">
-      <div style="font-size:52px">🍑💗🧸</div>
-      <h1>Peaches & Pelucha</h1>
+      <div style="font-size:52px">💗</div>
+      <h1>Connect your app</h1>
       <p>One-time setup. Paste your Supabase project's <b>URL</b> and <b>anon key</b><br/>(Supabase → Project Settings → API). They stay on this phone.</p>
       <div class="card" style="text-align:left; max-width:420px; margin:0 auto;">
         <label class="field"><span>Project URL</span>
@@ -521,11 +521,16 @@ function App({ client, onResetCreds }) {
   const mem = tab === "memories";   // Memories is its own white, full-bleed space — no glass container, no photo backdrop (that container broke the photo carousel)
   const mapTab = tab === "map";     // Map is full-bleed too (edge-to-edge preview), but keeps the cool glass world
 
+  // each couple's app is named after THEM (derived from their two players), so a
+  // beta couple's app feels like theirs — not "Peaches & Pelucha".
+  const coupleName = players.length ? players.map((p) => p.name).join(" & ").toLowerCase() : "love";
+  useEffect(() => { if (players.length) document.title = players.map((p) => p.name).join(" & "); }, [players]);
+
   return html`
     ${mem ? html`<div class="mem-bg"></div>` : html`<${PhotoBackdrop} client=${client} />`}
     <div class=${`app-shell cool ${mem ? "mem" : ""} ${mapTab ? "map" : ""}`}>
       <div class="topbar">
-        <div class="brand script">peaches & pelucha</div>
+        <div class="brand script">${coupleName}</div>
         <button class="whoami" onClick=${() => goTab("more")}>
           <span class="av" style=${`background:${me.color}22`}>${me.emoji}</span>
           ${me.name}
@@ -662,14 +667,37 @@ function makeApi(client, reload, flash) {
 /* ============================================================ login ======= */
 
 function Login({ players, onPick, onAdd, modal, setModal, api }) {
+  // tap a player → personalize your emoji (keyboard emoji welcome) → jump in
+  const [sel, setSel] = useState(null);   // { id, name, emoji }
+  const hero = players.length >= 2 ? `${players[0].emoji}💗${players[1].emoji}` : "💗";
+
+  if (sel) {
+    const orig = (players.find((p) => p.id === sel.id) || {}).emoji;
+    const jumpIn = async () => {
+      const e = (sel.emoji || "").trim();
+      if (e && e !== orig) { try { await api.updatePlayer(sel.id, { emoji: e }); } catch {} }
+      onPick(sel.id);
+    };
+    return html`<div class="login">
+      <div class="login-bigemoji">${sel.emoji || "💗"}</div>
+      <h1>Hi ${sel.name} 💗</h1>
+      <p>Make it yours — pick an emoji, or type your own.</p>
+      <div style="max-width:360px;margin:0 auto">
+        <${EmojiPicker} value=${sel.emoji} onChange=${(e) => setSel((s) => ({ ...s, emoji: e }))} />
+      </div>
+      <button class="btn block mt" style="max-width:360px;margin:16px auto 0" onClick=${jumpIn}>That's me ✓</button>
+      <button class="linkbtn mt" onClick=${() => setSel(null)}>‹ not me</button>
+    </div>`;
+  }
+
   return html`
     <div class="login">
-      <div style="font-size:52px">🍑💗🧸</div>
+      <div style="font-size:52px">${hero}</div>
       <h1>Who's playing?</h1>
       <p>Tap yourself to jump in.</p>
       <div class="player-grid" style="max-width:420px;margin:0 auto">
         ${players.map((p) => html`
-          <button class="player-pick" key=${p.id} onClick=${() => onPick(p.id)}>
+          <button class="player-pick" key=${p.id} onClick=${() => setSel({ id: p.id, name: p.name, emoji: p.emoji })}>
             <span class="av" style=${`background:${p.color}22`}>${p.emoji}</span>
             <span class="nm">${p.name}</span>
           </button>`)}
@@ -872,7 +900,7 @@ function MoreTab(ctx) {
         <button class="btn ghost block" onClick=${() => setModal({ type: "install" })}>📲 Install to home screen</button>
         <button class="btn ghost block" onClick=${onResetCreds}>🔌 Change Supabase connection</button>
       </div>
-      <p class="tiny muted center mt">Made with 💗 for Peaches & Pelucha</p>
+      <p class="tiny muted center mt">Made with 💗 for ${players.length ? players.map((p) => p.name).join(" & ") : "the two of you"}</p>
     </div>`;
 }
 
@@ -905,9 +933,13 @@ function ModalBody(props) {
   }
 }
 
-function EmojiPicker({ value, onChange }) {
-  return html`<div class="emoji-row">
-    ${EMOJIS.map((e) => html`<button class=${value === e ? "on" : ""} onClick=${() => onChange(e)}>${e}</button>`)}
+function EmojiPicker({ value, onChange, allowCustom = true }) {
+  return html`<div class="emoji-pick">
+    <div class="emoji-row">
+      ${EMOJIS.map((e) => html`<button class=${value === e ? "on" : ""} onClick=${() => onChange(e)}>${e}</button>`)}
+    </div>
+    ${allowCustom && html`<input class="emoji-custom" value=${value} maxlength="8" inputmode="text"
+      onInput=${(e) => onChange(e.target.value)} placeholder="…or type your own 😀" />`}
   </div>`;
 }
 function ColorPicker({ value, onChange }) {

@@ -200,6 +200,10 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .emoji-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .emoji-row button { font-size: 21px; padding: 6px 8px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
 .emoji-row button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.emoji-pick { display: flex; flex-direction: column; gap: 8px; }
+.emoji-custom { width: 100%; font-size: 18px; text-align: center; padding: 11px 12px; border: 1px solid var(--line);
+  border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font-family: var(--sans); }
+.login-bigemoji { font-size: 60px; line-height: 1; }
 
 .empty { text-align: center; color: var(--ink-3); padding: 26px 8px; }
 .empty .big { font-size: 30px; display: block; margin-bottom: 8px; opacity: .8; }
