@@ -6,9 +6,22 @@
 // signs messages with the VAPID private key (kept as a function secret).
 
 // Public half of the VAPID pair — safe to ship in the client. The private half
-// lives ONLY as an Edge Function secret.
-export const VAPID_PUBLIC_KEY =
-  "BGqzDqmIYJlLXRc3NkUZXwfC2995uEgymoJwZUZnBbe3r73nBY8L01w9UI8FTNICdq4vT8Znipm_LttH8tZD-FM";
+// lives ONLY as an Edge Function secret (per project). Each couple's backend has
+// its OWN VAPID pair, so we pick the public key by the connected project ref.
+const VAPID_KEYS = {
+  default:                "BGqzDqmIYJlLXRc3NkUZXwfC2995uEgymoJwZUZnBbe3r73nBY8L01w9UI8FTNICdq4vT8Znipm_LttH8tZD-FM", // Peaches & Pelucha
+  tglwpgktertvyumhhkal:   "BM41zNFmQHzswaepzUMVWHLaJeMrp2s0NP9GVc6lwEL6WBE6tckb2QeBEMRPrIAij8VtszSzIXa5rReWJHt2r20", // Mayo & Briuna
+};
+// Resolved at call time (not import time) — window.PP_CREDS is set once the
+// client connects, so this reflects whichever couple's backend is active.
+function vapidPublicKey() {
+  try {
+    const url = (typeof window !== "undefined" && window.PP_CREDS && window.PP_CREDS.url) || "";
+    const ref = (url.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/i) || [])[1];
+    if (ref && VAPID_KEYS[ref]) return VAPID_KEYS[ref];
+  } catch {}
+  return VAPID_KEYS.default;
+}
 
 function keyBytes(b64url) {
   const pad = "=".repeat((4 - (b64url.length % 4)) % 4);
@@ -38,7 +51,7 @@ export async function enablePush(client, playerId) {
   if (!reg) throw new Error("Open the installed app (not a localhost preview) to enable alerts.");
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: keyBytes(VAPID_PUBLIC_KEY),
+    applicationServerKey: keyBytes(vapidPublicKey()),
   });
   const j = sub.toJSON();
   const { error } = await client.from("push_subscriptions").upsert(
@@ -60,7 +73,7 @@ export async function ensurePush(client, playerId) {
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: keyBytes(VAPID_PUBLIC_KEY),
+        applicationServerKey: keyBytes(vapidPublicKey()),
       });
     }
     const j = sub.toJSON();
