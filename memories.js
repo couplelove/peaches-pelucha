@@ -1177,7 +1177,7 @@ function Lightbox({ items, index, pubUrl, renderUrl, me, players = [], com, onCl
         ${c.comments.length === 0
           ? html`<div class="lb-com-empty">No comments yet — say something 💬</div>`
           : c.comments.map((m) => html`<div class=${`lb-com ${m.author_id === me.id ? "mine" : ""} ${m.pending ? "pending" : ""}`} key=${m.id}>
-              ${m.author_id !== me.id && html`<span class="lb-com-who">${pinfo(m.author_id).emoji}</span>`}
+              ${m.author_id !== me.id && html`<span class="lb-com-who">${m.author_id ? pinfo(m.author_id).emoji : `${m.author_emoji || "👵"} ${m.author_name || "Family"}`}</span>`}
               <span class="lb-com-txt">${m.text}</span>
             </div>`)}
       </div>

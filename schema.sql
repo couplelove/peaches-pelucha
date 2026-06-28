@@ -533,3 +533,21 @@ alter table redemptions enable row level security;
 drop policy if exists anon_all on redemptions;
 create policy anon_all on redemptions for all to anon, authenticated using (true) with check (true);
 do $$ begin alter publication supabase_realtime add table redemptions; exception when duplicate_object then null; end $$;
+
+-- family_voice (032): family (Gramma) can comment from the family page, and the
+-- family feed carries heartfelt cards (incl. an automated weekly note from the
+-- couple). memory_comments gains a non-player author; family_notes is new.
+alter table memory_comments add column if not exists author_name  text;
+alter table memory_comments add column if not exists author_emoji text;
+create table if not exists family_notes (
+  id         uuid primary key default gen_random_uuid(),
+  text       text not null,
+  photo_path text, thumb_path text, blur text,
+  kind       text not null default 'auto',
+  created_at timestamptz not null default now()
+);
+create index if not exists family_notes_recent on family_notes (created_at desc);
+alter table family_notes enable row level security;
+drop policy if exists anon_all on family_notes;
+create policy anon_all on family_notes for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table family_notes; exception when duplicate_object then null; end $$;

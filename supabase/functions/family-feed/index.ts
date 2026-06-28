@@ -69,7 +69,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ items, stories, done: (mems || []).length < lim });
+    // heartfelt family notes (the weekly auto love-note + any manual ones) — only
+    // on the first page so they head the feed without repeating as you scroll.
+    let notes: any[] = [];
+    if (off === 0) {
+      const nRes = await fetch(`${url}/rest/v1/family_notes?select=*&order=created_at.desc&limit=8`, { headers: rest });
+      if (nRes.ok) {
+        const ns: any[] = await nRes.json();
+        notes = ns.map((n) => ({
+          id: n.id, text: n.text, kind: n.kind, created_at: n.created_at,
+          thumb: n.thumb_path ? pub(n.thumb_path) : (n.photo_path ? render(n.photo_path, 600) : null),
+          full: n.photo_path ? pub(n.photo_path) : null,
+        }));
+      }
+    }
+
+    return json({ items, stories, notes, done: (mems || []).length < lim });
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
   }

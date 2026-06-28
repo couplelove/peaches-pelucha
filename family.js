@@ -10,8 +10,11 @@ const html = htm.bind(h);
    on a server-side secret and returns memories + their AI day-stories. No nav,
    no uploads, no edits — just the day-by-day story. */
 
-const FEED = "https://ddaidwngxdbvfbchfixn.supabase.co/functions/v1/family-feed";
+const FN = "https://ddaidwngxdbvfbchfixn.supabase.co/functions/v1";
+const FEED = FN + "/family-feed";
+const COMMENT = FN + "/family-comment";
 const PASS_KEY = "pp_family_pass";
+const NAME_KEY = "pp_family_name";
 const PAGE = 48;
 
 const dayHead = (iso) => {
@@ -40,6 +43,7 @@ function App() {
 
   const [items, setItems] = useState([]);
   const [stories, setStories] = useState({});
+  const [notes, setNotes] = useState([]);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [openDay, setOpenDay] = useState(null);
@@ -53,6 +57,7 @@ function App() {
       return [...cur, ...page.items.filter((r) => !seen.has(r.id))];
     });
     setStories((cur) => ({ ...page.stories, ...cur }));
+    if (page.notes) setNotes(page.notes);   // first page carries the love-notes
     setDone(!!page.done);
   };
 
@@ -135,6 +140,17 @@ function App() {
     </div>`}
     <div class="fam-rule"></div>
 
+    <!-- heartfelt notes from the couple (incl. the weekly auto love-note) -->
+    ${!openGroup && notes.length > 0 && html`<div class="fam-notes">
+      ${notes.map((n) => html`<div class="fam-note" key=${n.id}>
+        ${n.thumb && html`<img class="fam-note-img" src=${n.thumb} alt="" loading="lazy" />`}
+        <div class="fam-note-body">
+          <div class="fam-note-eyebrow">💌 a note for you</div>
+          <p class="fam-note-text">${n.text}</p>
+        </div>
+      </div>`)}
+    </div>`}
+
     ${!openGroup && html`<div class="dayfeed">
       ${groups.map((g, gi) => {
         const s = stories[g.date];
@@ -169,13 +185,19 @@ function App() {
       <div class="memgrid">${openGroup.items.map(cell)}</div>
     </div>`}
 
-    ${lightbox !== null && flat[lightbox] && html`<${Lightbox} items=${flat} index=${lightbox}
+    ${lightbox !== null && flat[lightbox] && html`<${Lightbox} items=${flat} index=${lightbox} pass=${pass}
       onClose=${() => setLightbox(null)} onNav=${(i) => setLightbox(i)} />`}
   </div>`;
 }
 
-function Lightbox({ items, index, onClose, onNav }) {
+function Lightbox({ items, index, pass, onClose, onNav }) {
   const it = items[index];
+  const [comments, setComments] = useState([]);
+  const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) || "");
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const stop = { onPointerDown: (e) => e.stopPropagation(), onPointerUp: (e) => e.stopPropagation() };
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") onClose();
@@ -185,6 +207,33 @@ function Lightbox({ items, index, onClose, onNav }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [index, items.length]);
+
+  // load the family comments on this memory (not the couple's private ones)
+  useEffect(() => {
+    let live = true;
+    setComments([]);
+    fetch(COMMENT, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ passcode: pass, action: "list", memory_id: it.id }) })
+      .then((r) => r.ok ? r.json() : { comments: [] }).then((d) => { if (live) setComments(d.comments || []); }).catch(() => {});
+    return () => { live = false; };
+  }, [it.id, pass]);
+
+  const send = async () => {
+    const text = draft.trim();
+    const who = name.trim() || "Family";
+    if (!text || sending) return;
+    setSending(true);
+    localStorage.setItem(NAME_KEY, who);
+    const opt = { id: "tmp" + Math.random(), author_name: who, author_emoji: "👵", text };
+    setComments((c) => [...c, opt]); setDraft("");
+    try {
+      const res = await fetch(COMMENT, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ passcode: pass, action: "post", memory_id: it.id, name: who, text }) });
+      const d = await res.json();
+      if (d && d.comment) setComments((c) => c.map((x) => x.id === opt.id ? d.comment : x));
+    } catch {}
+    setSending(false);
+  };
 
   // basic swipe between items / swipe-down to close
   const drag = useRef(null);
@@ -200,17 +249,29 @@ function Lightbox({ items, index, onClose, onNav }) {
   };
 
   if (!it) return null;
-  return html`<div class="fam-lb" onPointerDown=${down} onPointerUp=${up}
-    onClick=${(e) => { if (e.target.classList.contains("fam-lb")) onClose(); }}>
+  return html`<div class="fam-lb" onPointerDown=${down} onPointerUp=${up}>
     <button class="fam-lb-x" onClick=${onClose}>✕</button>
     <button class="fam-lb-nav prev" disabled=${index === 0} onClick=${() => onNav(index - 1)}>‹</button>
-    <div class="fam-lb-media">
-      ${it.kind === "video"
-        ? html`<video src=${it.full} controls playsinline autoplay></video>`
-        : html`<img src=${it.full} alt="" />`}
-    </div>
     <button class="fam-lb-nav next" disabled=${index === items.length - 1} onClick=${() => onNav(index + 1)}>›</button>
+    <div class="fam-lb-stage" onClick=${(e) => { if (e.target.classList.contains("fam-lb-stage")) onClose(); }}>
+      <div class="fam-lb-media">
+        ${it.kind === "video"
+          ? html`<video src=${it.full} controls playsinline autoplay></video>`
+          : html`<img src=${it.full} alt="" />`}
+      </div>
+    </div>
     <div class="fam-lb-meta">${dayHead(it.taken_on)}${it.place ? " · 📍 " + it.place : ""} · ${index + 1} / ${items.length}</div>
+    <div class="fam-com" ...${stop}>
+      ${comments.length > 0 && html`<div class="fam-com-list">
+        ${comments.map((c) => html`<div class="fam-com-row" key=${c.id}><b>${c.author_emoji || "👵"} ${c.author_name || "Family"}</b> ${c.text}</div>`)}
+      </div>`}
+      <div class="fam-com-bar">
+        ${!name.trim() && html`<input class="fam-com-name" placeholder="Your name" value=${name} onInput=${(e) => setName(e.target.value)} />`}
+        <input class="fam-com-input" placeholder="Leave a little love…" value=${draft}
+          onInput=${(e) => setDraft(e.target.value)} onKeyDown=${(e) => { if (e.key === "Enter") send(); }} />
+        <button class="fam-com-send" disabled=${!draft.trim() || sending} onClick=${send}>💌</button>
+      </div>
+    </div>
   </div>`;
 }
 

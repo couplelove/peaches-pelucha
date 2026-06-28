@@ -127,7 +127,8 @@ export function MemoryThread({ client, me, players, onOpenMemory }) {
     <div class="mt-car">
       ${rows.map((r) => {
         const m = mem[r.memory_id];
-        const who = pinfo(r.author_id);
+        // a family member (Gramma) has no player id — show their own name/emoji
+        const who = r.author_id ? pinfo(r.author_id) : { emoji: r.author_emoji || "👵", name: r.author_name || "Family" };
         const url = thumbUrl(m);
         return html`<button class=${`mt-card ${r.emoji ? "react" : "comment"}`} key=${r.id}
           onClick=${() => onOpenMemory && onOpenMemory(r.memory_id)}>
