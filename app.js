@@ -115,9 +115,36 @@ const LS = {
   url: "pp.supabase.url",
   key: "pp.supabase.key",
   me: "pp.currentPlayer",
+  couple: "pp.couple",          // a beta couple's own backend, set by their private ?join= link
 };
 
+// A private "join" link — ?join=<base64url of {url,key,label}> — pins THIS device
+// to a specific couple's database. It's how we add a second beta couple (e.g.
+// Mayo & Briuna) on the SAME app + repo, with their own isolated data, without
+// any auth/multi-tenant productizing. Consumed once, persisted, then stripped.
+(function consumeJoinLink() {
+  try {
+    const p = new URLSearchParams(location.search);
+    const tok = p.get("join");
+    if (!tok) return;
+    const json = decodeURIComponent(escape(atob(tok.replace(/-/g, "+").replace(/_/g, "/"))));
+    const data = JSON.parse(json);
+    if (data && data.url && data.key) {
+      localStorage.setItem(LS.couple, JSON.stringify({ url: data.url, key: data.key, label: data.label || null }));
+      localStorage.removeItem(LS.me);   // new backend → pick your player fresh on this device
+    }
+    p.delete("join");
+    const qs = p.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
+  } catch {}
+})();
+
+function coupleOverride() { try { return JSON.parse(localStorage.getItem(LS.couple) || "null"); } catch { return null; } }
+
 function getCreds() {
+  // a joined beta couple's own backend wins over the baked-in default config
+  const ov = coupleOverride();
+  if (ov && ov.url && ov.key) return { url: ov.url, key: ov.key };
   const cfg = window.PP_CONFIG || {};
   const url = (cfg.SUPABASE_URL || localStorage.getItem(LS.url) || "").trim();
   const key = (cfg.SUPABASE_ANON_KEY || localStorage.getItem(LS.key) || "").trim();
@@ -182,7 +209,7 @@ function Root() {
   if (!client) {
     return html`<${SetupScreen} onSave=${saveCreds} error=${credError || "Connecting…"} current=${creds} />`;
   }
-  return html`<${App} client=${client} onResetCreds=${() => { localStorage.removeItem(LS.url); localStorage.removeItem(LS.key); setCreds({ url: "", key: "" }); }} />`;
+  return html`<${App} client=${client} onResetCreds=${() => { localStorage.removeItem(LS.url); localStorage.removeItem(LS.key); localStorage.removeItem(LS.couple); setCreds({ url: "", key: "" }); }} />`;
 }
 
 /* ============================================================ setup ======= */
