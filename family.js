@@ -57,7 +57,9 @@ function App() {
       return [...cur, ...page.items.filter((r) => !seen.has(r.id))];
     });
     setStories((cur) => ({ ...page.stories, ...cur }));
-    if (page.notes) setNotes(page.notes);   // first page carries the love-notes
+    // only the FIRST page carries notes; later (scroll) pages return [] — never
+    // let that empty array wipe the note card that's already showing.
+    if (page.notes && page.notes.length) setNotes(page.notes);
     setDone(!!page.done);
   };
 
