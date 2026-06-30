@@ -551,3 +551,18 @@ alter table family_notes enable row level security;
 drop policy if exists anon_all on family_notes;
 create policy anon_all on family_notes for all to anon, authenticated using (true) with check (true);
 do $$ begin alter publication supabase_realtime add table family_notes; exception when duplicate_object then null; end $$;
+
+-- daily_shares (033): the morning ritual — one row/day holds the silly question
+-- + each player's answer; a full-screen gate blocks the app until BOTH answer.
+create table if not exists daily_shares (
+  id uuid primary key default gen_random_uuid(),
+  day date not null unique,
+  question text not null,
+  answers jsonb not null default '{}'::jsonb,
+  version int not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table daily_shares enable row level security;
+drop policy if exists anon_all on daily_shares;
+create policy anon_all on daily_shares for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table daily_shares; exception when duplicate_object then null; end $$;

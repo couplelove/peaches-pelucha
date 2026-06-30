@@ -117,6 +117,7 @@ function seed() {
     // a family member (Gramma) chiming in from the family page → shows in the couple's Reactions feed
     { id: uid(), memory_id: m0, author_id: null, author_name: "Gramma", author_emoji: "👵", emoji: null, text: "Look at my beautiful grandbabies 💗", created_at: new Date(Date.now() - 10 * 6e4).toISOString() },
   ];
+  db.daily_shares = [];   // empty → the morning gate creates today's row on open
   db.redemptions = [
     // pending: Pelucha redeemed, waiting on Peaches → the sweet home card shows for Peaches
     { id: uid(), reward_label: "Back massage", reward_emoji: "💆", cost: 80, redeemer_id: pelucha, fulfiller_id: peaches, status: "pending", photo_path: null, thumb_path: null, blur: null, note: null, taken_on: null, created_at: nowISO(), fulfilled_at: null },
@@ -153,6 +154,7 @@ const DEFAULTS = {
   gratitudes: { created_by: null },
   memory_comments: { author_id: null, text: null, emoji: null, author_name: null, author_emoji: null },
   family_notes: { kind: "auto", photo_path: null, thumb_path: null, blur: null },
+  daily_shares: { answers: {}, version: 0 },
   redemptions: { reward_emoji: "🎁", cost: 0, redeemer_id: null, fulfiller_id: null, status: "pending", photo_path: null, thumb_path: null, blur: null, note: null, taken_on: null, fulfilled_at: null },
   app_settings: { value: {} },
   fights: { status: "venting", started_by: null, entries: {}, translations: {}, together: null, acks: {}, version: 0, resolved_at: null },

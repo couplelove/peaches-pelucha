@@ -1543,6 +1543,34 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   font-size: 13px; font-weight: 600; box-shadow: 0 10px 26px -10px rgba(0,0,0,.5); cursor: pointer; animation: pop .2s ease; max-width: calc(100% - 28px); }
 
 /* z-index 9000 → a true takeover: covers tabs, dock, modals, everything */
+/* ☀️ daily morning ritual — full-screen editorial gate */
+.dailyfull { position: fixed; inset: 0; z-index: 8800; display: grid; place-items: center; overflow-y: auto;
+  background: linear-gradient(180deg, #fcf7f0 0%, #f3ead7 100%); color: var(--ink); animation: fade .2s ease;
+  padding: calc(var(--safe-top) + 28px) 22px calc(var(--safe-bottom) + 28px); }
+.daily-inner { width: 100%; max-width: 440px; text-align: center; }
+.daily-eyebrow { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; }
+.daily-sun { font-size: 40px; line-height: 1; margin: 12px 0 4px; animation: rise 3s ease-in-out infinite; }
+.daily-q { font-family: var(--serif); font-weight: 500; font-size: 30px; line-height: 1.22; letter-spacing: -0.015em;
+  color: var(--ink); margin: 14px 0 20px; }
+.daily-q.small { font-size: 19px; color: var(--ink-2); margin: 10px 0 18px; }
+.daily-input { width: 100%; font-family: var(--sans); font-size: 17px; line-height: 1.5; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; resize: none; }
+.daily-input:focus { outline: none; border-color: var(--accent); }
+.daily-btn { margin-top: 18px; }
+.daily-wait, .daily-reveal, .daily-step { display: flex; flex-direction: column; }
+.daily-yours { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px;
+  font-size: 16px; color: var(--ink); text-align: left; position: relative; }
+.daily-tag { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; margin-bottom: 5px; }
+.daily-waiting { margin-top: 20px; color: var(--ink-2); font-size: 15px; line-height: 1.6; }
+.daily-waiting .tiny { font-size: 12px; color: var(--ink-3); }
+.daily-cards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
+.daily-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; text-align: left;
+  animation: wmFly .5s cubic-bezier(.2,.9,.3,1.05) backwards; }
+.daily-card:nth-child(2) { animation-delay: .12s; }
+.daily-card.mine { border-color: var(--accent-soft); background: var(--accent-soft); }
+.daily-who { font-family: var(--serif); font-weight: 600; font-size: 15px; color: var(--ink); margin-bottom: 5px; }
+.daily-ans { font-size: 16px; line-height: 1.45; color: var(--ink); }
+
 .fightfull { position: fixed; inset: 0; z-index: 9000; display: flex; flex-direction: column;
   background: linear-gradient(180deg, #fbf6ef 0%, #f1e9dd 100%); color: var(--ink); animation: fade .15s ease; }
 .fightfull-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(var(--safe-top) + 12px) 18px 8px; }

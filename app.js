@@ -11,6 +11,7 @@ import { GratitudeCard } from "./gratitude.js";
 import { MemoryThread } from "./comments.js";
 import { RewardHome } from "./rewards.js";
 import { FightMode, FightToggle } from "./fight.js";
+import { DailyShare } from "./daily.js";
 import { pushStatus, enablePush, disablePush, ensurePush, notifyTurn } from "./push.js";
 import { get as idbGet, set as idbSet } from "https://esm.sh/idb-keyval@6";
 
@@ -567,6 +568,7 @@ function App({ client, onResetCreds }) {
       </nav>
 
       <${FightMode} client=${client} me=${me} players=${players} />
+      <${DailyShare} client=${client} me=${me} players=${players} />
       ${modal && html`<${Modal} modal=${modal} close=${() => setModal(null)} ...${ctx} pickMe=${pickMe} onResetCreds=${onResetCreds} />`}
       ${toast && html`<div class="toast">${toast}</div>`}
       ${updateReady && html`<button class="updbar" onClick=${() => location.reload()}>✨ Update ready — tap to refresh</button>`}
