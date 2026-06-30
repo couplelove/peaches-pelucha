@@ -149,3 +149,49 @@ export function DailyShare({ client, me, players }) {
     </div>
   </div>`, document.body);
 }
+
+/* A small home card with the latest answered question → tap for the full log. */
+export function DailyHistory({ client, me, players }) {
+  const [rows, setRows] = useState(null);
+  const [open, setOpen] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const { data } = await client.from("daily_shares").select("day,question,answers").order("day", { ascending: false }).limit(180);
+      setRows((data || []).filter((r) => players.length >= 2 && players.every((p) => r.answers && r.answers[p.id])));   // only days you BOTH answered
+    } catch { setRows([]); }
+  }, [client, players]);
+  useEffect(() => {
+    load();
+    let ch = null;
+    try { ch = client.channel("pp-dailyhist").on("postgres_changes", { event: "*", schema: "public", table: "daily_shares" }, () => load()).subscribe(); } catch {}
+    const wake = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", wake);
+    return () => { document.removeEventListener("visibilitychange", wake); try { ch && client.removeChannel(ch); } catch {} };
+  }, [client, load]);
+
+  if (!rows || !rows.length) return null;    // nothing answered together yet → no clutter
+  const latest = rows[0];
+
+  return html`<div class="card dailyhist" onClick=${() => setOpen(true)}>
+    <div class="shead"><h2>Daily questions <span class="muted-glyph">☀️</span></h2><span class="linkbtn micro">${rows.length} →</span></div>
+    <div class="dh-q">${latest.question}</div>
+    <div class="dh-peek">${players.map((p) => html`<span class="dh-peek-a" key=${p.id}>${p.emoji} ${latest.answers[p.id]}</span>`)}</div>
+
+    ${open && createPortal(html`<div class="dh-full" onClick=${(e) => { if (e.target.classList.contains("dh-full")) setOpen(false); }}>
+      <div class="dh-bar">
+        <span class="dh-title">Daily questions ☀️</span>
+        <button class="dh-x" onClick=${() => setOpen(false)}>✕</button>
+      </div>
+      <div class="dh-list">
+        ${rows.map((r) => html`<div class="dh-entry" key=${r.day}>
+          <div class="dh-date">${niceDate(r.day)}</div>
+          <div class="dh-eq">${r.question}</div>
+          ${players.map((p) => html`<div class="dh-ans" key=${p.id}>
+            <span class="dh-ans-who">${p.emoji} ${p.name}</span>
+            <span class="dh-ans-txt">${r.answers[p.id]}</span>
+          </div>`)}
+        </div>`)}
+      </div>
+    </div>`, document.body)}
+  </div>`;
+}

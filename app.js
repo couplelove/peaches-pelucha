@@ -11,7 +11,7 @@ import { GratitudeCard } from "./gratitude.js";
 import { MemoryThread } from "./comments.js";
 import { RewardHome } from "./rewards.js";
 import { FightMode, FightToggle } from "./fight.js";
-import { DailyShare } from "./daily.js";
+import { DailyShare, DailyHistory } from "./daily.js";
 import { pushStatus, enablePush, disablePush, ensurePush, notifyTurn } from "./push.js";
 import { get as idbGet, set as idbSet } from "https://esm.sh/idb-keyval@6";
 
@@ -724,6 +724,7 @@ function ScoreTab(ctx) {
     <div data-noswipe><${PlayTab} ...${ctx} /></div>
     <${ScriptureCard} />
     <${GratitudeCard} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
+    <${DailyHistory} client=${ctx.client} me=${ctx.me} players=${ctx.players} />
     <${MemoryThread} client=${ctx.client} me=${ctx.me} players=${ctx.players}
       onOpenMemory=${(id) => { window.__ppFocusMemory = id; ctx.setTab("memories"); }} />
     <${WatchTab} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />

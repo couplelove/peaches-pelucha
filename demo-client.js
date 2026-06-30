@@ -117,7 +117,12 @@ function seed() {
     // a family member (Gramma) chiming in from the family page → shows in the couple's Reactions feed
     { id: uid(), memory_id: m0, author_id: null, author_name: "Gramma", author_emoji: "👵", emoji: null, text: "Look at my beautiful grandbabies 💗", created_at: new Date(Date.now() - 10 * 6e4).toISOString() },
   ];
-  db.daily_shares = [];   // empty → the morning gate creates today's row on open
+  // past answered dailies for the history card (today's row is seeded by the gate on open)
+  const dstr = (off) => { const d = new Date(Date.now() - off * 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  db.daily_shares = [
+    { id: uid(), day: dstr(1), question: "What cartoon did you race home from school to watch?", answers: { [peaches]: "Hey Arnold — every single day", [pelucha]: "Sailor Moon, obviously" }, version: 2, created_at: nowISO() },
+    { id: uid(), day: dstr(2), question: "What snack was your whole personality as a kid?", answers: { [peaches]: "Dunkaroos, hands down", [pelucha]: "the sourest Warheads" }, version: 2, created_at: nowISO() },
+  ];
   db.redemptions = [
     // pending: Pelucha redeemed, waiting on Peaches → the sweet home card shows for Peaches
     { id: uid(), reward_label: "Back massage", reward_emoji: "💆", cost: 80, redeemer_id: pelucha, fulfiller_id: peaches, status: "pending", photo_path: null, thumb_path: null, blur: null, note: null, taken_on: null, created_at: nowISO(), fulfilled_at: null },
