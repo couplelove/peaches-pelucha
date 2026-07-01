@@ -967,7 +967,8 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* cool-world chrome (scoped under .cool — Score never gets this class) */
 .app-shell.cool { color: var(--c-ink); }
 .app-shell.cool .topbar { padding-top: 6px; }
-.app-shell.cool .brand.script { color: var(--c-ink-2); }
+/* wordmark (both names) → white over the dark photo backdrop */
+.app-shell.cool .brand.script { color: #fff; }
 
 /* journal-flip page transition (replays on tab change via key=tab) */
 /* NB: no `will-change`/persistent transform here — it would become the containing
@@ -1125,26 +1126,28 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .photobg { position: fixed; inset: 0; z-index: -2; overflow: hidden; background: var(--c-canvas); }
 /* two layers stacked; the incoming one fades in over the outgoing one — a clean
    crossfade with no flash to the empty canvas. Fewer, larger tiles (2×3). */
+/* ONE large photo per layer, filling the whole (mobile-tall) screen. Two layers
+   stacked; the incoming one fades in over the outgoing — a clean crossfade.
+   NO continuous drift animation (it'd force every glass card above to
+   re-rasterize each frame); the 9s opacity crossfade gives the motion instead. */
 .collage {
-  position: absolute; inset: -7%; display: grid;
-  grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px;
-  filter: blur(3px) saturate(1.12); transform: scale(1.05);
+  position: absolute; inset: 0;
+  filter: blur(2px) saturate(1.08); transform: scale(1.06);
   opacity: 0; transition: opacity 1.4s ease;
-  /* NO continuous drift animation — a constantly-moving blurred backdrop forces
-     every backdrop-filter card above it to re-rasterize each frame (major jank).
-     The 9s opacity crossfade between the two layers gives the motion instead. */
 }
 .collage.on { opacity: 1; }
-.ctile { background-size: cover; background-position: center; border-radius: 20px; }
-/* cool wash so the photos read as soft ambient texture and everything on top stays legible */
+.ctile { position: absolute; inset: 0; background-size: cover; background-position: center; }
+/* dark wash so a bright photo stays behind the light glass cards + white wordmark */
 .photoscrim {
   position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(233,239,244,.38) 0%, rgba(223,233,240,.44) 50%, rgba(231,238,243,.58) 100%);
+  background: linear-gradient(180deg, rgba(18,22,27,.44) 0%, rgba(16,20,25,.52) 50%, rgba(12,16,20,.64) 100%);
 }
 @media (prefers-reduced-motion: reduce) { .collage { animation: none; transition: none; } }
 
-/* a hair more legibility for loose editorial text sitting directly on the backdrop */
-.app-shell.cool .brand.script { text-shadow: 0 1px 10px rgba(233,239,244,.9); }
+/* legibility for the white wordmark sitting directly on the photo backdrop */
+.app-shell.cool .brand.script { text-shadow: 0 1px 12px rgba(0,0,0,.45); }
+/* …but Memories + Map are light-background spaces → keep the wordmark dark there */
+.app-shell.mem .brand.script, .app-shell.map .brand.script { color: var(--c-ink-2); text-shadow: none; }
 
 /* Phase 10 BOARD stays exactly as designed even though the shell is cool — only
    the gameplay must be preserved, but the board's own surfaces shouldn't glass. */

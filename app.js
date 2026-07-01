@@ -44,7 +44,7 @@ const TAB_META = {
 // Rotating photo-collage backdrop drawn from the couple's own memories. Heavily
 // blurred + cool-scrimmed (in CSS) so the glass panels and all text stay legible
 // on top. Falls back to the plain cool gradient until there are photos.
-const COLLAGE_TILES = 6;   // fewer, larger photos
+const COLLAGE_TILES = 1;   // one big photo at a time, full mobile height
 function PhotoBackdrop({ client }) {
   const [photos, setPhotos] = useState(null);
   // two stacked collage layers that CROSSFADE on rotation (no flash to blank).
