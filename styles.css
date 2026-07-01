@@ -1167,8 +1167,10 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* ============================================================================
    ✨ Professional polish pass
    ========================================================================== */
-/* no floating hairline dividers between glass cards over the photo bg — let air separate them */
-.app-shell.cool .card + .card { border-top: none; padding-top: 0; }
+/* no floating hairline dividers between glass cards over the photo bg — let air
+   separate them. Keep the SAME top padding as a first card so every header has
+   the same breathing room (not crunched against the box edge). */
+.app-shell.cool .card + .card { border-top: none; padding-top: var(--sp-4); }
 /* one consistent glass-card radius (cards were 22/18; rows/controls keep their own) */
 .app-shell.cool .card,
 .app-shell.cool .evhero,
