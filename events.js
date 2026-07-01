@@ -372,7 +372,7 @@ export function PlansTab({ client, me, players, flash }) {
   return html`<div>
     <div class="card">
       <div class="shead">
-        <span class="lbword">love bug calendar</span>
+        <h2>Love bug calendar</h2>
         <div class="shead-actions">
           <button class="iconbtn" title=${view === "home" ? "All events" : "Back"} onClick=${() => setView(view === "home" ? "list" : "home")}>${view === "home" ? "☰" : "✕"}</button>
           <button class="btn sm" onClick=${() => setCompose({ emoji: "💗", title: "", date: todayISO(), time: "", kind: "invite", notes: "", location: "" })}>＋ Plan</button>
