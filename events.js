@@ -151,7 +151,7 @@ function TodoCard({ client, me, players, flash }) {
   </div>`;
 
   return html`<div class="card">
-    <h2>To-dos</h2>
+    <div class="shead"><h2>To-dos</h2></div>
     <div class="row" style="margin-bottom:12px">
       <input placeholder=${withDate ? "Remind us to…" : "Add a to-do…"} maxlength="120" value=${text}
         onInput=${(e) => setText(e.target.value)}

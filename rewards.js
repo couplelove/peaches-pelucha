@@ -117,7 +117,7 @@ export function RewardStrip({ client, me, players }) {
   if (!rows || !rows.length) return null;
 
   return html`<div class="rewardstrip">
-    <div class="rs-head">Rewards <span class="muted-glyph">🎁</span></div>
+    <div class="shead"><h2>Rewards <span class="muted-glyph">🎁</span></h2></div>
     <div class="rs-row">
       ${rows.map((r) => html`<button class="rs-card" key=${r.id}
         style=${r.blur ? `background-image:url(${r.blur})` : ""} onClick=${() => setOpen(r)}>

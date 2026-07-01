@@ -592,7 +592,6 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 /* delivered rewards in Memories — special cards kept apart from the day feed */
 .rewardstrip { margin: 2px 0 14px; }
-.rs-head { font-family: var(--serif); font-weight: 500; font-size: 17px; color: var(--ink); margin: 0 0 8px; }
 .rs-row { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 2px 16px 8px;
   scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .rs-row::-webkit-scrollbar { display: none; }
@@ -1573,7 +1572,6 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 /* daily questions — small home card + full-screen log */
 .dailyhist { cursor: pointer; }
-.dailyhist .shead { align-items: baseline; }
 .dailyhist .linkbtn.micro { opacity: .6; }
 .dh-q { font-family: var(--serif); font-weight: 500; font-size: 17px; line-height: 1.3; color: var(--ink); margin: 2px 0 8px; }
 .dh-peek { display: flex; flex-direction: column; gap: 3px; }

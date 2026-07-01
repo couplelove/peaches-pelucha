@@ -740,7 +740,7 @@ function WalletTab(ctx) {
   const { players, balances, txns, me, setModal, api } = ctx;
   return html`
     <div class="card">
-      <h2>Hearts</h2>
+      <div class="shead"><h2>Hearts</h2></div>
       <div class="score-head">
         ${players.map((p) => html`
           <div class="score-tile">
@@ -756,7 +756,7 @@ function WalletTab(ctx) {
     </div>
 
     <div class="card">
-      <div class="row between"><h2 style="margin:0">Recent activity</h2></div>
+      <div class="shead"><h2>Recent activity</h2></div>
       <${TxnList} txns=${txns.slice(0, 40)} players=${players} api=${api} canDelete=${true} />
     </div>`;
 }
@@ -811,7 +811,7 @@ function BetsTab(ctx) {
       </div>
     </div>
 
-    ${done.length > 0 && html`<div class="card"><h2>History</h2><div class="list">
+    ${done.length > 0 && html`<div class="card"><div class="shead"><h2>History</h2></div><div class="list">
       ${done.map((b) => {
         const w = b.winner_id ? nameOf(b.winner_id) : null;
         return html`<div class="line" key=${b.id}>
@@ -873,7 +873,7 @@ function MoreTab(ctx) {
     : "🔔 Get notified when it's your turn";
   return html`
     <div class="card">
-      <h2>Players</h2>
+      <div class="shead"><h2>Players</h2></div>
       <div class="list">
         ${players.map((p) => html`<div class="line" key=${p.id}>
           <div class="l"><span class="av" style=${`background:${p.color}22;width:34px;height:34px;border-radius:50%;display:grid;place-content:center`}>${p.emoji}</span>
@@ -887,7 +887,7 @@ function MoreTab(ctx) {
     <${FightToggle} client=${client} me=${me} players=${players} />
 
     <div class="card">
-      <h2>Customise</h2>
+      <div class="shead"><h2>Customise</h2></div>
       <div class="list">
         <button class="btn ghost block" onClick=${() => setModal({ type: "manageEarn" })}>✨ Earn buttons</button>
         <button class="btn ghost block" onClick=${() => setModal({ type: "manageRewards" })}>🎁 Reward shop</button>
@@ -896,7 +896,7 @@ function MoreTab(ctx) {
     </div>
 
     <div class="card">
-      <h2>This phone</h2>
+      <div class="shead"><h2>This phone</h2></div>
       <div class="list">
         <button class="btn ghost block" disabled=${alerts === "denied" || alerts === "…"} onClick=${toggleAlerts}>${alertsLabel}</button>
         <button class="btn ghost block" onClick=${() => setModal({ type: "switch" })}>🔁 Switch player</button>
