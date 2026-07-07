@@ -1145,8 +1145,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 /* legibility for the white wordmark sitting directly on the photo backdrop */
 .app-shell.cool .brand.script { text-shadow: 0 1px 12px rgba(0,0,0,.45); }
-/* …but Memories + Map are light-background spaces → keep the wordmark dark there */
-.app-shell.mem .brand.script, .app-shell.map .brand.script { color: var(--c-ink-2); text-shadow: none; }
+/* …but Memories is a light-background space → keep the wordmark dark there.
+   (Map sits over the dark backdrop, so it uses the white wordmark like home.) */
+.app-shell.mem .brand.script { color: var(--c-ink-2); text-shadow: none; }
 
 /* Phase 10 BOARD stays exactly as designed even though the shell is cool — only
    the gameplay must be preserved, but the board's own surfaces shouldn't glass. */
