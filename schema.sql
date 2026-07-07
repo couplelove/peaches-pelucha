@@ -342,6 +342,7 @@ create table if not exists social_links (
   seen_at      timestamptz,
   reactions    jsonb not null default '[]'::jsonb,
   status       text not null default 'active',
+  archived_at  timestamptz,
   created_at   timestamptz not null default now()
 );
 create table if not exists watch_state (

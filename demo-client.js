@@ -32,7 +32,20 @@ function seed() {
     ],
     bets: [],
     matches: [],
-    social_links: [],
+    social_links: [
+      // fresh share, seen minutes ago → stays in the live list
+      { id: uid(), url: "https://youtu.be/dQw4w9WgXcQ", platform: "youtube", video_id: "dQw4w9WgXcQ", mode: "share",
+        sender_id: pelucha, recipient_id: peaches, note: "this is so us", seen_at: new Date(Date.now() - 20 * 60e3).toISOString(),
+        reactions: [{ by: peaches, emoji: "😂", at: new Date(Date.now() - 18 * 60e3).toISOString() }], status: "active", archived_at: null, created_at: new Date(Date.now() - 3600e3).toISOString() },
+      // watched 2 days ago → the sweep should retire it to the archive on load
+      { id: uid(), url: "https://youtu.be/9bZkp7q19f0", platform: "youtube", video_id: "9bZkp7q19f0", mode: "share",
+        sender_id: peaches, recipient_id: pelucha, note: "wait for the end", seen_at: new Date(Date.now() - 2 * 864e5).toISOString(),
+        reactions: [{ by: pelucha, emoji: "💀", at: new Date(Date.now() - 2 * 864e5).toISOString() }], status: "active", archived_at: null, created_at: new Date(Date.now() - 3 * 864e5).toISOString() },
+      // a queue night already cleared → straight in the archive
+      { id: uid(), url: "https://www.tiktok.com/@x/video/7200000000000000000", platform: "tiktok", video_id: "7200000000000000000", mode: "queue",
+        sender_id: pelucha, recipient_id: null, note: null, seen_at: null,
+        reactions: [], status: "watched", archived_at: new Date(Date.now() - 5 * 864e5).toISOString(), created_at: new Date(Date.now() - 6 * 864e5).toISOString() },
+    ],
     watch_state: [],
     trash_talk: [],
     day_stories: [],
@@ -146,7 +159,7 @@ const DEFAULTS = {
   matches: { status: "playing", version: 0 },
   trash_talk: { player_id: null },
   memories: { kind: "photo", uploaded_by: null, place: null, lat: null, lng: null, thumb_path: null, blur: null },
-  social_links: { platform: "other", video_id: null, mode: "share", sender_id: null, recipient_id: null, note: null, seen_at: null, reactions: [], status: "active" },
+  social_links: { platform: "other", video_id: null, mode: "share", sender_id: null, recipient_id: null, note: null, seen_at: null, reactions: [], status: "active", archived_at: null },
   todos: { due_on: null, done: false, done_at: null, created_by: null },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },

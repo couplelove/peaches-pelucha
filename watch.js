@@ -141,6 +141,8 @@ function Viewer({ items, index, me, onClose, onNav, onReact }) {
 export function WatchTab({ client, me, players, flash }) {
   const partner = players.find((p) => p.id !== me.id) || players[0];
   const [items, setItems] = useState(null);
+  const [archive, setArchive] = useState([]);        // watched → retired videos
+  const [archOpen, setArchOpen] = useState(false);   // full-screen archive log
   const [watch, setWatch] = useState(null);          // watch_state row
   const [view, setView] = useState("shares");        // 'shares' | 'queue'
   const [input, setInput] = useState("");
@@ -148,11 +150,23 @@ export function WatchTab({ client, me, players, flash }) {
   const [viewer, setViewer] = useState(null);        // { list, index }
 
   const load = useCallback(async () => {
-    const [{ data: links }, { data: ws }] = await Promise.all([
+    const [{ data: links }, { data: ws }, { data: old }] = await Promise.all([
       client.from("social_links").select("*").eq("status", "active").order("created_at", { ascending: false }),
       client.from("watch_state").select("*").order("updated_at", { ascending: false }).limit(1),
+      client.from("social_links").select("*").eq("status", "watched").order("created_at", { ascending: false }).limit(200),
     ]);
-    setItems(links || []);
+    // Retire shares into the archive 24h after the last activity (watched /
+    // reacted) — they stop cluttering the live lists but stay browsable.
+    const activityAt = (it) => {
+      const ts = [it.seen_at, ...(it.reactions || []).map((r) => r.at)].filter(Boolean).map((t) => new Date(t).getTime());
+      return ts.length ? Math.max(...ts) : null;
+    };
+    const now = Date.now(), at = new Date().toISOString();
+    const done = (links || []).filter((it) => it.mode === "share" && activityAt(it) && now - activityAt(it) > 864e5);
+    done.forEach((it) => { client.from("social_links").update({ status: "watched", archived_at: at }).eq("id", it.id).then(() => {}); });
+    const doneIds = new Set(done.map((it) => it.id));
+    setItems((links || []).filter((it) => !doneIds.has(it.id)));
+    setArchive([...done.map((it) => ({ ...it, status: "watched", archived_at: at })), ...(old || [])]);
     setWatch((ws && ws[0]) || null);
   }, [client]);
 
@@ -226,7 +240,7 @@ export function WatchTab({ client, me, players, flash }) {
 
   const queueItems = (items || []).filter((i) => i.mode === "queue").slice().reverse();   // oldest first → watch order
   const finishQueue = async () => {
-    await client.from("social_links").update({ status: "watched" }).eq("mode", "queue").eq("status", "active");
+    await client.from("social_links").update({ status: "watched", archived_at: new Date().toISOString() }).eq("mode", "queue").eq("status", "active");
     await setReady(false);
     flash("Queue cleared 🍿");
     setViewer(null); load();
@@ -311,6 +325,24 @@ export function WatchTab({ client, me, players, flash }) {
             <button class="linkbtn block mt" style="width:100%" onClick=${finishQueue}>Done — clear the queue</button>
           </div>`}
     </div>`}
+
+    ${archive.length > 0 && html`<button class="warchbtn" onClick=${() => setArchOpen(true)}>
+      <span>🗄 Watch archive</span><span class="muted tiny">${archive.length} →</span>
+    </button>`}
+
+    ${archOpen && createPortal(html`<div class="dh-full" onClick=${(e) => { if (e.target.classList.contains("dh-full")) setArchOpen(false); }}>
+      <div class="dh-bar">
+        <span class="dh-title">Watch archive 🗄</span>
+        <button class="dh-x" onClick=${() => setArchOpen(false)}>✕</button>
+      </div>
+      <div class="dh-list warch-list">
+        ${archive.map((it) => Card(it, {
+          sub: it.mode === "queue"
+            ? `watched together 🍿 · ${ago(it.archived_at || it.created_at)}`
+            : `from ${(players.find((p) => p.id === it.sender_id) || {}).name || "?"} · watched ${ago(it.seen_at || it.archived_at || it.created_at)}`,
+          onOpen: () => openViewer(archive, archive.indexOf(it)) }))}
+      </div>
+    </div>`, document.body)}
 
     ${viewer && html`<${Viewer} items=${viewer.list} index=${viewer.index} me=${me}
       onClose=${() => setViewer(null)} onNav=${navViewer} onReact=${react} />`}

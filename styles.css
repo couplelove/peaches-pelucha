@@ -899,6 +899,11 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .wdel { position: absolute; top: 6px; right: 8px; color: var(--ink-3); font-size: 13px; padding: 4px; }
 
 .wgate { text-align: center; border: 1px solid var(--line); border-radius: var(--r); padding: 22px 16px; background: var(--paper-2); }
+/* 🗄 archive strip at the foot of the Watch card → full-screen log (dh-full) */
+.warchbtn { display: flex; align-items: center; justify-content: space-between; width: 100%;
+  margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--paper-2); color: var(--ink-2); font-weight: 600; font-size: 13px; cursor: pointer; }
+.warch-list .wcard { width: 100%; }
 .wgate-icon { font-size: 38px; }
 .wgate-count { font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 6px 0 4px; }
 
