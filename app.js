@@ -9,7 +9,7 @@ import { DateRoulette } from "./roulette.js";
 import { ScriptureCard } from "./home.js";
 import { GratitudeCard } from "./gratitude.js";
 import { MemoryThread } from "./comments.js";
-import { RewardHome } from "./rewards.js";
+import { RewardHome, RewardStrip } from "./rewards.js";
 import { FightMode, FightToggle } from "./fight.js";
 import { DailyShare, DailyHistory } from "./daily.js";
 import { pushStatus, enablePush, disablePush, ensurePush, notifyTurn } from "./push.js";
@@ -827,7 +827,7 @@ function BetsTab(ctx) {
 /* ============================================================ Shop ======== */
 
 function ShopTab(ctx) {
-  const { rewards, me, balances, api, setModal } = ctx;
+  const { rewards, me, players, client, balances, api, setModal } = ctx;
   const bal = balances[me.id] || 0;
   const active = rewards.filter((r) => r.active);
   return html`
@@ -850,7 +850,8 @@ function ShopTab(ctx) {
           </div>`;
         })}
       </div>
-    </div>`;
+    </div>
+    <${RewardStrip} client=${client} me=${me} players=${players} />`;
 }
 
 /* ============================================================ More ======== */

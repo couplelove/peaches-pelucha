@@ -2,7 +2,6 @@ import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
 import { useMemoryComments, MEM_REACTS } from "./comments.js";
-import { RewardStrip } from "./rewards.js";
 
 const html = htm.bind(h);
 
@@ -905,9 +904,6 @@ export function MemoriesTab({ client, me, players = [], flash }) {
 
       ${items === null && html`<div class="memskel">${[...Array(9)].map((_, i) => html`<div class="memskel-cell" key=${i}></div>`)}</div>`}
       ${items !== null && items.length === 0 && html`<div class="empty"><span class="big">📸</span>No memories yet — add your first.</div>`}
-
-      <!-- delivered rewards: special cards, kept apart from the day feed -->
-      ${view === "gallery" && !openGroup && html`<${RewardStrip} client=${client} me=${me} players=${players} />`}
 
       <!-- title-card feed: scroll the days like a journey; tap a card to open the day -->
       ${view === "gallery" && items !== null && !openGroup && html`<div class="dayfeed">
