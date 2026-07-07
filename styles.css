@@ -729,6 +729,11 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   margin: 4px 14px 6px; padding: 9px 14px; border-radius: var(--r-sm);
   background: var(--accent-soft); color: var(--accent-press); font-size: 13px; font-weight: 600; }
 
+/* 🏳 white-flag chooser (bottom sheet) */
+.flagsheet { text-align: center; }
+.flagsheet h3 { text-align: center; }
+.flagsheet .linkbtn { display: block; width: 100%; margin-top: 12px; }
+
 /* ---- zoned board ---- */
 /* Fills the immersive viewport exactly so the board never page-scrolls; the
    hand stays pinned at the bottom and only the chat strip (if any) scrolls.

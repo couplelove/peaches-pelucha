@@ -91,6 +91,7 @@ export function PlayTab(ctx) {
   // land on the home page, NOT jump straight into the full-screen hand. The
   // board opens full-screen only when you choose to (Open game / Play turn).
   const [immersive, setImmersive] = useState(false);
+  const [flagOpen, setFlagOpen] = useState(false);   // 🏳 white-flag chooser
   const busy = useRef(false);
 
   const commit = useCallback(async (newState) => {
@@ -261,28 +262,32 @@ export function PlayTab(ctx) {
   if (immersive) {
     const s = match.state;
     const pinfo = (id) => players.find((p) => p.id === id) || { name: "?", emoji: "❔" };
-    const endReq = s.endRequest || null;
-    const requestEnd = () => commit({ ...s, endRequest: me.id });
-    const keepPlaying = () => commit({ ...s, endRequest: null });
-    const confirmEnd = async () => {
-      await client.from("matches").update({ status: "finished" }).eq("id", match.id);
-      setMatch(null); // partner's phone follows via realtime
+    const partnerId = s.players.find((p) => p !== me.id) || s.players[0];
+    // 🏳 White flag — two ways to concede, both land on the Match-Over screen so
+    // the ending always has closure. "Surrender" hands the win to the other
+    // player (it counts toward Lifetime). "No winner" just ends it, uncounted.
+    const surrender = (winnerId) => {
+      commit({ ...s, status: "matchOver", winner: winnerId || null, endedBy: "surrender", surrenderedBy: me.id });
+      try {
+        if (winnerId) notifyTurn(client, winnerId, "🏳 You win!", `${me.emoji} ${me.name} surrendered the match to you.`);
+        else if (partnerId) notifyTurn(client, partnerId, "🏳 Match ended", `${me.emoji} ${me.name} waved the white flag — no winner this time.`);
+      } catch {}
+      setFlagOpen(false);
     };
     return html`<div class="gamefs">
       <div class="gamefs-bar">
         <button class="iconbtn" onClick=${() => setImmersive(false)}>‹</button>
         <div class="gamefs-title">Hand ${s.handNumber}</div>
-        <button class="iconbtn ${endReq ? "on" : ""}" title="End match" onClick=${endReq === me.id ? keepPlaying : requestEnd}>🏳</button>
+        <button class="iconbtn ${flagOpen ? "on" : ""}" title="White flag" onClick=${() => setFlagOpen(true)}>🏳</button>
       </div>
-      ${endReq && html`<div class="endbar">
-        ${endReq === me.id
-          ? html`<span>Waiting for ${pinfo(s.players.find((p) => p !== me.id)).emoji} to agree to end</span>
-                 <button class="linkbtn" onClick=${keepPlaying}>Cancel</button>`
-          : html`<span>${pinfo(endReq).emoji} ${pinfo(endReq).name} wants to end this match</span>
-                 <span class="row">
-                   <button class="btn sm" onClick=${confirmEnd}>End it</button>
-                   <button class="linkbtn" onClick=${keepPlaying}>Keep playing</button>
-                 </span>`}
+      ${flagOpen && html`<div class="modal-bg" onClick=${(e) => { if (e.target.classList.contains("modal-bg")) setFlagOpen(false); }}>
+        <div class="modal flagsheet">
+          <div class="handle"></div>
+          <h3>Wave the white flag 🏳</h3>
+          <button class="btn block" onClick=${() => surrender(partnerId)}>Surrender — ${pinfo(partnerId).emoji} ${pinfo(partnerId).name} wins 👑</button>
+          <button class="btn ghost block mt" onClick=${() => surrender(null)}>End — no winner 🤍</button>
+          <button class="linkbtn block mt" onClick=${() => setFlagOpen(false)}>Keep playing</button>
+        </div>
       </div>`}
       <div class="gamefs-body">
         <${Board} ...${ctx} match=${match} commit=${commit} setMatch=${setMatch} oppOnline=${oppOnline} talk=${talk} />
@@ -1204,6 +1209,24 @@ function MatchOver({ match, setMatch, players, me, pinfo, client, flash, room = 
     if (error) { flash("⚠️ " + error.message); return; }
     setMatch(data); // realtime swaps the other phone to the fresh match too
   };
+
+  // 🏳 Ended by white flag — no going-out turn to replay, so show a calm crown
+  // (someone conceded the win) or a neutral "no winner" close.
+  if (s.endedBy === "surrender") {
+    const quit = s.surrenderedBy ? pinfo(s.surrenderedBy) : null;
+    return html`<div class="card center winover">
+      <div class="wm-crown">🏳</div>
+      ${s.winner
+        ? html`<h2 class="wm-title">${w.emoji} ${w.name} wins!</h2>
+               <p class="sub">${quit ? `${quit.emoji} ${quit.name} surrendered the match.` : "Won by surrender."}</p>
+               <p class="tiny muted mt">🏆 logged to Lifetime</p>`
+        : html`<h2 class="wm-title">White flag 🏳</h2>
+               <p class="sub">${quit ? `${quit.emoji} ${quit.name} ended the match — no winner this time.` : "Match ended — no winner."}</p>
+               <p class="tiny muted mt">Not counted toward Lifetime.</p>`}
+      <button class="btn block mt" onClick=${newMatch}>New match 🎴</button>
+    </div>`;
+  }
+
   return html`<div class="card center winover">
     <div class="wm-crown">👑</div>
     <h2 class="wm-title">${w.emoji} ${w.name} wins!</h2>
