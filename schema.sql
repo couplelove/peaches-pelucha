@@ -569,9 +569,9 @@ drop policy if exists anon_all on daily_shares;
 create policy anon_all on daily_shares for all to anon, authenticated using (true) with check (true);
 do $$ begin alter publication supabase_realtime add table daily_shares; exception when duplicate_object then null; end $$;
 
--- bday_coupons (036): Pelucha's birthday app (/birthday/) — four experience
--- coupons she can redeem. payload carries her picks ({date} or {start,nights});
--- realtime so a redemption lands on Peaches's phone instantly.
+-- bday_coupons (036): Peaches's birthday app (/birthday/, from Pelucha) — four
+-- experience coupons she can redeem. payload carries her picks ({date} or
+-- {start,days}); realtime so a redemption lands on Pelucha's phone instantly.
 create table if not exists bday_coupons (
   id          uuid primary key default gen_random_uuid(),
   slug        text not null unique,

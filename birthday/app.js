@@ -1,4 +1,4 @@
-// For Pelucha 🧸 — her birthday app. A letter, ten poems, four promises.
+// For Peaches 🍑, from Pelucha 🧸 — her birthday app. A letter, ten poems, four promises.
 // Same stack as home: Preact + htm + supabase-js, no build step.
 import { h, render } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useRef, useCallback } from "https://esm.sh/preact@10.23.2/hooks";
@@ -7,12 +7,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2?bundle";
 
 const html = htm.bind(h);
 
-const PEACHES_ID = "4f9fcad1-63f8-4a98-a5ac-02f0367a0e05";
+const PELUCHA_ID = "b8db6a45-06e8-4bb0-bf67-b716c2179393"; // the giver — gets the redemption pushes
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 
 // ——— Cam: everything she reads lives in LETTER, PHOTOS[].poem, and COUPONS[].sub ———
 
-const LETTER = `My Pelucha,
+const LETTER = `My Peaches,
 
 You took my birthday out of my hands and made it unforgettable — which means you never let me plan yours. So this year you get something better than one surprise: a stack of promises, already yours, waiting on your word.
 
@@ -59,7 +59,7 @@ const PHOTOS = [
   },
   {
     path: "u1783708582218-48xhhe.jpg", thumb: "t1783708582218-48xhhe.webp", date: "Today", finale: true,
-    poem: "And today the hills wore\ntheir softest blue for you,\nthe garden held its breath —\nanother year of you,\nimpossibly, gloriously you.\n\nHappy birthday, my Pelucha.",
+    poem: "And today the hills wore\ntheir softest blue for you,\nthe garden held its breath —\nanother year of you,\nimpossibly, gloriously you.\n\nHappy birthday, my Peaches.",
   },
 ];
 
@@ -102,15 +102,15 @@ let SB_URL = "";
 const renderUrl = (p, w) => `${SB_URL}/storage/v1/render/image/public/memories/${p}?width=${w}&quality=80`;
 const pubUrl = (p) => `${SB_URL}/storage/v1/object/public/memories/${p}`;
 
-function notifyPeaches(client, title, body) {
+function notifyPelucha(client, title, body) {
   if (IS_LOCAL) return; // never ping his phone from a dev run
   try {
-    client.functions.invoke("notify-turn", { body: { player_id: PEACHES_ID, title, body } }).catch(() => {});
+    client.functions.invoke("notify-turn", { body: { player_id: PELUCHA_ID, title, body } }).catch(() => {});
   } catch {}
 }
 
-// ——— confetti (canvas, her purple + terracotta + gold) ———
-const CONF_COLORS = ["#9b6bff", "#c4a6ff", "#c15f3c", "#ffd166", "#ffb4c8", "#fffdfb"];
+// ——— confetti (canvas, her peach + his purple + gold) ———
+const CONF_COLORS = ["#ff7a91", "#ffb4c8", "#9b6bff", "#c15f3c", "#ffd166", "#fffdfb"];
 let confCanvas = null, confParts = [], confRaf = 0;
 function confetti(n = 140) {
   if (!confCanvas) {
@@ -200,7 +200,7 @@ function Envelope({ onOpen }) {
           <div class="env-body"></div>
           <div class="env-seal">🧸</div>
         </div>
-        <div class="gate-name">Pelucha</div>
+        <div class="gate-name">Peaches</div>
         <div class="gate-sub">something for your birthday</div>
         <div class="gate-hint">tap to open</div>
       </div>
@@ -211,7 +211,7 @@ function Envelope({ onOpen }) {
 function Hero() {
   return html`
     <header class="hero">
-      <div class="hero-kicker">July 10, 2026</div>
+      <div class="hero-kicker">July 11, 2026</div>
       <h1 class="hero-title">Happy<br />Birthday</h1>
       <div class="hero-sub">for the girl who plans everyone else's magic</div>
     </header>
@@ -224,7 +224,7 @@ function Letter() {
       <div class="sec-label"><span>I</span> a letter</div>
       <div class="letter">
         <p>${LETTER}</p>
-        <div class="letter-sig">— your Peaches 🍑</div>
+        <div class="letter-sig">— your Pelucha 🧸</div>
       </div>
     </section>
   `;
@@ -321,7 +321,7 @@ function Coupon({ c, row, onRedeem }) {
               ${date && html`<div class="range-echo">${fmtShort(date)} – ${fmtShort(addDays(date, days - 1))}</div>`}
             `}
             <button class="redeem" disabled=${!ready || busy} onClick=${go}>
-              ${busy ? "…" : c.cta} 💜
+              ${busy ? "…" : c.cta} 💗
             </button>
           </div>
         `}
@@ -363,7 +363,7 @@ function Gifts({ client }) {
       : c.kind === "range" ? `${c.emoji} ${c.title} — ${fmtShort(payload.start)} to ${fmtShort(addDays(payload.start, payload.days - 1))}`
       : c.slug === "thrift" ? `${c.emoji} ${c.title} — time to send it 💸`
       : `${c.emoji} ${c.title}`;
-    notifyPeaches(client, "🧸 Pelucha redeemed a birthday gift!", detail);
+    notifyPelucha(client, "🍑 Peaches redeemed a birthday gift!", detail);
   };
   return html`
     <section class="sec">
@@ -403,7 +403,7 @@ function App() {
       ${client && html`<${Gifts} client=${client} />`}
       <footer class="foot">
         <div class="foot-heart">🧸 💗 🍑</div>
-        <div>made by your Peaches, with all of his heart</div>
+        <div>made by your Pelucha, with all of his heart</div>
       </footer>
     </div>
   `;

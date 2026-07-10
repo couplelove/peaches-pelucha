@@ -1,5 +1,5 @@
-/* For Pelucha 🧸 — service worker. Own cache, independent of the main app. */
-const CACHE = "pb-v1";
+/* For Peaches 🍑 — service worker. Own cache, independent of the main app. */
+const CACHE = "pb-v2";
 const MEDIA_CACHE = "pb-media-v1";
 const DEPS_CACHE = "pb-deps-v1";
 const MEDIA_MAX = 40;

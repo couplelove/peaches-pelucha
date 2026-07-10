@@ -1,4 +1,5 @@
-/* For Pelucha 🧸 — warm editorial paper, her purple as the accent. */
+/* For Peaches 🍑 — warm editorial paper, her peach-pink as the accent;
+   Pelucha's purple survives only as his wax seal + confetti. */
 :root {
   --paper: #faf5ef;
   --paper-2: #f3ece2;
@@ -8,9 +9,11 @@
   --ink-3: #b7ada1;
   --line: #e8dfd4;
   --line-2: #f0e8dd;
-  --plush: #9b6bff;
+  --peach: #e8617a;
+  --peach-soft: #fdeaee;
+  --peach-press: #cf4a63;
+  --plush: #9b6bff;        /* the giver's mark: wax seal + confetti only */
   --plush-soft: #f0e9ff;
-  --plush-press: #8253e6;
   --terra: #c15f3c;
   --gold: #c9a227;
   --serif: "Fraunces", ui-serif, Georgia, serif;
@@ -51,7 +54,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .gate {
   position: fixed; inset: 0; z-index: 800;
   background:
-    radial-gradient(circle at 18% 12%, var(--plush-soft) 0 3px, transparent 4px),
+    radial-gradient(circle at 18% 12%, var(--peach-soft) 0 3px, transparent 4px),
     radial-gradient(circle at 82% 24%, #fbe9d7 0 3px, transparent 4px),
     radial-gradient(circle at 30% 78%, var(--plush-soft) 0 3px, transparent 4px),
     radial-gradient(circle at 70% 88%, #fbe9d7 0 3px, transparent 4px),
@@ -157,7 +160,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .sec-label span {
   font-family: var(--serif); font-style: italic; font-weight: 500;
-  font-size: 15px; color: var(--plush); letter-spacing: 0;
+  font-size: 15px; color: var(--peach); letter-spacing: 0;
 }
 .sec-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
@@ -220,7 +223,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   backdrop-filter: blur(6px);
   padding: 6px 11px; border-radius: 999px;
 }
-.page.finale .page-date { background: var(--plush); }
+.page.finale .page-date { background: var(--peach); }
 .poem {
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 0 22px 22px;
@@ -241,7 +244,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   opacity: 0.5;
   transition: all 0.25s ease;
 }
-.dot.on { opacity: 1; background: var(--plush); transform: scale(1.35); }
+.dot.on { opacity: 1; background: var(--peach); transform: scale(1.35); }
 .dot.cake { width: auto; height: auto; background: none; font-size: 12px; opacity: 0.5; }
 .dot.cake.on { opacity: 1; transform: scale(1.25); }
 
@@ -258,14 +261,14 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
-.ticket.open { cursor: default; box-shadow: 0 12px 34px rgba(155, 107, 255, 0.16); }
+.ticket.open { cursor: default; box-shadow: 0 12px 34px rgba(232, 97, 122, 0.16); }
 .ticket:active:not(.open):not(.done) { transform: scale(0.985); }
 .ticket-stub {
   flex: 0 0 86px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   padding: 18px 8px;
-  background: var(--plush-soft);
-  border-right: 1px dashed var(--plush);
+  background: var(--peach-soft);
+  border-right: 1px dashed var(--peach);
   position: relative;
 }
 .ticket-stub::before, .ticket-stub::after {
@@ -276,7 +279,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .ticket-stub::after { bottom: -8px; }
 .ticket-no {
   font-size: 10px; letter-spacing: 0.14em; font-weight: 700;
-  color: var(--plush);
+  color: var(--peach);
 }
 .ticket-emoji { font-size: 30px; }
 .ticket-main { flex: 1; padding: 16px 18px; min-width: 0; }
@@ -287,9 +290,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   margin-top: 5px;
   font-size: 13.5px; color: var(--ink-2); line-height: 1.45;
 }
-.ticket.done { cursor: default; background: linear-gradient(160deg, var(--surface), var(--plush-soft)); }
+.ticket.done { cursor: default; background: linear-gradient(160deg, var(--surface), var(--peach-soft)); }
 .ticket.done .ticket-main { padding-right: 92px; }
-.ticket.done .ticket-sub { color: var(--plush-press); font-weight: 600; }
+.ticket.done .ticket-sub { color: var(--peach-press); font-weight: 600; }
 .stamp {
   position: absolute; right: 14px; top: 12px;
   transform: rotate(8deg);
@@ -323,8 +326,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: all 0.15s ease;
 }
 .seg button.on {
-  border-color: var(--plush); color: var(--plush-press);
-  background: var(--plush-soft);
+  border-color: var(--peach); color: var(--peach-press);
+  background: var(--peach-soft);
 }
 .range-echo {
   font-family: var(--serif); font-style: italic;
@@ -333,9 +336,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .redeem {
   padding: 13px 0;
   border-radius: 12px;
-  background: var(--plush);
+  background: var(--peach);
   color: #fff; font-weight: 700; font-size: 15px;
-  box-shadow: 0 6px 18px rgba(155, 107, 255, 0.35);
+  box-shadow: 0 6px 18px rgba(232, 97, 122, 0.35);
   transition: transform 0.12s ease, opacity 0.2s ease;
 }
 .redeem:active { transform: scale(0.97); }

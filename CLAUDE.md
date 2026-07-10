@@ -1,6 +1,6 @@
 # CLAUDE.md — Peaches & Pelucha
 
-A private two-person PWA for Cam ("Peaches" 🍑) and his girlfriend ("Pelucha" 🧸):
+A private two-person PWA for Cam ("Pelucha" 🧸) and his girlfriend ("Peaches" 🍑):
 a fully playable, realtime-synced **Phase 10 card game**, a **hearts 💗
 relationship currency** (earn/gift/bet/cash-out), a **Date Night Roulette**, and
 a **Love Bug Calendar** (invites/FYIs + push notifications). Login is just
