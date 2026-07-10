@@ -596,6 +596,66 @@ function Poems() {
   `;
 }
 
+// ——— dinner tonight: under the cloche until 5pm, then Clay, Harlem ———
+const DINNER_REVEAL = new Date("2026-07-11T17:00:00").getTime();
+
+function Dinner() {
+  const [now, setNow] = useState(Date.now());
+  const [rattle, setRattle] = useState(0);
+  const wasLocked = useRef(Date.now() < DINNER_REVEAL);
+  const revealed = SNEAK || now >= DINNER_REVEAL;
+  useEffect(() => {
+    if (revealed) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [revealed]);
+  useEffect(() => {
+    // the moment the cloche lifts live, celebrate
+    if (revealed && wasLocked.current) { wasLocked.current = false; if (!SNEAK) confetti(110); }
+  }, [revealed]);
+
+  const s = Math.max(0, Math.floor((DINNER_REVEAL - now) / 1000));
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+
+  return html`
+    <section class="sec">
+      <div class="sec-label"><span>III</span> tonight</div>
+      <div class="dinner">
+        ${revealed ? html`
+          <div class="din-stars">★ ★ ★ ★ ★</div>
+          <div class="din-name">Clay</div>
+          <div class="din-place">harlem · new york</div>
+          <div class="din-rows">
+            <div class="din-row"><span>📅</span><b>Sat, Jul 11 · 7:30 pm</b></div>
+            <div class="din-row"><span>👥</span><b>2 guests · dining room</b></div>
+            <a class="din-row" href="https://maps.apple.com/?q=Clay,+553+Manhattan+Ave,+New+York" target="_blank" rel="noopener">
+              <span>📍</span><b>553 Manhattan Ave</b>
+            </a>
+          </div>
+          <div class="din-note">wear something beautiful 💃</div>
+        ` : html`
+          <div class="din-lock ${rattle ? "nope" : ""}" key=${rattle} onClick=${() => setRattle((n) => n + 1)}>
+            <svg class="cloche" viewBox="0 0 120 96">
+              <path class="steam s1" d="M 46 22 q 5 -7 0 -13 q -4 -5 0 -9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <path class="steam s2" d="M 74 24 q 5 -7 0 -13 q -4 -5 0 -9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <circle cx="60" cy="26" r="4" fill="none" stroke="currentColor" stroke-width="2.4" />
+              <path d="M 18 72 C 18 46 38 32 60 32 C 82 32 102 46 102 72 Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" />
+              <text x="60" y="62" text-anchor="middle" class="cloche-q">?</text>
+              <path d="M 10 80 H 110" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+            </svg>
+            <div class="din-tease">dinner is booked 🤫</div>
+            <div class="din-sub">a five-star secret in Harlem</div>
+            <div class="din-count">${hh}<i>:</i>${mm}<i>:</i>${ss}</div>
+            <div class="din-lift">the cloche lifts at 5:00 pm</div>
+          </div>
+        `}
+      </div>
+    </section>
+  `;
+}
+
 // ——— the Phase 10 reckoning: live career numbers, computed from games+matches ———
 function Record({ client }) {
   const [s, setS] = useState(null);
@@ -632,7 +692,7 @@ function Record({ client }) {
   if (!s) return null;
   return html`
     <section class="sec">
-      <div class="sec-label"><span>III</span> for the record</div>
+      <div class="sec-label"><span>IV</span> for the record</div>
       <div class="record">
         <div class="rec-score">
           <div class="rec-side">
@@ -773,7 +833,7 @@ function Gifts({ client }) {
   };
   return html`
     <section class="sec">
-      <div class="sec-label"><span>IV</span> your gifts</div>
+      <div class="sec-label"><span>V</span> your gifts</div>
       <div class="tickets">
         ${COUPONS.map((c) => html`<${Coupon} key=${c.slug} c=${c} row=${rows[c.slug]} onRedeem=${onRedeem} />`)}
       </div>
@@ -860,6 +920,7 @@ function App() {
       <${Hero} />
       <${Letter} />
       <${Poems} />
+      <${Dinner} />
       ${client && html`<${Record} client=${client} />`}
       ${client && html`<${Gifts} client=${client} />`}
       <footer class="foot">
