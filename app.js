@@ -3,6 +3,7 @@ import {
   useState, useEffect, useMemo, useRef, useCallback,
 } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
+import { createPortal } from "https://esm.sh/preact@10.23.2/compat";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?bundle";
 import { PlayTab } from "./game.js";
 import { DateRoulette } from "./roulette.js";
@@ -712,6 +713,38 @@ function Login({ players, onPick, onAdd, modal, setModal, api }) {
     </div>`;
 }
 
+/* ------------------------------------------------------ birthday banner 🎂
+   On a player's birthday (players.birthday = 'MM-DD') the home page opens with
+   a banner — one voice for the birthday person, another for their partner —
+   and every tap rains confetti over the whole screen. */
+function BirthdayBanner({ me, players }) {
+  const [bursts, setBursts] = useState([]);
+  const d = new Date();
+  const today = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const bday = players.find((p) => p.birthday === today);
+  if (!bday) return null;
+  const mine = bday.id === me.id;
+  const rain = () => {
+    const id = Math.random().toString(36).slice(2);
+    setBursts((b) => [...b, id]);
+    try { navigator.vibrate && navigator.vibrate([40, 30, 90]); } catch {}
+    setTimeout(() => setBursts((b) => b.filter((x) => x !== id)), 4400);
+  };
+  const EMO = ["🎂", "🎉", "🎈", "✨", "💗", bday.emoji];
+  return html`<div class=${`card bdaycard ${mine ? "isyou" : ""}`} onClick=${rain} role="button">
+    <div class="bday-band" aria-hidden="true">🎈 🎂 🎈</div>
+    ${mine
+      ? html`<div class="bday-title">Happy birthday, ${bday.name} ${bday.emoji}</div>
+             <div class="bday-sub">today is all yours, baby — tap me 🎂</div>`
+      : html`<div class="bday-title">It's ${bday.emoji} ${bday.name}'s birthday</div>
+             <div class="bday-sub">spoil them rotten today — tap to celebrate</div>`}
+    ${bursts.map((id) => createPortal(html`<div class="bdayrain" key=${id} aria-hidden="true">
+      ${[...Array(48)].map((_, i) => html`<span key=${i}
+        style=${`left:${(i * 41 + 13) % 100}%; animation-delay:${(i % 11) * 150}ms; animation-duration:${2300 + (i % 5) * 400}ms; font-size:${16 + (i % 4) * 8}px`}>${EMO[i % EMO.length]}</span>`)}
+    </div>`, document.body))}
+  </div>`;
+}
+
 /* ============================================================ Score ======= */
 // The Score tab is now the live, playable Phase 10 game (see game.js), with the
 // The home screen: current game (prominent) → lifetime line → his & hers
@@ -720,6 +753,7 @@ function ScoreTab(ctx) {
   // The home page: Phase 10 at the top, then lifetime, horoscopes, scripture,
   // and the date roulette.
   return html`<${Fragment}>
+    <${BirthdayBanner} me=${ctx.me} players=${ctx.players} />
     <${RewardHome} client=${ctx.client} me=${ctx.me} players=${ctx.players} flash=${ctx.flash} />
     <div data-noswipe><${PlayTab} ...${ctx} /></div>
     <${ScriptureCard} />

@@ -4,13 +4,16 @@
 let _id = 1;
 const uid = () => "demo-" + (_id++);
 const nowISO = () => new Date().toISOString();
+// 'MM-DD' for today + n days (players.birthday in the demo seed)
+const mmdd = (n) => { const d = new Date(Date.now() + n * 864e5); return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 function seed() {
   const peaches = uid(), pelucha = uid();
   const db = {
     players: [
-      { id: peaches, name: "Peaches", emoji: "🍑", color: "#ff7a91", created_at: nowISO() },
-      { id: pelucha, name: "Pelucha", emoji: "🧸", color: "#9b6bff", created_at: nowISO() },
+      // demo: Pelucha's birthday is always "today" so the banner is easy to see
+      { id: peaches, name: "Peaches", emoji: "🍑", color: "#ff7a91", birthday: mmdd(1), created_at: nowISO() },
+      { id: pelucha, name: "Pelucha", emoji: "🧸", color: "#9b6bff", birthday: mmdd(0), created_at: nowISO() },
     ],
     games: [], game_players: [], rounds: [], round_entries: [],
     transactions: [

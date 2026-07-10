@@ -1629,3 +1629,30 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .fight-focus { font-size: 15.5px; line-height: 1.55; color: var(--ink); margin: 0; }
 .fight-together { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--accent-press); margin: 22px 0 0; padding-top: 16px; border-top: 1px solid var(--line); text-align: center; }
 .fight-acked { text-align: center; color: var(--ink-2); font-size: 14px; margin-top: 18px; }
+
+/* ------------------------------------------------------- birthday 🎂 ----- */
+/* Home banner on a player's birthday. Two voices: gold-warm when it's YOURS,
+   terracotta-rose when it's your partner's. Tap → full-screen confetti rain. */
+.bdaycard { text-align: center; cursor: pointer; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, #fdeee6 0%, #fbd9c8 55%, #f6c7b4 100%);
+  border: 1px solid rgba(193,95,60,.25); }
+.bdaycard.isyou { background: linear-gradient(160deg, #fdf3dc 0%, #fae3b4 55%, #f3d391 100%);
+  border-color: rgba(176,130,44,.3); }
+.bdaycard:active { transform: scale(.99); }
+.bday-band { font-size: 22px; letter-spacing: .35em; margin-bottom: 6px; animation: bdaybob 2.6s ease-in-out infinite; }
+.bday-title { font-family: var(--serif); font-weight: 500; font-size: 26px; letter-spacing: -0.01em; color: #4a2c1a; }
+.bdaycard.isyou .bday-title { color: #4d3a12; }
+.bday-sub { font-size: 13.5px; color: rgba(74,44,26,.72); margin-top: 4px; }
+.bdaycard.isyou .bday-sub { color: rgba(77,58,18,.72); }
+@keyframes bdaybob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+/* the rain — portaled to <body>, above everything, taps pass through */
+.bdayrain { position: fixed; inset: 0; z-index: 9600; pointer-events: none; overflow: hidden; }
+.bdayrain span { position: absolute; top: -8vh; animation: bdayfall linear forwards; will-change: transform; }
+@keyframes bdayfall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(120vh) rotate(340deg); opacity: .75; }
+}
+/* keep the birthday warmth under the cool-glass theme (its .card override wins otherwise) */
+.app-shell.cool .bdaycard { background: linear-gradient(160deg, rgba(253,238,230,.94) 0%, rgba(251,217,200,.94) 55%, rgba(246,199,180,.94) 100%); border-color: rgba(193,95,60,.25); }
+.app-shell.cool .bdaycard.isyou { background: linear-gradient(160deg, rgba(253,243,220,.95) 0%, rgba(250,227,180,.95) 55%, rgba(243,211,145,.95) 100%); border-color: rgba(176,130,44,.3); }

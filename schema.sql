@@ -14,6 +14,7 @@ create table if not exists players (
   name        text not null,
   emoji       text not null default '🍑',
   color       text not null default '#ff7a91',
+  birthday    text,                               -- 'MM-DD' → home birthday banner 🎂
   created_at  timestamptz not null default now()
 );
 
