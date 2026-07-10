@@ -1,0 +1,17 @@
+{
+  "name": "For Pelucha 🧸",
+  "short_name": "Pelucha 🧸",
+  "id": "/birthday/",
+  "description": "Happy birthday, my love.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf5ef",
+  "theme_color": "#faf5ef",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

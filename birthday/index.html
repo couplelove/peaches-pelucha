@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <title>For Pelucha 🧸</title>
+  <meta name="description" content="Happy birthday, my love." />
+
+  <!-- PWA (its own app: own manifest, scope, icon, service worker) -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#faf5ef" />
+  <link rel="icon" type="image/png" href="icons/favicon-64.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Pelucha 🧸" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700&family=Caveat:wght@500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://esm.sh" crossorigin />
+  <link rel="modulepreload" href="https://esm.sh/preact@10.23.2" crossorigin />
+  <link rel="modulepreload" href="https://esm.sh/preact@10.23.2/hooks" crossorigin />
+  <link rel="modulepreload" href="https://esm.sh/htm@3.1.1" crossorigin />
+  <link rel="modulepreload" href="https://esm.sh/@supabase/supabase-js@2?bundle" crossorigin />
+  <!-- same injected credentials as the main app -->
+  <script src="../config.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot"><div class="boot-heart">🧸</div></div>
+  </div>
+  <script type="module" src="app.js"></script>
+  <script>
+    var isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+    if ("serviceWorker" in navigator && !isLocal) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

@@ -568,3 +568,21 @@ alter table daily_shares enable row level security;
 drop policy if exists anon_all on daily_shares;
 create policy anon_all on daily_shares for all to anon, authenticated using (true) with check (true);
 do $$ begin alter publication supabase_realtime add table daily_shares; exception when duplicate_object then null; end $$;
+
+-- bday_coupons (036): Pelucha's birthday app (/birthday/) — four experience
+-- coupons she can redeem. payload carries her picks ({date} or {start,nights});
+-- realtime so a redemption lands on Peaches's phone instantly.
+create table if not exists bday_coupons (
+  id          uuid primary key default gen_random_uuid(),
+  slug        text not null unique,
+  status      text not null default 'available' check (status in ('available','redeemed')),
+  payload     jsonb not null default '{}'::jsonb,
+  redeemed_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+alter table bday_coupons enable row level security;
+drop policy if exists anon_all on bday_coupons;
+create policy anon_all on bday_coupons for all to anon, authenticated using (true) with check (true);
+do $$ begin alter publication supabase_realtime add table bday_coupons; exception when duplicate_object then null; end $$;
+insert into bday_coupons (slug) values ('manipedi'), ('staycation'), ('sewing'), ('thrift')
+on conflict (slug) do nothing;
