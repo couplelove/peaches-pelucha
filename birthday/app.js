@@ -11,7 +11,7 @@ const PELUCHA_ID = "b8db6a45-06e8-4bb0-bf67-b716c2179393"; // the giver — gets
 const PEACHES_ID = "4f9fcad1-63f8-4a98-a5ac-02f0367a0e05"; // the birthday girl / reigning champion
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 
-// ——— Cam: everything she reads lives in LETTER, PHOTOS[].poem, and COUPONS[].sub ———
+// ——— Cam: everything she reads lives in LETTER, ART[].poem, and COUPONS[].sub ———
 
 const LETTER = `My Peaches,
 
@@ -21,45 +21,288 @@ Pick your dates. I'm there for every one of them.
 
 Being loved by you is the best thing that has ever happened to me. Happy birthday, my love.`;
 
-const PHOTOS = [
+// ——— the gallery: each moment redrawn as a single-line ink drawing.
+// One thin ink contour + one misregistered color block. The `ref` on each
+// entry is the original photo in the memories bucket it was drawn from.
+
+const LINE = { fill: "none", stroke: "currentColor", "stroke-width": "2.2", "stroke-linecap": "round", "stroke-linejoin": "round" };
+const THIN = { ...LINE, "stroke-width": "1.5" };
+
+// April 4 — he kisses her cheek in the red beanie; she laughs. ref m0056.jpg
+function ArtBeanie() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <path d="M 198 92 C 202 62 240 50 266 64 C 286 74 292 94 288 112 C 258 108 226 112 202 122 C 198 112 196 102 198 92 Z"
+        fill="#c15f3c" opacity="0.28" stroke="none" transform="translate(5 -4)" />
+      <path ...${LINE} d="M 96 124 C 92 98 112 78 138 82 C 164 86 174 108 170 132 C 166 154 150 170 131 170 C 111 170 99 148 96 124 Z" />
+      <path ...${LINE} d="M 110 124 q 8 -7 16 0" />
+      <path ...${LINE} d="M 138 124 q 8 -7 16 0" />
+      <path ...${LINE} d="M 112 142 Q 130 160 150 140 Q 130 172 112 142 Z" />
+      <circle ...${LINE} cx="99" cy="154" r="7" />
+      <path ...${LINE} d="M 116 84 C 94 96 86 130 90 168 C 92 192 98 212 106 228" />
+      <path ...${LINE} d="M 150 88 C 166 100 170 124 166 146" />
+      <path ...${LINE} d="M 198 92 C 202 62 240 50 266 64 C 286 74 292 94 288 112 C 258 108 226 112 202 122 C 198 112 196 102 198 92 Z" />
+      <path ...${THIN} d="M 218 70 C 214 82 212 94 212 104" />
+      <path ...${THIN} d="M 240 62 C 236 76 234 90 234 102" />
+      <path ...${THIN} d="M 260 64 C 258 76 256 88 256 100" />
+      <path ...${LINE} d="M 202 122 C 198 134 190 144 180 152" />
+      <path ...${LINE} d="M 214 136 q 9 -4 16 2" />
+      <path ...${LINE} d="M 180 154 C 188 174 208 184 230 182 C 248 180 260 170 266 154" />
+      <path ...${THIN} d="M 196 168 q 6 8 14 10 M 216 178 q 8 4 16 2" />
+    </svg>
+  `;
+}
+
+// April 4 — a hand holds the Williamsburg photobooth strip. ref m0276.jpg
+function ArtBooth() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <rect x="126" y="34" width="84" height="224" rx="6" fill="#f3e7df" opacity="0.7" stroke="none" transform="translate(6 -4)" />
+      <rect ...${LINE} x="120" y="32" width="84" height="224" rx="6" />
+      <rect ...${THIN} x="130" y="44" width="64" height="44" rx="2" />
+      <rect ...${THIN} x="130" y="96" width="64" height="44" rx="2" />
+      <rect ...${THIN} x="130" y="148" width="64" height="44" rx="2" />
+      <rect ...${THIN} x="130" y="200" width="64" height="44" rx="2" />
+      <circle ...${THIN} cx="150" cy="64" r="9" />
+      <circle ...${THIN} cx="172" cy="66" r="9" />
+      <path ...${THIN} d="M 146 66 q 4 4 8 0 M 168 68 q 4 4 8 0" />
+      <circle ...${THIN} cx="152" cy="118" r="9" />
+      <circle ...${THIN} cx="172" cy="116" r="9" />
+      <path ...${THIN} d="M 166 114 h 12" />
+      <circle ...${THIN} cx="150" cy="170" r="9" />
+      <circle ...${THIN} cx="171" cy="168" r="9" />
+      <path ...${THIN} d="M 146 172 q 4 4 8 0 M 167 170 q 4 4 8 0" />
+      <circle ...${THIN} cx="149" cy="224" r="9" />
+      <circle ...${THIN} cx="168" cy="220" r="9" />
+      <path ...${THIN} d="M 158 222 l 4 2 l -4 2" />
+      <path d="M 178 210 C 172 204 176 196 183 198 C 190 196 194 204 188 210 L 183 214 Z" fill="#e8617a" opacity="0.5" stroke="none" />
+      <path ...${LINE} d="M 120 196 C 104 192 96 180 98 168 C 100 156 112 154 122 162" />
+      <path ...${LINE} d="M 98 168 C 84 178 78 198 84 220 C 88 236 100 248 116 254" />
+      <path ...${THIN} d="M 204 216 C 214 212 220 204 222 194" />
+    </svg>
+  `;
+}
+
+// May 16 — the white dress in the tall grass, sun low. ref u1781744975261-9fzgsm.jpg
+function ArtMeadow() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <circle cx="76" cy="62" r="27" fill="#ffd166" opacity="0.55" stroke="none" />
+      <circle ...${LINE} cx="70" cy="66" r="24" />
+      <circle ...${LINE} cx="200" cy="102" r="13" />
+      <path ...${LINE} d="M 210 94 C 222 106 226 128 222 148" />
+      <path ...${LINE} d="M 190 116 C 182 134 172 162 160 196 C 182 208 218 208 238 198 C 230 168 220 140 212 118 C 204 112 196 112 190 116 Z" />
+      <path ...${LINE} d="M 190 124 C 180 132 174 142 172 152" />
+      ${[[48, 252, -6, -40], [70, 258, 4, -34], [96, 250, -8, -44], [122, 260, 6, -36], [148, 254, -4, -46],
+         [176, 262, 8, -34], [206, 256, -6, -42], [232, 262, 6, -38], [258, 252, -8, -44], [280, 258, 4, -34],
+         [160, 246, -10, -30], [250, 246, 10, -30]].map(([x, y, dx, dy]) =>
+        html`<path ...${THIN} d="M ${x} ${y} q ${dx} ${dy / 2} ${dx / 2} ${dy}" />`)}
+    </svg>
+  `;
+}
+
+// May 16 — lakeside promenade, sunset over the mountains. ref u1781299267195-tm2ufa.jpg
+function ArtLake() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <path d="M 142 152 A 22 22 0 0 1 186 152 Z" fill="#ff9e7d" opacity="0.55" stroke="none" transform="translate(4 -3)" />
+      <path ...${LINE} d="M 24 152 H 296" />
+      <path ...${LINE} d="M 24 152 C 48 124 74 116 98 134 C 112 144 122 150 130 152" />
+      <path ...${LINE} d="M 204 152 C 222 132 250 124 272 138 C 284 145 292 150 296 152" />
+      <path ...${LINE} d="M 142 152 A 22 22 0 0 1 186 152" />
+      <path ...${THIN} d="M 152 166 h 22 M 158 178 h 14 M 154 190 h 9" />
+      <circle ...${LINE} cx="96" cy="128" r="11" />
+      <path ...${LINE} d="M 88 142 C 84 158 78 182 72 208 C 86 216 108 216 120 210 C 114 184 108 160 104 142 C 98 138 92 138 88 142 Z" />
+      <path ...${LINE} d="M 88 150 C 80 158 76 166 74 174 M 104 150 C 110 158 114 166 116 174" />
+      <path ...${THIN} d="M 82 224 h 10 M 104 224 h 10" />
+      <path ...${THIN} d="M 24 244 C 100 236 220 236 296 244" />
+    </svg>
+  `;
+}
+
+// June 12 — golden hour, cheek to cheek, both grinning. ref u1781316190383-q31kax.jpg
+function ArtGolden() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <circle cx="80" cy="140" r="9" fill="#ff9e7d" opacity="0.45" stroke="none" />
+      <circle cx="134" cy="134" r="9" fill="#ff9e7d" opacity="0.45" stroke="none" />
+      <circle cx="222" cy="150" r="8" fill="#ff9e7d" opacity="0.35" stroke="none" />
+      <path ...${THIN} d="M 28 28 l 20 13 M 44 16 l 14 18 M 20 52 l 23 8" />
+      <path ...${LINE} d="M 62 122 C 60 90 90 70 120 76 C 148 82 160 108 154 138 C 149 164 128 182 104 180 C 78 178 64 152 62 122 Z" />
+      <path ...${LINE} d="M 84 122 q 8 -7 16 0 M 116 122 q 8 -7 16 0" />
+      <path ...${LINE} d="M 86 144 Q 106 164 130 142 Q 108 176 86 144 Z" />
+      <path ...${LINE} d="M 86 80 C 64 94 54 126 60 160 C 63 178 72 194 84 204" />
+      <path ...${LINE} d="M 154 120 C 160 94 186 80 212 86 C 240 92 254 116 250 144 C 247 168 228 186 204 184 C 182 182 162 164 156 142" />
+      <path ...${LINE} d="M 196 124 q 8 -6 16 1" />
+      <path ...${THIN} d="M 192 110 q 10 -6 20 -2" />
+      <path ...${LINE} d="M 194 150 Q 210 164 228 148" />
+      <path ...${LINE} d="M 186 170 C 198 182 218 186 234 178" />
+      <path ...${THIN} d="M 196 182 q 6 6 12 7 M 218 188 q 8 2 14 -2" />
+    </svg>
+  `;
+}
+
+// June 12 — the magnificent pout; he stays deadpan. ref u1781316204863-6uq3vy.jpg
+function ArtPout() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <path d="M 74 46 q -6 -16 12 -18 q 4 -14 20 -9 q 16 -7 20 9 q 14 5 7 18 q -14 8 -30 6 q -16 4 -29 -6 Z"
+        fill="#cfe7f5" opacity="0.6" stroke="none" transform="translate(4 -3)" />
+      <path ...${LINE} d="M 74 46 q -6 -16 12 -18 q 4 -14 20 -9 q 16 -7 20 9 q 14 5 7 18 q -14 8 -30 6 q -16 4 -29 -6 Z" />
+      <path ...${THIN} d="M 88 58 l -3 10 M 106 60 l -3 10" />
+      <path ...${LINE} d="M 66 148 C 64 118 92 98 120 104 C 146 110 158 134 152 162 C 147 186 127 202 104 200 C 80 198 68 174 66 148 Z" />
+      <path ...${LINE} d="M 84 134 L 102 142 M 136 142 L 154 134" />
+      <path ...${THIN} d="M 90 150 h 10 M 128 150 h 10" />
+      <path ...${LINE} d="M 106 172 q 11 -7 22 0 q -11 9 -22 0 Z" />
+      <path ...${LINE} d="M 90 106 C 74 118 66 140 68 164" />
+      <path ...${LINE} d="M 192 156 C 188 110 216 84 246 90 C 270 96 282 118 280 142 C 279 162 268 178 252 184" />
+      <circle cx="230" cy="136" r="2.4" fill="currentColor" />
+      <circle cx="262" cy="136" r="2.4" fill="currentColor" />
+      <path ...${THIN} d="M 222 118 q 10 -6 20 -2" />
+      <path ...${LINE} d="M 232 160 h 24" />
+      <path ...${LINE} d="M 210 172 C 224 188 248 190 266 178" />
+      <path ...${THIN} d="M 222 182 q 6 6 13 7 M 244 188 q 8 1 14 -3" />
+    </svg>
+  `;
+}
+
+// June 20 — rooftop, she photographs the sunset. ref u1782005373821-991u58.jpg
+function ArtRooftop() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <circle cx="258" cy="112" r="16" fill="#ff9e7d" opacity="0.55" stroke="none" transform="translate(4 -3)" />
+      <circle ...${LINE} cx="258" cy="112" r="14" />
+      <path ...${THIN} d="M 258 88 v -10 M 280 96 l 8 -8 M 236 96 l -8 -8" />
+      <path ...${LINE} d="M 184 158 h 12 v -10 h 12 v 6 h 14 v -14 h 12 v 10 h 12 v -6 h 14 v 14 h 12 v -8 h 14" />
+      <path ...${LINE} d="M 24 178 H 296 M 24 206 H 296" />
+      ${[60, 96, 168, 204, 240, 276].map((x) => html`<path ...${THIN} d="M ${x} 178 V 206" />`)}
+      <path ...${LINE} d="M 92 100 C 84 78 104 62 124 68 C 144 60 160 76 154 94 C 166 104 160 124 146 128 C 150 144 132 156 118 148 C 100 154 84 142 88 126 C 76 118 80 104 92 100 Z" />
+      <path ...${THIN} d="M 102 92 q 10 -8 22 -2 M 112 116 q 12 -6 22 2" />
+      <path ...${LINE} d="M 90 168 C 94 152 104 144 120 144 C 136 144 148 152 152 168 L 152 206" />
+      <path ...${LINE} d="M 90 206 L 90 170" />
+      <path ...${LINE} d="M 148 150 C 160 136 168 124 174 112" />
+      <rect ...${LINE} x="168" y="84" width="17" height="28" rx="3" transform="rotate(8 176 98)" />
+    </svg>
+  `;
+}
+
+// July 9 — the garden kiss, gold slip dress, her whole face lit up. ref u1783646428795-f3jdvs.jpg
+function ArtGarden() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <path d="M 286 36 C 274 58 266 82 264 104" stroke="#7fb069" stroke-width="2" fill="none" opacity="0.9" />
+      <ellipse cx="276" cy="52" rx="10" ry="5" fill="#7fb069" opacity="0.4" stroke="none" transform="rotate(-36 276 52)" />
+      <ellipse ...${THIN} cx="290" cy="70" rx="10" ry="5" transform="rotate(30 290 70)" />
+      <ellipse ...${THIN} cx="266" cy="86" rx="9" ry="4.5" transform="rotate(-30 266 86)" />
+      ${[[186, 84], [208, 76], [230, 78], [248, 90], [260, 108], [264, 128], [178, 100], [172, 118]].map(([x, y]) =>
+        html`<circle ...${THIN} cx=${x} cy=${y} r="9" />`)}
+      <path ...${LINE} d="M 176 132 C 176 104 202 86 228 92 C 252 98 262 120 256 146 C 251 170 230 186 208 182 C 188 178 176 156 176 132 Z" />
+      <path ...${LINE} d="M 200 128 q 8 -7 16 0 M 228 128 q 8 -7 16 0" />
+      <circle cx="196" cy="144" r="7" fill="#ff9e7d" opacity="0.45" stroke="none" />
+      <circle cx="248" cy="140" r="7" fill="#ff9e7d" opacity="0.45" stroke="none" />
+      <path ...${LINE} d="M 200 148 Q 218 168 242 146 Q 220 180 200 148 Z" />
+      <path ...${LINE} d="M 60 162 C 48 122 70 88 110 84 C 132 82 150 92 160 108" />
+      <path ...${LINE} d="M 128 118 q 9 -5 16 1" />
+      <path ...${LINE} d="M 160 112 q 10 4 8 12 q -10 4 -14 -4" />
+      <path ...${LINE} d="M 92 160 C 108 178 134 182 156 170" />
+      <path ...${THIN} d="M 104 172 q 7 7 15 8 M 128 180 q 9 2 16 -2" />
+      <path ...${LINE} d="M 96 178 C 110 194 134 198 152 190" />
+      <rect ...${THIN} x="120" y="196" width="9" height="12" rx="2" />
+    </svg>
+  `;
+}
+
+// July 9 — she gasps in a room full of balloons. ref u1783621284279-wbm3jq.jpg
+function ArtBalloons() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <circle cx="200" cy="62" r="25" fill="#ff9e7d" opacity="0.45" stroke="none" transform="translate(5 -3)" />
+      <circle ...${LINE} cx="88" cy="70" r="22" />
+      <circle ...${LINE} cx="142" cy="50" r="17" />
+      <circle ...${LINE} cx="200" cy="62" r="24" />
+      <circle ...${LINE} cx="250" cy="86" r="15" />
+      <circle ...${LINE} cx="170" cy="102" r="12" />
+      <path ...${THIN} d="M 88 92 C 92 130 98 166 106 200" />
+      <path ...${THIN} d="M 142 67 C 146 108 150 148 152 182" />
+      <path ...${THIN} d="M 200 86 C 196 124 190 158 180 188" />
+      <path ...${THIN} d="M 250 101 C 244 136 234 168 220 196" />
+      <path ...${THIN} d="M 170 114 C 170 140 168 162 164 180" />
+      <circle ...${LINE} cx="160" cy="176" r="15" />
+      ${[[148, 164], [158, 158], [170, 160], [176, 168]].map(([x, y]) => html`<circle ...${THIN} cx=${x} cy=${y} r="5" />`)}
+      <path ...${THIN} d="M 150 172 q 3 -4 7 -1 M 165 171 q 4 -3 7 1" />
+      <ellipse ...${LINE} cx="160" cy="184" rx="3.6" ry="5" />
+      <path ...${LINE} d="M 146 196 C 146 210 174 210 174 196" />
+      <path ...${LINE} d="M 152 200 q 8 -8 16 0 q -8 8 -16 0 Z" />
+      <path ...${LINE} d="M 146 198 C 138 204 134 212 138 220 M 174 198 C 182 204 186 212 182 220" />
+      <path ...${LINE} d="M 148 212 l -3 30 M 172 212 l 3 30" />
+      <path ...${THIN} d="M 138 248 h 12 M 170 248 h 12" />
+    </svg>
+  `;
+}
+
+// July 10 — the yellow dress on the stone wall, hills gone soft. ref u1783708582218-48xhhe.webp
+function ArtWall() {
+  return html`
+    <svg viewBox="0 0 320 300">
+      <ellipse cx="164" cy="204" rx="42" ry="60" fill="#ffd166" opacity="0.38" stroke="none" transform="translate(6 -4)" />
+      <path ...${THIN} d="M 24 92 C 58 76 96 72 134 80" />
+      <path ...${THIN} d="M 236 44 q 14 -10 26 2 q 16 -6 22 8 q 14 2 10 16 q -18 8 -34 2 q -18 6 -28 -8 q -6 -12 4 -20 Z" />
+      <path ...${LINE} d="M 40 196 H 128 M 204 196 H 282" />
+      <path ...${LINE} d="M 40 232 H 126 M 206 232 H 282" />
+      <path ...${THIN} d="M 72 196 V 232 M 100 196 V 232 M 234 196 V 232 M 260 196 V 232" />
+      <circle ...${LINE} cx="166" cy="104" r="13" />
+      ${[[152, 92], [162, 84], [176, 85], [186, 94], [148, 105], [184, 108]].map(([x, y]) =>
+        html`<circle ...${THIN} cx=${x} cy=${y} r="7.5" />`)}
+      <path ...${THIN} d="M 160 102 q 4 -4 8 0 M 172 102 q 4 -4 8 0" />
+      <path ...${THIN} d="M 162 110 q 4 4 8 0" />
+      <path ...${LINE} d="M 162 118 C 160 124 159 130 158 136" />
+      <path ...${LINE} d="M 158 136 C 150 152 142 172 138 196 C 132 224 130 252 134 272 C 154 281 178 278 192 268 C 192 242 190 216 186 196 C 182 174 178 154 172 136 C 167 130 162 130 158 136 Z" />
+      <path ...${THIN} d="M 152 200 C 150 226 150 250 152 268 M 172 198 C 174 222 176 246 178 264" />
+      <path ...${LINE} d="M 172 142 C 184 156 196 174 204 192" />
+      <path ...${THIN} d="M 200 194 h 12" />
+    </svg>
+  `;
+}
+
+const ART = [
   {
-    path: "m0056.jpg", thumb: "thumb/m0056.jpg", date: "April 4",
+    Art: ArtBeanie, ref: "m0056.jpg", date: "April 4",
     poem: "April, and already\nyour laugh was my favorite room —\nI kissed your cheek\nand moved in for good.",
   },
   {
-    path: "m0276.jpg", thumb: "thumb/m0276.jpg", date: "April 4",
+    Art: ArtBooth, ref: "m0276.jpg", date: "April 4",
     poem: "Four little frames,\na dollar's worth of forever.\nIn the last one\nI couldn't help myself.",
   },
   {
-    path: "u1781744975261-9fzgsm.jpg", thumb: "t1781744975261-9fzgsm.webp", date: "May 16",
+    Art: ArtMeadow, ref: "u1781744975261-9fzgsm.jpg", date: "May 16",
     poem: "You walked into the tall grass\nand the sun leaned down\nfor a better look.\nI know the feeling.",
   },
   {
-    path: "u1781299267195-tm2ufa.jpg", thumb: "thumb/u1781299267195-tm2ufa.jpg", date: "May 16",
+    Art: ArtLake, ref: "u1781299267195-tm2ufa.jpg", date: "May 16",
     poem: "The sky spent the whole evening\npainting the water gold —\nand still came in second.",
   },
   {
-    path: "u1781316190383-q31kax.jpg", thumb: "thumb/u1781316190383-q31kax.jpg", date: "June 12",
+    Art: ArtGolden, ref: "u1781316190383-q31kax.jpg", date: "June 12",
     poem: "Golden hour, they call it,\nas if the light does this\nfor everyone.",
   },
   {
-    path: "u1781316204863-6uq3vy.jpg", thumb: "t1781316204863-6uq3vy.webp", date: "June 12",
+    Art: ArtPout, ref: "u1781316204863-6uq3vy.jpg", date: "June 12",
     poem: "Even this face.\nEspecially this face.\nI love every weather\nyou've ever been.",
   },
   {
-    path: "u1782005373821-991u58.jpg", thumb: "t1782005373821-991u58.webp", date: "June 20",
+    Art: ArtRooftop, ref: "u1782005373821-991u58.jpg", date: "June 20",
     poem: "You collect sunsets;\nI collect the way you look\nreaching for them.\nWe are both rich.",
   },
   {
-    path: "u1783646428795-f3jdvs.jpg", thumb: "t1783646428795-f3jdvs.jpg", date: "July 9",
+    Art: ArtGarden, ref: "u1783646428795-f3jdvs.jpg", date: "July 9",
     poem: "July taught me nothing new.\nI already knew where the light\nin the garden\nwas coming from.",
   },
   {
-    path: "u1783621284279-wbm3jq.jpg", thumb: "t1783621284279-wbm3jq.webp", date: "July 9",
+    Art: ArtBalloons, ref: "u1783621284279-wbm3jq.jpg", date: "July 9",
     poem: "That gasp —\na room full of balloons\nand still nothing in it\nas bright as you.",
   },
   {
-    path: "u1783708582218-48xhhe.jpg", thumb: "t1783708582218-48xhhe.webp", date: "Today", finale: true,
+    Art: ArtWall, ref: "u1783708582218-48xhhe.jpg", date: "Today", finale: true,
     poem: "And today the hills wore\ntheir softest blue for you,\nthe garden held its breath —\nanother year of you,\nimpossibly, gloriously you.\n\nHappy birthday, my Peaches.",
   },
 ];
@@ -98,10 +341,6 @@ async function getCreds() {
   const t = await (await fetch("https://couplelove.github.io/peaches-pelucha/config.js")).text();
   return new Function(`const window = {}; ${t}; return window.PP_CONFIG;`)();
 }
-
-let SB_URL = "";
-const renderUrl = (p, w) => `${SB_URL}/storage/v1/render/image/public/memories/${p}?width=${w}&quality=80`;
-const pubUrl = (p) => `${SB_URL}/storage/v1/object/public/memories/${p}`;
 
 function notifyPelucha(client, title, body) {
   if (IS_LOCAL) return; // never ping his phone from a dev run
@@ -546,23 +785,11 @@ function Letter() {
   `;
 }
 
-function Page({ ph, i }) {
-  // reveal + fallback mutate the node directly — a Preact re-render inside the
-  // snap scroller makes Chrome re-snap and yank the carousel mid-swipe
+function Page({ ph }) {
   return html`
-    <div class="page ${ph.finale ? "finale" : ""}" style="background-image:url('${renderUrl(ph.thumb, 480)}')">
-      <img
-        src=${renderUrl(ph.path, 1100)}
-        loading=${i < 2 ? "eager" : "lazy"}
-        onLoad=${(e) => { e.target.style.opacity = 1; }}
-        onError=${(e) => {
-          const el = e.target, fb = pubUrl(ph.path);
-          if (el.src !== fb) el.src = fb;
-        }}
-        alt=""
-      />
-      <div class="page-scrim"></div>
+    <div class="page ${ph.finale ? "finale" : ""}">
       <div class="page-date">${ph.date}</div>
+      <div class="art"><${ph.Art} /></div>
       <div class="poem">${ph.poem}</div>
     </div>
   `;
@@ -587,10 +814,10 @@ function Poems() {
     <section class="sec">
       <div class="sec-label"><span>II</span> the season of us</div>
       <div class="carousel" ref=${ref} onScroll=${onScroll}>
-        ${PHOTOS.map((ph, i) => html`<${Page} key=${ph.path} ph=${ph} i=${i} />`)}
+        ${ART.map((ph) => html`<${Page} key=${ph.ref} ph=${ph} />`)}
       </div>
       <div class="dots">
-        ${PHOTOS.map((_, i) => html`<span class="dot ${i === idx ? "on" : ""} ${i === PHOTOS.length - 1 ? "cake" : ""}">${i === PHOTOS.length - 1 ? "🎂" : ""}</span>`)}
+        ${ART.map((_, i) => html`<span class="dot ${i === idx ? "on" : ""} ${i === ART.length - 1 ? "cake" : ""}">${i === ART.length - 1 ? "🎂" : ""}</span>`)}
       </div>
     </section>
   `;
@@ -790,7 +1017,6 @@ function App() {
   useEffect(() => {
     (async () => {
       const creds = await getCreds();
-      SB_URL = creds.SUPABASE_URL;
       const c = createClient(creds.SUPABASE_URL, creds.SUPABASE_ANON_KEY);
       window.__pb = c;
       setClient(c);
