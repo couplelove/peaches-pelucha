@@ -599,6 +599,69 @@ a.din-row b { border-bottom: 1px dashed var(--peach); }
 .redeem:active { transform: scale(0.97); }
 .redeem[disabled] { opacity: 0.4; box-shadow: none; }
 
+/* ——— № 05: the headliner ——— */
+.ticket.finale-locked { cursor: pointer; }
+.ticket.finale-locked .ticket-stub {
+  background: #fbf3dc;
+  border-right: 1px dashed var(--gold);
+}
+.ticket.finale-locked .ticket-no { color: var(--gold); }
+.ticket.finale-locked .ticket-title { font-style: italic; }
+.ticket.finale-locked.nope { animation: nopeshake 0.45s ease; }
+.finale-card {
+  background: var(--surface);
+  border: 1px solid var(--gold);
+  border-radius: 14px;
+  padding: 22px 20px 20px;
+  box-shadow: 0 14px 38px rgba(201, 162, 39, 0.18);
+  text-align: center;
+  animation: pagein 0.6s ease both;
+}
+.finale-no {
+  font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--gold); font-weight: 700;
+}
+.finale-photo {
+  margin: 14px auto 0;
+  max-width: 320px;
+  background: #fff;
+  padding: 8px 8px 26px;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 26px rgba(43, 37, 33, 0.16);
+  transform: rotate(-1.6deg);
+}
+.finale-photo img {
+  width: 100%;
+  border-radius: 2px;
+}
+.finale-title {
+  margin-top: 18px;
+  font-family: var(--serif); font-weight: 600;
+  font-size: 26px; line-height: 1.15;
+}
+.finale-text {
+  margin-top: 10px;
+  font-family: var(--serif);
+  font-size: 15.5px; line-height: 1.6;
+  color: var(--ink-2);
+}
+.finale-card .redeem {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+}
+.finale-sig {
+  margin-top: 12px;
+  font-family: var(--script); font-size: 21px;
+  color: var(--terra);
+}
+.finale-done {
+  margin-top: 16px;
+  font-family: var(--serif); font-style: italic; font-weight: 600;
+  font-size: 17px;
+  color: var(--peach-press);
+}
+
 /* ——— footer ——— */
 .foot {
   margin-top: 64px; text-align: center;

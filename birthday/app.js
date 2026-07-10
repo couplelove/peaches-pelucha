@@ -91,6 +91,15 @@ const COUPONS = [
   },
 ];
 
+// № 05 — the headliner 🎧. Locked until the other four are hers. No form:
+// she just comes and talks to Pelucha. The photo is her at the decks.
+const FINALE = {
+  slug: "djparty", no: "05", emoji: "🎧", kind: "instant",
+  title: "The Headliner",
+  photo: "u1781743779854-3y6lwj.jpg",
+  cta: "I'm ready — let's plan it",
+};
+
 // ——— boot: credentials (injected config in prod; live config for local dev) ———
 async function getCreds() {
   const c = window.PP_CONFIG || {};
@@ -777,6 +786,56 @@ function Coupon({ c, row, onRedeem }) {
   `;
 }
 
+// № 05 stays under lock until the other four gifts are redeemed, then reveals
+// itself: her party, her decks — planned face to face, no forms.
+function Finale({ rows, onRedeem }) {
+  const row = rows[FINALE.slug];
+  const done = COUPONS.filter((c) => rows[c.slug]?.status === "redeemed").length;
+  const unlocked = done === COUPONS.length;
+  const redeemed = row?.status === "redeemed";
+  const [busy, setBusy] = useState(false);
+  const [wiggle, setWiggle] = useState(0);
+  const wasLocked = useRef(null);
+  useEffect(() => {
+    if (!Object.keys(rows).length) return;
+    if (wasLocked.current === null) { wasLocked.current = !unlocked; return; }
+    // the moment the fourth gift lands, the last one bursts open
+    if (unlocked && wasLocked.current) { wasLocked.current = false; confetti(160); }
+  }, [unlocked, rows]);
+
+  if (!unlocked) return html`
+    <div class="ticket finale-locked ${wiggle ? "nope" : ""}" key=${"w" + wiggle} onClick=${() => setWiggle((n) => n + 1)}>
+      <div class="ticket-stub"><div class="ticket-no">№ 05</div><div class="ticket-emoji">🔒</div></div>
+      <div class="ticket-main">
+        <div class="ticket-title">one more thing…</div>
+        <div class="ticket-sub">unlocks when the other four are yours · ${done} of 4</div>
+      </div>
+    </div>
+  `;
+
+  return html`
+    <div class="finale-card">
+      <div class="finale-no">№ 05 · the headliner</div>
+      <div class="finale-photo"><img src=${renderUrl(FINALE.photo, 900)} alt="" /></div>
+      <div class="finale-title">Your party. Your set.</div>
+      <div class="finale-text">
+        A party on the date you choose — everyone you love in one room,
+        the music in your hands, the whole night in your name.
+        I'll handle everything else; you just step up to the decks.
+      </div>
+      ${redeemed
+        ? html`<div class="finale-done">yours ✓ · come find your Pelucha 🧸</div>`
+        : html`
+          <button class="redeem" disabled=${busy}
+            onClick=${async () => { setBusy(true); await onRedeem(FINALE, {}); setBusy(false); }}>
+            ${busy ? "…" : FINALE.cta} 🎧
+          </button>
+          <div class="finale-sig">no forms for this one — just come find me</div>
+        `}
+    </div>
+  `;
+}
+
 function Gifts({ client }) {
   // rows + realtime live HERE so coupon updates never re-render the rest of the page
   const [rows, setRows] = useState({});
@@ -807,6 +866,8 @@ function Gifts({ client }) {
       ev.starts_on = todayISO();
       ev.notes = c.slug === "thrift"
         ? "🎁 birthday coupon redeemed — send her the $250 💸"
+        : c.slug === "djparty"
+        ? "🎁 the headliner is ON — she's ready to plan her party 🎧"
         : "🎁 birthday coupon redeemed — book her classes 🪡";
     }
     try { await client.from("events").insert(ev); } catch {}
@@ -828,6 +889,7 @@ function Gifts({ client }) {
       c.kind === "date" ? `${c.emoji} ${c.title} — ${fmtLong(payload.date)}`
       : c.kind === "range" ? `${c.emoji} ${c.title} — ${fmtShort(payload.start)} to ${fmtShort(addDays(payload.start, payload.days - 1))}`
       : c.slug === "thrift" ? `${c.emoji} ${c.title} — time to send it 💸`
+      : c.slug === "djparty" ? `🎧 ${c.title} — she's ready to plan the party!`
       : `${c.emoji} ${c.title}`;
     notifyPelucha(client, "🍑 Peaches redeemed a birthday gift!", detail);
   };
@@ -836,6 +898,7 @@ function Gifts({ client }) {
       <div class="sec-label"><span>V</span> your gifts</div>
       <div class="tickets">
         ${COUPONS.map((c) => html`<${Coupon} key=${c.slug} c=${c} row=${rows[c.slug]} onRedeem=${onRedeem} />`)}
+        <${Finale} rows=${rows} onRedeem=${onRedeem} />
       </div>
     </section>
   `;
