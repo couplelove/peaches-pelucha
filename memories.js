@@ -327,6 +327,24 @@ const fallbackStory = (g) => {
   const n = g.items.length, moments = n === 1 ? "moment" : "moments";
   return place ? `${place} — ${n} ${moments} from the day.` : `${n} ${moments} you kept from this day.`;
 };
+// Special days (birthdays, from players.birthday 'MM-DD') get a real book
+// chapter: a multi-paragraph story the day view lays out between the photos.
+const specialOf = (date, players) => {
+  if (!date) return null;
+  const p = (players || []).find((pl) => pl.birthday && date.slice(5) === pl.birthday);
+  return p ? `${p.name}'s birthday` : null;
+};
+// multi-paragraph placeholder so a special day reads like a book even before
+// (or without) the AI chapter
+const fallbackStorySpecial = (g, occ) => {
+  const place = (g.items.find((i) => i.place) || {}).place;
+  const n = g.items.length, moments = n === 1 ? "moment" : "moments";
+  return [
+    `Today is ${occ} — and the day already knows it.`,
+    `${place ? place + " holds" : "You kept"} ${n} ${moments} of it: the small ones that end up mattering most.`,
+    `The full chapter is being written — give it a moment, then come back to read it together.`,
+  ].join("\n\n");
+};
 
 export function MemoriesTab({ client, me, players = [], flash }) {
   const [items, setItems] = useState(null);          // null = loading; else loaded window (paged)
@@ -818,7 +836,10 @@ export function MemoriesTab({ client, me, players = [], flash }) {
         if (stored) {
           const was = parseInt(String(stored.sig || "").split(":")[0], 10) || 0;
           const added = cur - was;
-          if (!(added >= 3 || (added >= 2 && added >= was * 0.5))) continue;   // not enough new content → keep it
+          // a special day whose stored story is still a one-paragraph caption
+          // upgrades to a full chapter; otherwise the usual new-content rule
+          const wantsChapter = specialOf(g.date, players) && !/\n{2,}/.test(stored.story || "");
+          if (!wantsChapter && !(added >= 3 || (added >= 2 && added >= was * 0.5))) continue;   // not enough new content → keep it
         }
         storyTried.current.add(key); queue.push(g);
       }
@@ -828,7 +849,7 @@ export function MemoriesTab({ client, me, players = [], flash }) {
       }
     });
     return () => { live = false; };
-  }, [groups, client]);
+  }, [groups, client, players]);
 
   // calendar events — so a day can cite what was planned/happening then
   useEffect(() => {
@@ -854,13 +875,15 @@ export function MemoriesTab({ client, me, players = [], flash }) {
     const place = (g.items.find((i) => i.place) || {}).place || null;
     const sig = g.items.length + ":" + g.items[0].id;
     const body = { day: g.date, images, context: { date: dayHead(g.date), place, count: g.items.length, sig } };
+    const occ = specialOf(g.date, players);
+    if (occ) body.special = occ;                    // birthdays → a multi-paragraph chapter
     if (opts.fresh && (opts.fresh.story || opts.fresh.title)) body.fresh = { title: opts.fresh.title || null, story: opts.fresh.story || null };
     try {
       const { data } = await client.functions.invoke("day-story", { body });
       if (data && data.story) { setStories((s) => ({ ...s, [g.date]: { title: data.title, story: data.story } })); return true; }
       return false;
     } catch { return false; }
-  }, [client, pubUrl]);
+  }, [client, pubUrl, players]);
 
   const flat = items || [];
   const openGroup = dayOpen ? groups.find((g) => g.date === dayOpen) : null;
@@ -924,20 +947,36 @@ export function MemoriesTab({ client, me, players = [], flash }) {
             <span class="dt-body">
               <span class="dt-date">${dayHead(g.date)}</span>
               <span class="dt-title">${(s && s.title) || fallbackTitle(g)}</span>
-              <span class="dt-story">${(s && s.story) || fallbackStory(g)}</span>
+              <span class="dt-story">${((s && s.story) || fallbackStory(g)).split(/\n{2,}/)[0]}</span>
             </span>
           </button>`;
         })}
         <div ref=${sentinel} class="memsentinel">${!more.current.done ? html`<span class="memspin"></span>` : ""}</div>
       </div>`}
 
-      <!-- a single day: its story, then the full photo grid -->
-      ${view === "gallery" && openGroup && html`<div class="daydetail">
+      <!-- a single day: its story, then the photos. Ordinary days are a lede +
+           one grid; special days (birthdays) read like a BOOK — the chapter's
+           paragraphs interleaved with runs of photos, ending on the last words. -->
+      ${view === "gallery" && openGroup && (() => {
+        const st = stories[openGroup.date] || {};
+        const occ = specialOf(openGroup.date, players);
+        const storyText = st.story || (occ ? fallbackStorySpecial(openGroup, occ) : fallbackStory(openGroup));
+        const paras = storyText.split(/\n{2,}/).map((t) => t.trim()).filter(Boolean);
+        const book = paras.length > 1;
+        // split the day's photos into one run per remaining paragraph
+        const runs = [];
+        if (book) {
+          const n = paras.length - 1, len = openGroup.items.length;
+          const base = Math.floor(len / n); let rem = len % n, i = 0;
+          for (let k = 0; k < n; k++) { const take = base + (k < rem ? 1 : 0); runs.push(openGroup.items.slice(i, i + take)); i += take; }
+        }
+        return html`<div class="daydetail">
         <button class="dd-back" onClick=${() => setDayOpen(null)}>‹ All days</button>
         <div class="dd-head">
           <div class="dd-date">${dayHead(openGroup.date)}</div>
-          <div class="dd-title">${(stories[openGroup.date] && stories[openGroup.date].title) || fallbackTitle(openGroup)}</div>
-          <p class="dd-story">${(stories[openGroup.date] && stories[openGroup.date].story) || fallbackStory(openGroup)}</p>
+          ${occ && html`<div class="dd-occasion">🎂 ${occ}</div>`}
+          <div class="dd-title">${st.title || fallbackTitle(openGroup)}</div>
+          <p class=${`dd-story ${book ? "lede" : ""}`}>${paras[0]}</p>
           <button class="dd-rewrite" disabled=${reweaving} onClick=${async () => {
             if (reweaving) return; setReweaving(true);
             storyTried.current.add(openGroup.date + ":" + openGroup.items.length);   // keep the auto-weaver from racing it
@@ -951,8 +990,14 @@ export function MemoriesTab({ client, me, players = [], flash }) {
           </div>` : ""; })()}
           ${sel && html`<button class=${`dayall ${openGroup.items.every((i) => sel.has(i.id)) ? "on" : ""}`} onClick=${dayToggle(openGroup)}>✓ Select all this day</button>`}
         </div>
-        <div class="memgrid">${openGroup.items.map(cell)}</div>
-      </div>`}
+        ${book
+          ? html`${runs.map((run, i) => html`<div class="booksec" key=${i}>
+                ${run.length > 0 && html`<div class="memgrid">${run.map(cell)}</div>`}
+                <p class="bookpara">${paras[i + 1]}</p>
+              </div>`)}
+              <div class="bookend">⁂</div>`
+          : html`<div class="memgrid">${openGroup.items.map(cell)}</div>`}
+      </div>`; })()}
 
       ${view === "game" && items !== null && html`<${MatchGame} items=${items} pubUrl=${pubUrl} thumbUrl=${thumbUrl} />`}
     </div>

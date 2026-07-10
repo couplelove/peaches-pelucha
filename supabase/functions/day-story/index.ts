@@ -23,12 +23,21 @@ const SUBJECTS =
   "Look carefully at each photo and attribute actions to the correct person by these features; never swap them. " +
   "If a photo doesn't clearly show who is who, write 'you two' / 'together' instead of guessing a name.";
 
-const SYSTEM = [
+const SYSTEM_BASE = [
   "You are the storyteller for Peaches 🍑 and Pelucha 🧸 — a couple keeping a lifetime of days in a shared journal.",
   SUBJECTS,
   "Given a few photos from ONE day, return a `title` and a `story`.",
   "title: a short, evocative chapter heading for the day — like a storybook page or a postcard caption (e.g. 'Cliffs Over the Fjord', 'The Red Rocks at Dusk'). 2–5 words, ≤45 characters. Title Case. No emoji, no quotes, no date.",
+];
+const SYSTEM = [
+  ...SYSTEM_BASE,
   "story: one warm, whimsical entry — the way a beautiful children's picture-book narrates a small adventure. Voice: tender, playful, a little magical. Present tense. Second person plural ('you two', 'together') or gently name them. Notice real details you can see in the photos (light, place, weather, what they're doing) and turn the day into a tiny journey. ≤500 characters, 1–3 short sentences. No quotes, no emoji.",
+].join(" ");
+// Special occasions (birthdays): a real CHAPTER, not a caption — several short
+// paragraphs the app lays out between the photos like pages of a book.
+const SYSTEM_SPECIAL = (occasion: string) => [
+  ...SYSTEM_BASE,
+  `story: today is ${occasion} — write a full storybook chapter, not a caption: exactly 4 to 6 SHORT paragraphs separated by blank lines (two newlines). Editorial and tender, like a beautifully written picture book for grown-ups. Open by setting the scene; wander through what the photos actually show (light, faces, small gestures, place); let the middle swell into the celebration of the birthday person; end with a short toast-like closing paragraph that blesses the year ahead. Present tense. Second person plural ('you two', 'together') or gently name them. Each paragraph 1–3 sentences. ≤1600 characters total. No quotes, no emoji, no headings — just the paragraphs.`,
 ].join(" ");
 
 const SCHEMA = {
@@ -41,7 +50,7 @@ const SCHEMA = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { day, images = [], context = {}, revise = null, fresh = null } = await req.json();
+    const { day, images = [], context = {}, revise = null, fresh = null, special = null } = await req.json();
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY not set" }, 500);
     if (!images.length) return json({ error: "no images" }, 400);
@@ -70,6 +79,7 @@ Deno.serve(async (req) => {
       context.date ? `Date: ${context.date}.` : "",
       context.place ? `Place: ${context.place}.` : "",
       context.count ? `${context.count} photo${context.count === 1 ? "" : "s"} from this day.` : "",
+      special ? `Occasion: ${special}.` : "",
     ];
     // revise mode: fix ONLY who-is-who in an existing entry; keep the wording.
     // fresh mode: a manual "rewrite" — same day & photos, but a deliberately
@@ -91,8 +101,8 @@ Deno.serve(async (req) => {
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 500,
-        system: SYSTEM,
+        max_tokens: special ? 1400 : 500,
+        system: special ? SYSTEM_SPECIAL(String(special)) : SYSTEM,
         output_config: { format: { type: "json_schema", schema: SCHEMA } },
         messages: [{ role: "user", content: [...imgs, { type: "text", text: hint }] }],
       }),
@@ -104,7 +114,8 @@ Deno.serve(async (req) => {
     try { const o = JSON.parse(raw); title = (o.title || "").trim(); story = (o.story || "").trim(); }
     catch { story = raw; }
     if (!story) return json({ error: "empty story" }, 502);
-    if (story.length > 500) story = story.slice(0, 499).trimEnd() + "…";
+    const cap = special ? 1900 : 500;
+    if (story.length > cap) story = story.slice(0, cap - 1).trimEnd() + "…";
     if (title.length > 60) title = title.slice(0, 60).trimEnd();
 
     // cache it so the partner sees it and we never regenerate this day's photos

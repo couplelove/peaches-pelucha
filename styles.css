@@ -1656,3 +1656,17 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* keep the birthday warmth under the cool-glass theme (its .card override wins otherwise) */
 .app-shell.cool .bdaycard { background: linear-gradient(160deg, rgba(253,238,230,.94) 0%, rgba(251,217,200,.94) 55%, rgba(246,199,180,.94) 100%); border-color: rgba(193,95,60,.25); }
 .app-shell.cool .bdaycard.isyou { background: linear-gradient(160deg, rgba(253,243,220,.95) 0%, rgba(250,227,180,.95) 55%, rgba(243,211,145,.95) 100%); border-color: rgba(176,130,44,.3); }
+
+/* ---------------------------------------------------- special-day book 📖 */
+/* Birthday chapters: paragraphs woven between runs of photos, like pages. */
+.dd-occasion { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: #8a5a2a; background: linear-gradient(160deg, #fdf3dc, #fae3b4); border: 1px solid rgba(176,130,44,.3);
+  border-radius: 999px; padding: 4px 12px; margin: 2px 0 10px; }
+.dd-story.lede { font-style: normal; font-size: 17.5px; line-height: 1.7; }
+.dd-story.lede::first-letter { font-family: var(--serif); font-size: 2.9em; float: left; line-height: .85;
+  padding: 3px 8px 0 0; color: var(--accent-press); }
+.booksec { margin-bottom: 6px; }
+.booksec .memgrid { margin-bottom: 0; }
+.bookpara { font-family: var(--serif); font-size: 16.5px; line-height: 1.75; color: var(--ink);
+  margin: 16px 2px 20px; max-width: 62ch; }
+.bookend { text-align: center; color: var(--ink-2); font-size: 15px; letter-spacing: .5em; margin: 6px 0 18px; padding-left: .5em; }
