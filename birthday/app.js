@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2?bundle";
 const html = htm.bind(h);
 
 const PELUCHA_ID = "b8db6a45-06e8-4bb0-bf67-b716c2179393"; // the giver — gets the redemption pushes
+const PEACHES_ID = "4f9fcad1-63f8-4a98-a5ac-02f0367a0e05"; // the birthday girl / reigning champion
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 
 // ——— Cam: everything she reads lives in LETTER, PHOTOS[].poem, and COUPONS[].sub ———
@@ -280,6 +281,76 @@ function Poems() {
   `;
 }
 
+// ——— the Phase 10 reckoning: live career numbers, computed from games+matches ———
+function Record({ client }) {
+  const [s, setS] = useState(null);
+  useEffect(() => {
+    (async () => {
+      const [{ data: games }, { data: matches }] = await Promise.all([
+        client.from("games").select("winner_id,finished_at").eq("status", "finished").order("finished_at"),
+        client.from("matches").select("status,state,created_at").order("created_at"),
+      ]);
+      if (!games?.length) return;
+      const wins = { [PEACHES_ID]: 0, [PELUCHA_ID]: 0 };
+      games.forEach((g) => { if (wins[g.winner_id] != null) wins[g.winner_id]++; });
+      const lastN = games.slice(-5);
+      const last5P = lastN.filter((g) => g.winner_id === PEACHES_ID).length;
+      let ptsP = 0, ptsL = 0, bestP = Infinity, bestL = Infinity, live = null;
+      (matches || []).forEach((m) => {
+        const sc = m.state?.scores || {}, ph = m.state?.phaseOf || {};
+        const p = sc[PEACHES_ID], l = sc[PELUCHA_ID];
+        if (m.status === "finished" && p != null && l != null) {
+          ptsP += p; ptsL += l;
+          bestP = Math.min(bestP, p); bestL = Math.min(bestL, l);
+        } else if (m.status === "playing" && p != null && l != null) {
+          // leader: furthest phase, then fewest points
+          const peachLeads = (ph[PEACHES_ID] || 0) !== (ph[PELUCHA_ID] || 0)
+            ? (ph[PEACHES_ID] || 0) > (ph[PELUCHA_ID] || 0) : p < l;
+          live = { peachLeads };
+        }
+      });
+      setS({ winsP: wins[PEACHES_ID], winsL: wins[PELUCHA_ID], ptsP, ptsL,
+             best: Math.min(bestP, bestL), bestIsHers: bestP <= bestL,
+             last5P, lastN: lastN.length, live });
+    })().catch(() => {});
+  }, [client]);
+  if (!s) return null;
+  return html`
+    <section class="sec">
+      <div class="sec-label"><span>III</span> for the record</div>
+      <div class="record">
+        <div class="rec-score">
+          <div class="rec-side">
+            <div class="rec-crown">👑</div>
+            <div class="rec-name">Peaches</div>
+            <div class="rec-num her">${s.winsP}</div>
+          </div>
+          <div class="rec-dash">–</div>
+          <div class="rec-side">
+            <div class="rec-crown dim">🧸</div>
+            <div class="rec-name">Pelucha</div>
+            <div class="rec-num him">${s.winsL}</div>
+          </div>
+        </div>
+        <div class="rec-cap">Phase 10, lifetime matches won</div>
+        <div class="rec-rows">
+          <div class="rec-row"><span>points collected — fewer is better</span><b>${s.ptsP.toLocaleString()} – ${s.ptsL.toLocaleString()}</b></div>
+          <div class="rec-row"><span>lowest match score, all time</span><b>${s.best} · ${s.bestIsHers ? "hers" : "his"}</b></div>
+          <div class="rec-row"><span>last ${s.lastN} matches</span><b>${s.last5P} – ${s.lastN - s.last5P}</b></div>
+        </div>
+        ${s.live && html`
+          <div class="rec-note">
+            ${s.live.peachLeads
+              ? "…and she leads the match still in progress. Of course she does."
+              : "…he leads the one match still in progress. Let him have this, briefly."}
+          </div>
+        `}
+        <div class="rec-sig">— faithfully recorded by the loser 🧸</div>
+      </div>
+    </section>
+  `;
+}
+
 function Coupon({ c, row, onRedeem }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState("");
@@ -367,7 +438,7 @@ function Gifts({ client }) {
   };
   return html`
     <section class="sec">
-      <div class="sec-label"><span>III</span> your gifts</div>
+      <div class="sec-label"><span>IV</span> your gifts</div>
       <div class="tickets">
         ${COUPONS.map((c) => html`<${Coupon} key=${c.slug} c=${c} row=${rows[c.slug]} onRedeem=${onRedeem} />`)}
       </div>
@@ -400,6 +471,7 @@ function App() {
       <${Hero} />
       <${Letter} />
       <${Poems} />
+      ${client && html`<${Record} client=${client} />`}
       ${client && html`<${Gifts} client=${client} />`}
       <footer class="foot">
         <div class="foot-heart">🧸 💗 🍑</div>
