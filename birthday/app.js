@@ -781,8 +781,56 @@ function Gifts({ client }) {
   `;
 }
 
+// Locked until her birthday actually starts (midnight, her phone's clock).
+// ?pelucha is Pelucha's secret bypass so he can check the app early.
+const BDAY_START = new Date("2026-07-11T00:00:00").getTime();
+const PARAMS = new URLSearchParams(location.search);
+const SNEAK = PARAMS.has("pelucha");
+// ?fresh replays the whole intro (envelope + story) on a device that has
+// already seen it — the plain link skips straight to the card after first read
+if (PARAMS.has("fresh")) localStorage.removeItem("pb.opened");
+if (PARAMS.has("fresh") || SNEAK) history.replaceState(null, "", location.pathname);
+
+function Lock({ onUnlock }) {
+  const [left, setLeft] = useState(() => BDAY_START - Date.now());
+  const [nope, setNope] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const l = BDAY_START - Date.now();
+      setLeft(l);
+      if (l <= 0) { clearInterval(t); onUnlock(); }
+    }, 250);
+    return () => clearInterval(t);
+  }, []);
+  const s = Math.max(0, Math.floor(left / 1000));
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return html`
+    <div class="gate lock" onClick=${() => setNope((n) => n + 1)}>
+      <div class="gate-inner">
+        <div class="env ${nope ? "nope" : ""}" key=${nope}>
+          <div class="env-flap"></div>
+          <div class="env-letter"><span>🎂</span></div>
+          <div class="env-body"></div>
+          <div class="env-seal">🧸</div>
+          <div class="env-lock">🔒</div>
+        </div>
+        <div class="gate-name">no peeking 😛</div>
+        <div class="gate-sub">her birthday starts in</div>
+        <div class="lock-count">
+          ${[[hh, "hours"], [mm, "minutes"], [ss, "seconds"]].map(([v, l]) => html`
+            <div class="lc"><div class="lc-num">${v}</div><div class="lc-label">${l}</div></div>
+          `)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function App() {
   const [client, setClient] = useState(null);
+  const [locked, setLocked] = useState(() => !SNEAK && Date.now() < BDAY_START);
   // gate → story → main; pb.opened is only set once the story has been read,
   // so quitting mid-story replays the whole intro next time
   const [stage, setStage] = useState(() => (localStorage.getItem("pb.opened") === "1" ? "main" : "gate"));
@@ -803,6 +851,7 @@ function App() {
     confetti(90);
   };
 
+  if (locked) return html`<${Lock} onUnlock=${() => { setLocked(false); confetti(180); }} />`;
   if (stage === "gate") return html`<${Envelope} onOpen=${() => setStage("story")} />`;
   // the storybook overlay must live OUTSIDE .bday: its entrance animation makes
   // it a containing block, which would trap our position:fixed inside the page

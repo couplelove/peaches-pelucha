@@ -127,6 +127,43 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 @keyframes hintfade { 50% { opacity: 0.35; } }
 
+/* ——— the midnight lock ——— */
+.gate.lock { cursor: default; }
+.env-lock {
+  position: absolute;
+  left: 50%; top: 92px;
+  transform: translateX(14px);
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(43, 37, 33, 0.16);
+  display: grid; place-items: center;
+  font-size: 16px;
+  z-index: 6;
+}
+.env.nope { animation: nopeshake 0.45s ease; }
+@keyframes nopeshake {
+  20% { transform: translateX(-9px) rotate(-2deg); }
+  45% { transform: translateX(8px) rotate(2deg); }
+  70% { transform: translateX(-5px) rotate(-1deg); }
+  100% { transform: none; }
+}
+.lock-count {
+  margin-top: 22px;
+  display: flex; justify-content: center; gap: 22px;
+}
+.lc-num {
+  font-family: var(--serif); font-weight: 600;
+  font-size: 44px; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.lc-label {
+  margin-top: 6px;
+  font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 600;
+}
+
 /* ——— the pop-up storybook ——— */
 .storybook {
   position: fixed; inset: 0; z-index: 850;
