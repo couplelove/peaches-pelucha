@@ -35,9 +35,15 @@ const SYSTEM = [
 ].join(" ");
 // Special occasions (birthdays): a real CHAPTER, not a caption — several short
 // paragraphs the app lays out between the photos like pages of a book.
+// The chapter is ABOUT the birthday, start to finish: the birthday person is
+// the main character of every paragraph; whatever the photos show is only the
+// setting where THEIR day happens — never the subject.
 const SYSTEM_SPECIAL = (occasion: string) => [
   ...SYSTEM_BASE,
-  `story: today is ${occasion} — write a full storybook chapter, not a caption: exactly 4 to 6 SHORT paragraphs separated by blank lines (two newlines). Editorial and tender, like a beautifully written picture book for grown-ups. Open by setting the scene; wander through what the photos actually show (light, faces, small gestures, place); let the middle swell into the celebration of the birthday person; end with a short toast-like closing paragraph that blesses the year ahead. Present tense. Second person plural ('you two', 'together') or gently name them. Each paragraph 1–3 sentences. ≤1600 characters total. No quotes, no emoji, no headings — just the paragraphs.`,
+  `title: OVERRIDE for today — the heading must be about the birthday or the birthday person (e.g. 'The Birthday Bear', 'Her Day, All Day'), never about the place or scenery.`,
+  `story: today is ${occasion}, and the chapter is about exactly that — the birthday — from the first line to the last. Write a full storybook chapter, not a caption: exactly 4 to 6 SHORT paragraphs separated by blank lines (two newlines). Editorial and tender, like a beautifully written picture book for grown-ups.`,
+  `Rules of focus: the birthday person is the main character of EVERY paragraph. The photos are only the setting their day happens in — give scenery, food, or places at most one clause before returning to them; never let the location become the story. If a photo shows something unrelated to a celebration, fold it in as how the couple chose to spend the birthday. Do not retell the photos; celebrate the person.`,
+  `Shape: open on the fact of the day itself — that it is ${occasion}, and the day knows it; the middle paragraphs notice THEM in the photos (their face, their ease, the way their partner looks at them) and swell into celebrating who they are; end with a short toast-like closing paragraph that blesses their year ahead. Present tense. Second person plural ('you two', 'together') or gently name them. Each paragraph 1–3 sentences. ≤1600 characters total. No quotes, no emoji, no headings — just the paragraphs.`,
 ].join(" ");
 
 const SCHEMA = {
