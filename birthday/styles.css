@@ -127,6 +127,91 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 @keyframes hintfade { 50% { opacity: 0.35; } }
 
+/* ——— the pop-up storybook ——— */
+.storybook {
+  position: fixed; inset: 0; z-index: 850;
+  display: grid; place-items: center; align-content: center; gap: 18px;
+  padding: 20px;
+  background:
+    radial-gradient(ellipse 70% 40% at 12% 8%, rgba(255, 217, 207, 0.55), transparent),
+    radial-gradient(ellipse 60% 36% at 88% 16%, rgba(205, 234, 192, 0.4), transparent),
+    radial-gradient(ellipse 70% 40% at 20% 92%, rgba(207, 231, 245, 0.45), transparent),
+    radial-gradient(ellipse 60% 40% at 85% 85%, rgba(255, 232, 163, 0.4), transparent),
+    var(--paper);
+  cursor: pointer;
+  animation: storyin 0.45s ease both;
+}
+@keyframes storyin { from { opacity: 0; } }
+.story-card {
+  position: relative;
+  width: min(92vw, 400px);
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 26px 20px 22px;
+  box-shadow: 0 22px 50px rgba(43, 37, 33, 0.16);
+  text-align: center;
+  transform-origin: 50% 92%;
+  animation: cardopen 0.6s cubic-bezier(0.2, 1.1, 0.4, 1) both;
+}
+@keyframes cardopen {
+  from { transform: perspective(900px) rotateX(-58deg); opacity: 0.2; }
+  to { transform: perspective(900px) rotateX(0deg); opacity: 1; }
+}
+.story-tape {
+  position: absolute; top: -10px; left: 50%;
+  width: 92px; height: 22px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: rgba(255, 158, 125, 0.4);
+  border-left: 1px dashed rgba(224, 122, 95, 0.5);
+  border-right: 1px dashed rgba(224, 122, 95, 0.5);
+}
+.story-card svg { width: 100%; height: auto; display: block; }
+.story-card .pop {
+  animation: popup 0.7s cubic-bezier(0.2, 1.45, 0.4, 1) both;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.story-card .p1 { animation-delay: 0.12s; }
+.story-card .p2 { animation-delay: 0.28s; }
+.story-card .p3 { animation-delay: 0.44s; }
+.story-card .p4 { animation-delay: 0.6s; }
+.story-card .p5 { animation-delay: 0.76s; }
+@keyframes popup {
+  from { transform: translateY(26px) scale(0.6, 0.05); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.story-cap {
+  margin-top: 10px;
+  font-family: var(--script);
+  font-size: 25px; line-height: 1.25;
+  color: var(--ink);
+  animation: capin 0.5s ease 0.7s both;
+}
+@keyframes capin { from { opacity: 0; transform: translateY(6px); } }
+.story-done {
+  margin-top: 16px;
+  padding: 12px 26px;
+  border-radius: 999px;
+  background: var(--peach);
+  color: #fff; font-weight: 700; font-size: 15px;
+  box-shadow: 0 6px 18px rgba(232, 97, 122, 0.35);
+  animation: capin 0.5s ease 1s both;
+}
+.story-done:active { transform: scale(0.97); }
+.story-dots { display: flex; gap: 7px; }
+.sdot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ink-3); opacity: 0.5;
+  transition: all 0.25s ease;
+}
+.sdot.on { opacity: 1; background: var(--peach); transform: scale(1.35); }
+.story-hint {
+  font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-3);
+  animation: hintfade 2s ease-in-out infinite;
+}
+
 /* ——— page ——— */
 .bday {
   max-width: var(--maxw);
@@ -407,3 +492,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   font-size: 14px; color: var(--ink-2);
 }
 .foot-heart { font-size: 18px; margin-bottom: 8px; letter-spacing: 6px; }
+.foot-replay {
+  margin-top: 14px;
+  font-family: var(--serif); font-style: italic;
+  font-size: 13.5px; color: var(--peach-press);
+  border-bottom: 1px dashed var(--peach);
+  padding-bottom: 1px;
+}

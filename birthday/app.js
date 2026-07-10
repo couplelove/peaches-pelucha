@@ -209,6 +209,321 @@ function Envelope({ onOpen }) {
   `;
 }
 
+// ——— the pop-up storybook: her last year, in watercolor & paper ———
+
+function SceneDefs() {
+  return html`
+    <defs>
+      <filter id="wc" x="-20%" y="-20%" width="140%" height="140%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="6" />
+      </filter>
+      <filter id="wash" x="-40%" y="-40%" width="180%" height="180%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.028" numOctaves="3" seed="4" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="16" />
+        <feGaussianBlur stdDeviation="1.4" />
+      </filter>
+    </defs>
+  `;
+}
+
+const Wash = ({ cx, cy, rx, ry, fill, o = 0.45 }) =>
+  html`<ellipse cx=${cx} cy=${cy} rx=${rx} ry=${ry} fill=${fill} opacity=${o} filter="url(#wash)" />`;
+
+// Peaches Shortcake herself: curly hair, peach beret, shortcake tights.
+function Girl({ x = 0, y = 0, s = 1, hair = "short", arms = "down", lean = 0 }) {
+  const curl = (cx, cy, r) => html`<circle cx=${cx} cy=${cy} r=${r} fill="#46312a" />`;
+  return html`
+    <g transform="translate(${x} ${y}) rotate(${lean}) scale(${s})">
+      ${curl(-18, -108, 11)} ${curl(0, -116, 12)} ${curl(18, -108, 11)}
+      ${curl(-24, -96, 9)} ${curl(24, -96, 9)}
+      ${hair !== "short" && html`${curl(-26, -80, 8)} ${curl(26, -80, 8)} ${curl(-28, -66, 8)} ${curl(28, -66, 8)}`}
+      ${hair === "long" && html`
+        ${curl(-30, -52, 8)} ${curl(30, -52, 8)}
+        ${curl(-31, -38, 7)} ${curl(31, -38, 7)}
+        ${curl(-30, -25, 7)} ${curl(30, -25, 7)}
+      `}
+      <rect x="-11" y="-28" width="7" height="27" rx="3.5" fill="#fff1e2" />
+      <rect x="4" y="-28" width="7" height="27" rx="3.5" fill="#fff1e2" />
+      <rect x="-11" y="-22" width="7" height="4" fill="#ffab8a" />
+      <rect x="4" y="-22" width="7" height="4" fill="#ffab8a" />
+      <rect x="-11" y="-13" width="7" height="4" fill="#ffab8a" />
+      <rect x="4" y="-13" width="7" height="4" fill="#ffab8a" />
+      <ellipse cx="-7.5" cy="0" rx="7" ry="4" fill="#8a5a44" />
+      <ellipse cx="7.5" cy="0" rx="7" ry="4" fill="#8a5a44" />
+      <path d="M -13 -76 L 13 -76 C 20 -55 24 -40 26 -26 C 10 -19 -10 -19 -26 -26 C -24 -40 -20 -55 -13 -76 Z"
+        fill="#ff9e7d" stroke="#e07a5f" stroke-width="1.5" />
+      <circle cx="-8" cy="-52" r="3" fill="#fff4e6" />
+      <circle cx="9" cy="-44" r="3" fill="#fff4e6" />
+      <circle cx="-2" cy="-33" r="3" fill="#fff4e6" />
+      ${arms === "up" ? html`
+        <path d="M -12 -68 C -22 -76 -28 -84 -31 -92" stroke="#cf9d78" stroke-width="6" stroke-linecap="round" fill="none" />
+        <path d="M 12 -68 C 22 -76 28 -84 31 -92" stroke="#cf9d78" stroke-width="6" stroke-linecap="round" fill="none" />
+      ` : arms === "reach" ? html`
+        <path d="M -12 -68 C -20 -66 -28 -62 -35 -57" stroke="#cf9d78" stroke-width="6" stroke-linecap="round" fill="none" />
+        <path d="M 12 -68 C 20 -66 28 -62 35 -57" stroke="#cf9d78" stroke-width="6" stroke-linecap="round" fill="none" />
+      ` : html`
+        <path d="M -12 -68 C -18 -60 -21 -52 -22 -46" stroke="#cf9d78" stroke-width="6" stroke-linecap="round" fill="none" />
+        <path d="M 12 -68 C 18 -60 21 -52 22 -46" stroke="#cf9d78" stroke-width="6" stroke-linecap="round" fill="none" />
+      `}
+      <circle cx="0" cy="-94" r="23" fill="#cf9d78" />
+      ${curl(-14, -111, 8)} ${curl(2, -114, 8)} ${curl(15, -110, 7)}
+      <circle cx="-9" cy="-89" r="3.6" fill="#ff9d94" opacity="0.75" />
+      <circle cx="9" cy="-89" r="3.6" fill="#ff9d94" opacity="0.75" />
+      <circle cx="-7.5" cy="-96" r="2.3" fill="#3a2a24" />
+      <circle cx="7.5" cy="-96" r="2.3" fill="#3a2a24" />
+      <path d="M -4 -88 Q 0 -84 4 -88" stroke="#3a2a24" stroke-width="1.6" stroke-linecap="round" fill="none" />
+      <path d="M -20 -110 C -17 -123 17 -123 20 -110 C 8 -116 -8 -116 -20 -110 Z"
+        fill="#ff8f70" stroke="#e07a5f" stroke-width="1.2" />
+      <ellipse cx="15" cy="-121" rx="6" ry="3" fill="#7fb069" transform="rotate(-24 15 -121)" />
+    </g>
+  `;
+}
+
+// Pelucha, as himself: a soft brown teddy boy with his purple bow.
+function Bear({ x = 0, y = 0, s = 1 }) {
+  return html`
+    <g transform="translate(${x} ${y}) scale(${s})">
+      <ellipse cx="-9" cy="-4" rx="8" ry="9" fill="#a9765b" />
+      <ellipse cx="9" cy="-4" rx="8" ry="9" fill="#a9765b" />
+      <ellipse cx="0" cy="-38" rx="24" ry="28" fill="#a9765b" />
+      <ellipse cx="0" cy="-34" rx="14" ry="17" fill="#c9987b" />
+      <path d="M -20 -48 C -28 -50 -34 -53 -39 -57" stroke="#a9765b" stroke-width="9" stroke-linecap="round" fill="none" />
+      <path d="M 20 -48 C 28 -50 34 -53 39 -57" stroke="#a9765b" stroke-width="9" stroke-linecap="round" fill="none" />
+      <circle cx="-16" cy="-112" r="10" fill="#a9765b" />
+      <circle cx="16" cy="-112" r="10" fill="#a9765b" />
+      <circle cx="-16" cy="-112" r="5" fill="#c9987b" />
+      <circle cx="16" cy="-112" r="5" fill="#c9987b" />
+      <circle cx="0" cy="-92" r="24" fill="#a9765b" />
+      <ellipse cx="0" cy="-83" rx="11" ry="8.5" fill="#e7c3a4" />
+      <circle cx="0" cy="-88" r="3" fill="#4a3529" />
+      <path d="M 0 -85 L 0 -81" stroke="#4a3529" stroke-width="1.6" stroke-linecap="round" />
+      <path d="M -4 -79 Q 0 -76 4 -79" stroke="#4a3529" stroke-width="1.6" stroke-linecap="round" fill="none" />
+      <circle cx="-9" cy="-96" r="2.3" fill="#3a2a24" />
+      <circle cx="9" cy="-96" r="2.3" fill="#3a2a24" />
+      <circle cx="-15" cy="-87" r="3.4" fill="#ff9d94" opacity="0.55" />
+      <circle cx="15" cy="-87" r="3.4" fill="#ff9d94" opacity="0.55" />
+      <path d="M 0 -64 L -12 -70 L -12 -58 Z" fill="#9b6bff" />
+      <path d="M 0 -64 L 12 -70 L 12 -58 Z" fill="#9b6bff" />
+      <circle cx="0" cy="-64" r="3.4" fill="#8253e6" />
+    </g>
+  `;
+}
+
+const Star = ({ x, y, s = 1, fill = "#ffd166" }) =>
+  html`<path transform="translate(${x} ${y}) scale(${s})" fill=${fill}
+    d="M 0 -7 L 1.8 -1.8 L 7 0 L 1.8 1.8 L 0 7 L -1.8 1.8 L -7 0 L -1.8 -1.8 Z" />`;
+
+const Heart = ({ x, y, s = 1, fill = "#ff8fa3", o = 1 }) =>
+  html`<path transform="translate(${x} ${y}) scale(${s})" fill=${fill} opacity=${o}
+    d="M 0 4 C -6 -2 -8 -6 -4.5 -8 C -2 -9.5 0 -7.5 0 -6 C 0 -7.5 2 -9.5 4.5 -8 C 8 -6 6 -2 0 4 Z" />`;
+
+function SceneCover() {
+  return html`
+    <svg viewBox="0 0 320 240"><${SceneDefs} />
+      <g class="pop p1"><${Wash} cx="160" cy="130" rx="120" ry="90" fill="#ffd9cf" o="0.55" /></g>
+      <g class="pop p2">
+        <circle cx="160" cy="130" r="56" fill="#ff9e7d" filter="url(#wc)" />
+        <path d="M 160 80 C 152 100 152 160 160 184" stroke="#e07a5f" stroke-width="2" fill="none" opacity="0.5" />
+        <ellipse cx="176" cy="72" rx="13" ry="6" fill="#7fb069" transform="rotate(-28 176 72)" />
+        <path d="M 160 80 Q 158 70 150 66" stroke="#8a5a44" stroke-width="3" stroke-linecap="round" fill="none" />
+        <circle cx="141" cy="128" r="6" fill="#ff9d94" opacity="0.8" />
+        <circle cx="179" cy="128" r="6" fill="#ff9d94" opacity="0.8" />
+        <circle cx="146" cy="118" r="3.4" fill="#3a2a24" />
+        <circle cx="174" cy="118" r="3.4" fill="#3a2a24" />
+        <path d="M 152 132 Q 160 140 168 132" stroke="#3a2a24" stroke-width="2.4" stroke-linecap="round" fill="none" />
+      </g>
+      <g class="pop p3">
+        <${Star} x="70" y="70" s="1.2" />
+        <${Star} x="250" y="86" s="0.9" fill="#ff8fa3" />
+        <${Star} x="238" y="188" s="1.1" />
+        <${Star} x="84" y="182" s="0.8" fill="#c4a6ff" />
+        <${Heart} x="256" y="140" s="1.2" o="0.8" />
+        <${Heart} x="64" y="126" s="1" o="0.7" fill="#c4a6ff" />
+      </g>
+    </svg>
+  `;
+}
+
+function SceneHome() {
+  return html`
+    <svg viewBox="0 0 320 240"><${SceneDefs} />
+      <g class="pop p1">
+        <${Wash} cx="160" cy="204" rx="150" ry="26" fill="#cdeac0" o="0.7" />
+        <${Wash} cx="160" cy="60" rx="150" ry="42" fill="#cfe7f5" o="0.4" />
+      </g>
+      <g class="pop p2">
+        <circle cx="52" cy="48" r="20" fill="#ffd166" filter="url(#wc)" />
+        <g stroke="#ffd166" stroke-width="3" stroke-linecap="round" opacity="0.8">
+          <path d="M 52 18 L 52 8" /><path d="M 78 26 L 85 19" /><path d="M 26 26 L 19 19" />
+          <path d="M 82 48 L 92 48" />
+        </g>
+      </g>
+      <g class="pop p3">
+        <rect x="150" y="118" width="110" height="80" rx="4" fill="#fff4e6" stroke="#d9a173" stroke-width="2" filter="url(#wc)" />
+        <path d="M 142 122 L 205 82 L 268 122 Z" fill="#ff9e7d" stroke="#e07a5f" stroke-width="2" filter="url(#wc)" />
+        <rect x="232" y="92" width="12" height="24" fill="#b96f4e" />
+        <rect x="192" y="150" width="26" height="48" rx="13" fill="#b96f4e" />
+        <circle cx="212" cy="176" r="2.4" fill="#ffd166" />
+        <rect x="162" y="136" width="20" height="20" rx="2" fill="#cfe7f5" stroke="#d9a173" stroke-width="1.6" />
+        <path d="M 172 136 L 172 156 M 162 146 L 182 146" stroke="#d9a173" stroke-width="1.4" />
+        <rect x="230" y="136" width="20" height="20" rx="2" fill="#cfe7f5" stroke="#d9a173" stroke-width="1.6" />
+        <path d="M 240 136 L 240 156 M 230 146 L 250 146" stroke="#d9a173" stroke-width="1.4" />
+        <${Heart} x="205" y="132" s="0.9" />
+      </g>
+      <g class="pop p4">
+        <rect x="96" y="172" width="34" height="26" rx="2" fill="#e8c39e" stroke="#b96f4e" stroke-width="1.6" />
+        <path d="M 96 178 L 130 178 M 113 172 L 113 198" stroke="#b96f4e" stroke-width="1.4" />
+        <circle cx="106" cy="168" r="5" fill="#ff9e7d" />
+        <ellipse cx="122" cy="166" rx="4" ry="2" fill="#7fb069" transform="rotate(-20 122 166)" />
+      </g>
+      <g class="pop p5">
+        <${Girl} x="56" y="202" s="0.72" hair="short" arms="up" />
+        <g transform="translate(84 132) rotate(24)">
+          <circle cx="0" cy="0" r="6" fill="none" stroke="#d9a827" stroke-width="3.4" />
+          <path d="M 5 3 L 16 12 M 12 9 L 9 13 M 16 12 L 13 16" stroke="#d9a827" stroke-width="3.4" stroke-linecap="round" />
+        </g>
+      </g>
+    </svg>
+  `;
+}
+
+function SceneCareer() {
+  return html`
+    <svg viewBox="0 0 320 240"><${SceneDefs} />
+      <g class="pop p1">
+        <${Wash} cx="160" cy="150" rx="130" ry="70" fill="#ffe8a3" o="0.4" />
+        <${Wash} cx="230" cy="70" rx="80" ry="46" fill="#ffd9cf" o="0.45" />
+      </g>
+      <g class="pop p2">
+        <path d="M 30 26 Q 160 6 290 26" stroke="#c9987b" stroke-width="1.6" fill="none" />
+        <path d="M 70 22 L 78 40 L 86 23 Z" fill="#ff8fa3" />
+        <path d="M 120 19 L 128 37 L 136 20 Z" fill="#cdeac0" />
+        <path d="M 170 18 L 178 36 L 186 19 Z" fill="#ffd166" />
+        <path d="M 220 20 L 228 38 L 236 21 Z" fill="#c4a6ff" />
+      </g>
+      <g class="pop p3">
+        <g transform="translate(236 130) rotate(14)">
+          <rect x="-20" y="-14" width="40" height="28" rx="5" fill="#b96f4e" stroke="#8a5a44" stroke-width="1.6" />
+          <path d="M -8 -14 C -8 -22 8 -22 8 -14" stroke="#8a5a44" stroke-width="3" fill="none" />
+          <rect x="-3" y="-4" width="6" height="5" rx="1" fill="#ffd166" />
+        </g>
+        <g transform="translate(66 118) rotate(-12)">
+          <rect x="-14" y="-18" width="28" height="36" rx="2" fill="#fffdfb" stroke="#d9a173" stroke-width="1.4" />
+          <path d="M -8 -10 L 8 -10 M -8 -3 L 8 -3 M -8 4 L 4 4" stroke="#b7ada1" stroke-width="1.6" />
+        </g>
+      </g>
+      <g class="pop p4">
+        <${Star} x="90" y="66" s="1.3" />
+        <${Star} x="226" y="56" s="1" fill="#ff8fa3" />
+        <${Star} x="270" y="100" s="0.8" fill="#c4a6ff" />
+        <${Star} x="52" y="160" s="0.9" />
+        <${Star} x="196" y="88" s="0.7" fill="#7fb069" />
+      </g>
+      <g class="pop p5">
+        <ellipse cx="150" cy="212" rx="26" ry="7" fill="#e8dfd4" opacity="0.8" />
+        <ellipse cx="128" cy="214" rx="10" ry="5" fill="#f0e8dd" />
+        <ellipse cx="172" cy="214" rx="10" ry="5" fill="#f0e8dd" />
+        <${Girl} x="150" y="196" s="0.78" hair="mid" arms="up" lean="-6" />
+      </g>
+    </svg>
+  `;
+}
+
+function SceneHair() {
+  return html`
+    <svg viewBox="0 0 320 240"><${SceneDefs} />
+      <g class="pop p1"><${Wash} cx="160" cy="120" rx="110" ry="86" fill="#ffd9cf" o="0.5" /></g>
+      <g class="pop p2"><${Girl} x="160" y="216" s="0.95" hair="long" arms="down" /></g>
+      <g class="pop p3">
+        <circle cx="139" cy="118" r="4" fill="#fffdfb" />
+        <circle cx="136" cy="115" r="1.6" fill="#ffd166" />
+        <circle cx="184" cy="128" r="4" fill="#fffdfb" />
+        <circle cx="187" cy="125" r="1.6" fill="#ffd166" />
+        <circle cx="132" cy="160" r="3.4" fill="#ff8fa3" />
+        <circle cx="190" cy="168" r="3.4" fill="#c4a6ff" />
+      </g>
+      <g class="pop p4">
+        <g transform="translate(74 90) rotate(-14)">
+          <ellipse cx="-5" cy="0" rx="7" ry="10" fill="#ff8fa3" opacity="0.85" />
+          <ellipse cx="5" cy="0" rx="7" ry="10" fill="#ffb4c8" opacity="0.85" />
+          <path d="M 0 -8 L 0 8" stroke="#8a5a44" stroke-width="2" stroke-linecap="round" />
+        </g>
+        <g transform="translate(248 122) rotate(16)">
+          <ellipse cx="-5" cy="0" rx="6" ry="9" fill="#cdeac0" opacity="0.9" />
+          <ellipse cx="5" cy="0" rx="6" ry="9" fill="#a8dadc" opacity="0.9" />
+          <path d="M 0 -7 L 0 7" stroke="#8a5a44" stroke-width="2" stroke-linecap="round" />
+        </g>
+        <${Heart} x="234" y="66" s="1.1" o="0.8" />
+        <${Heart} x="86" y="150" s="0.9" o="0.7" fill="#c4a6ff" />
+      </g>
+    </svg>
+  `;
+}
+
+function SceneLove() {
+  return html`
+    <svg viewBox="0 0 320 240"><${SceneDefs} />
+      <g class="pop p1">
+        <${Wash} cx="160" cy="206" rx="140" ry="24" fill="#cdeac0" o="0.6" />
+        <path d="M 160 96 C 128 58 92 74 96 104 C 99 128 132 148 160 164 C 188 148 221 128 224 104 C 228 74 192 58 160 96 Z"
+          fill="#ff8fa3" opacity="0.3" filter="url(#wash)" />
+      </g>
+      <g class="pop p2"><${Girl} x="112" y="204" s="0.82" hair="long" arms="reach" /></g>
+      <g class="pop p3"><${Bear} x="208" y="204" s="0.82" /></g>
+      <g class="pop p4">
+        <${Heart} x="160" y="140" s="1.6" />
+        <${Heart} x="136" y="112" s="0.9" o="0.8" fill="#c4a6ff" />
+        <${Heart} x="186" y="108" s="1" o="0.8" />
+        <${Star} x="90" y="80" s="0.9" />
+        <${Star} x="238" y="70" s="1" fill="#ff8fa3" />
+        <circle cx="70" cy="130" r="3" fill="#ffd166" />
+        <circle cx="252" cy="140" r="3" fill="#cdeac0" />
+      </g>
+    </svg>
+  `;
+}
+
+const STORY = [
+  { Scene: SceneCover, cap: "Once upon a year, there was a girl called Peaches Shortcake…" },
+  { Scene: SceneHome, cap: "First, she found a little home that was all her own." },
+  { Scene: SceneCareer, cap: "Then she leapt into a brand-new career." },
+  { Scene: SceneHair, cap: "Her curls grew long, and wild, and lovely." },
+  { Scene: SceneLove, cap: "And then she met a boy… and he loves her so." },
+];
+
+function Storybook({ onDone }) {
+  const [pg, setPg] = useState(0);
+  const lastTap = useRef(0);
+  const last = pg === STORY.length - 1;
+  const { Scene, cap } = STORY[pg];
+  const turn = () => {
+    // debounce: a double-tap (or an eager toddler tap) shouldn't skip pages
+    const now = Date.now();
+    if (now - lastTap.current < 500) return;
+    lastTap.current = now;
+    if (!last) setPg(pg + 1);
+  };
+  return html`
+    <div class="storybook" onClick=${turn}>
+      <div class="story-card" key=${pg}>
+        <div class="story-tape"></div>
+        <${Scene} />
+        <div class="story-cap">${cap}</div>
+        ${last && html`
+          <button class="story-done" onClick=${(e) => { e.stopPropagation(); onDone(); }}>
+            open your birthday 🎂
+          </button>
+        `}
+      </div>
+      <div class="story-dots">
+        ${STORY.map((_, i) => html`<span class="sdot ${i === pg ? "on" : ""}"></span>`)}
+      </div>
+      ${!last && html`<div class="story-hint">tap to turn the page</div>`}
+    </div>
+  `;
+}
+
 function Hero() {
   return html`
     <header class="hero">
@@ -468,7 +783,9 @@ function Gifts({ client }) {
 
 function App() {
   const [client, setClient] = useState(null);
-  const [opened, setOpened] = useState(() => localStorage.getItem("pb.opened") === "1");
+  // gate → story → main; pb.opened is only set once the story has been read,
+  // so quitting mid-story replays the whole intro next time
+  const [stage, setStage] = useState(() => (localStorage.getItem("pb.opened") === "1" ? "main" : "gate"));
 
   useEffect(() => {
     (async () => {
@@ -480,12 +797,15 @@ function App() {
     })();
   }, []);
 
-  const open = () => {
+  const storyDone = () => {
     localStorage.setItem("pb.opened", "1");
-    setOpened(true);
+    setStage("main");
+    confetti(90);
   };
 
-  if (!opened) return html`<${Envelope} onOpen=${open} />`;
+  if (stage === "gate") return html`<${Envelope} onOpen=${() => setStage("story")} />`;
+  // the storybook overlay must live OUTSIDE .bday: its entrance animation makes
+  // it a containing block, which would trap our position:fixed inside the page
   return html`
     <div class="bday">
       <${Hero} />
@@ -496,8 +816,10 @@ function App() {
       <footer class="foot">
         <div class="foot-heart">🧸 💗 🍑</div>
         <div>made by your Pelucha, with all of his heart</div>
+        <button class="foot-replay" onClick=${() => setStage("story")}>read your story again 📖</button>
       </footer>
     </div>
+    ${stage === "story" && html`<${Storybook} onDone=${storyDone} />`}
   `;
 }
 
