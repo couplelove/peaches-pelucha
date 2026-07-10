@@ -418,6 +418,25 @@ function Gifts({ client }) {
     return () => { try { ch?.unsubscribe(); } catch {} };
   }, [client]);
 
+  // her answer also lands on the Love Bug Calendar, so Pelucha can plan around
+  // it in the main app (no email, no forms — it's just there)
+  const calendarize = async (c, payload) => {
+    const ev = { kind: "fyi", created_by: PEACHES_ID, emoji: c.emoji, title: c.title };
+    if (c.kind === "date") {
+      ev.starts_on = payload.date;
+      ev.notes = "🎁 birthday coupon — she booked this day";
+    } else if (c.kind === "range") {
+      ev.starts_on = payload.start;
+      ev.notes = `🎁 birthday coupon — ${payload.days} days, through ${fmtLong(addDays(payload.start, payload.days - 1))}`;
+    } else {
+      ev.starts_on = todayISO();
+      ev.notes = c.slug === "thrift"
+        ? "🎁 birthday coupon redeemed — send her the $250 💸"
+        : "🎁 birthday coupon redeemed — book her classes 🪡";
+    }
+    try { await client.from("events").insert(ev); } catch {}
+  };
+
   const onRedeem = async (c, payload) => {
     const now = new Date().toISOString();
     const { data, error } = await client
@@ -429,6 +448,7 @@ function Gifts({ client }) {
     if (error || !data) return;
     setRows((r) => ({ ...r, [c.slug]: data }));
     confetti(120);
+    calendarize(c, payload);
     const detail =
       c.kind === "date" ? `${c.emoji} ${c.title} — ${fmtLong(payload.date)}`
       : c.kind === "range" ? `${c.emoji} ${c.title} — ${fmtShort(payload.start)} to ${fmtShort(addDays(payload.start, payload.days - 1))}`
