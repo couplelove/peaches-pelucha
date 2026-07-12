@@ -596,6 +596,7 @@ create table if not exists meals (
   title      text not null default '',        -- the dish they're planning
   cook_name  text not null default '',
   cook_emoji text not null default '',
+  confirmed  boolean not null default false,   -- night is incomplete until the dinner is locked in
   updated_at timestamptz not null default now()
 );
 alter table meals enable row level security;

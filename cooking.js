@@ -84,9 +84,17 @@ export function CookingCard({ client, me, players, flash }) {
   const saveDish = async (night, title) => {
     const m = mealOf(night);
     if (!m || m.title === title) { setEditNight(null); return; }
-    setMeals((cur) => cur.map((x) => (x.night === night ? { ...x, title } : x)));
+    // a changed dish goes back to "not locked in" until someone confirms it
+    setMeals((cur) => cur.map((x) => (x.night === night ? { ...x, title, confirmed: false } : x)));
     setEditNight(null);
-    await client.from("meals").update({ title, updated_at: new Date().toISOString() }).eq("id", m.id);
+    await client.from("meals").update({ title, confirmed: false, updated_at: new Date().toISOString() }).eq("id", m.id);
+  };
+  const lockMeal = async (night) => {
+    const m = mealOf(night);
+    if (!m || !m.title) return;
+    setMeals((cur) => cur.map((x) => (x.night === night ? { ...x, confirmed: true } : x)));
+    try { navigator.vibrate && navigator.vibrate(25); } catch {}
+    await client.from("meals").update({ confirmed: true, updated_at: new Date().toISOString() }).eq("id", m.id);
   };
 
   const addItem = async (label, market, mealNight) => {
@@ -121,37 +129,46 @@ export function CookingCard({ client, me, players, flash }) {
 
   const ingChips = (night) => (items || []).filter((i) => i.meal_night === night);
 
-  const mealRow = (n) => {
+  // one night = one carousel card. Three states: EMPTY (dashed invitation),
+  // DRAFT (dish typed but not confirmed), LOCKED (dinner picked ✓ — the card
+  // fills in warm). Editing a locked dish sends it back to draft.
+  const mealCard = (n) => {
     const m = mealOf(n.key);
     const dish = (m && m.title) || "";
+    const locked = !!(m && m.confirmed && dish);
     const chips = ingChips(n.key);
-    return html`<div class="mealrow" key=${n.key}>
-      <div class="mealwho"><span class="mealcook">${(m && m.cook_emoji) || ""}</span>
-        <div class="mealmeta"><b>${n.label}</b><span class="tiny muted">${(m && m.cook_name) || ""}</span></div>
+    const state = locked ? "locked" : dish ? "draft" : "empty";
+    return html`<div class=${`mealcard ${state}`} key=${n.key}>
+      <div class="mc-top">
+        <span class="mc-emoji">${(m && m.cook_emoji) || ""}</span>
+        <div class="mc-night">${n.label}</div>
+        <div class="mc-cook">${(m && m.cook_name) || ""}</div>
       </div>
-      <div class="mealdish">
-        ${editNight === n.key
-          ? html`<input class="mealinput" autofocus value=${dish} maxlength="80" placeholder="what are we making?"
-              ref=${(el) => { if (el) draft.current = el; }}
-              onKeyDown=${(e) => { if (e.key === "Enter") saveDish(n.key, e.target.value); if (e.key === "Escape") setEditNight(null); }}
-              onBlur=${(e) => saveDish(n.key, e.target.value)} />`
-          : html`<button class=${`mealtitle ${dish ? "" : "empty"}`} onClick=${() => setEditNight(n.key)}>${dish || "＋ plan the dish"}</button>`}
-        <div class="ingrow">
-          ${chips.map((it) => html`<span class=${`ingchip ${it.done ? "got" : ""}`} key=${it.id}>
-            <span class="ingmk" onClick=${() => cycleMarket(it)}>${it.market ? it.market[0].toUpperCase() : "·"}</span>
-            <span onClick=${() => toggleItem(it)}>${it.label}</span>
-            <span class="ingx" onClick=${() => delItem(it)}>✕</span>
-          </span>`)}
-          ${ingNight === n.key
-            ? html`<input class="inginput" autofocus placeholder="ingredient…" maxlength="60"
-                onKeyDown=${async (e) => {
-                  if (e.key === "Enter" && e.target.value.trim()) { const v = e.target.value; e.target.value = ""; await addItem(v, DEFAULT_MARKET[n.key], n.key); }
-                  if (e.key === "Escape") setIngNight(null);
-                }}
-                onBlur=${async (e) => { if (e.target.value.trim()) await addItem(e.target.value, DEFAULT_MARKET[n.key], n.key); setIngNight(null); }} />`
-            : html`<button class="ingadd" onClick=${() => setIngNight(n.key)}>＋</button>`}
-        </div>
-      </div>
+      ${editNight === n.key
+        ? html`<input class="mc-input" autofocus value=${dish} maxlength="80" placeholder="what are we making?"
+            ref=${(el) => { if (el) draft.current = el; }}
+            onKeyDown=${(e) => { if (e.key === "Enter") saveDish(n.key, e.target.value); if (e.key === "Escape") setEditNight(null); }}
+            onBlur=${(e) => saveDish(n.key, e.target.value)} />`
+        : dish
+          ? html`<button class="mc-dish" onClick=${() => setEditNight(n.key)}>${dish}</button>`
+          : html`<button class="mc-pick" onClick=${() => setEditNight(n.key)}><span class="mc-plus">＋</span>pick dinner</button>`}
+      ${state === "draft" && editNight !== n.key && html`<button class="mc-lock" onClick=${() => lockMeal(n.key)}>Lock it in 🍳</button>`}
+      ${locked && html`<div class="mc-locked">✓ dinner picked</div>`}
+      ${dish && html`<div class="ingrow mc-ings">
+        ${chips.map((it) => html`<span class=${`ingchip ${it.done ? "got" : ""}`} key=${it.id}>
+          <span class="ingmk" onClick=${() => cycleMarket(it)}>${it.market ? it.market[0].toUpperCase() : "·"}</span>
+          <span onClick=${() => toggleItem(it)}>${it.label}</span>
+          <span class="ingx" onClick=${() => delItem(it)}>✕</span>
+        </span>`)}
+        ${ingNight === n.key
+          ? html`<input class="inginput" autofocus placeholder="ingredient…" maxlength="60"
+              onKeyDown=${async (e) => {
+                if (e.key === "Enter" && e.target.value.trim()) { const v = e.target.value; e.target.value = ""; await addItem(v, DEFAULT_MARKET[n.key], n.key); }
+                if (e.key === "Escape") setIngNight(null);
+              }}
+              onBlur=${async (e) => { if (e.target.value.trim()) await addItem(e.target.value, DEFAULT_MARKET[n.key], n.key); setIngNight(null); }} />`
+          : html`<button class="ingadd" onClick=${() => setIngNight(n.key)}>＋</button>`}
+      </div>`}
     </div>`;
   };
 
@@ -161,23 +178,24 @@ export function CookingCard({ client, me, players, flash }) {
     </div>
 
     ${meals === null ? html`<div class="empty"><span class="big">🍳</span>Loading…</div>` : html`
-      <div class="meallist">${NIGHTS.map(mealRow)}</div>
+      <div class="mealcarousel" data-noswipe>${NIGHTS.map(mealCard)}</div>
 
-      <div class="weyebrow" style="margin-top:16px">Shopping list 🧺</div>
+      <div class="buyhead"><span class="buytitle">Shopping list <span class="muted-glyph">🧺</span></span></div>
       <div class="buybar">
         <input placeholder="add to the list…" maxlength="60"
           onKeyDown=${async (e) => { if (e.key === "Enter" && e.target.value.trim()) { const v = e.target.value; e.target.value = ""; await addItem(v, buyMarket, null); } }} />
         <div class="mkseg">
-          ${MARKETS.map((mk) => html`<button key=${mk.key} class=${buyMarket === mk.key ? "on" : ""} onClick=${() => setBuyMarket(mk.key)}>${mk.label}</button>`)}
-          <button class=${buyMarket === null ? "on" : ""} onClick=${() => setBuyMarket(null)}>any</button>
+          ${MARKETS.map((mk) => html`<button key=${mk.key} class=${buyMarket === mk.key ? "on" : ""} title=${mk.label} onClick=${() => setBuyMarket(mk.key)}>${mk.label[0]}</button>`)}
+          <button class=${buyMarket === null ? "on" : ""} title="anytime" onClick=${() => setBuyMarket(null)}>∙</button>
         </div>
       </div>
 
       ${MARKETS.map((mk) => {
         const list = (items || []).filter((i) => i.market === mk.key);
         if (!list.length) return null;
+        const open = list.filter((i) => !i.done).length;
         return html`<div class="mkgroup" key=${mk.key}>
-          <div class="mkhead">${mk.label === "Sat" ? "Saturday" : mk.label === "Mon" ? "Monday" : "Wednesday"} market ${nm.key === mk.key ? html`<span class="mknext">next 🧺</span>` : ""}</div>
+          <div class="mkhead"><span>${mk.label === "Sat" ? "Saturday" : mk.label === "Mon" ? "Monday" : "Wednesday"} market ${nm.key === mk.key ? html`<span class="mknext">next 🧺</span>` : ""}</span><span class="mkcount">${open || ""}</span></div>
           ${list.map((it) => html`<div class=${`buyline ${it.done ? "got" : ""}`} key=${it.id}>
             <button class="buychk" onClick=${() => toggleItem(it)}>${it.done ? "✓" : ""}</button>
             <span class="buylabel" onClick=${() => toggleItem(it)}>${it.label}${it.meal_night ? html`<span class="buymeal">${(mealOf(it.meal_night) || {}).cook_emoji || ""} ${NIGHTS.find((n) => n.key === it.meal_night).label.slice(0, 3)}</span>` : ""}</span>
@@ -186,7 +204,7 @@ export function CookingCard({ client, me, players, flash }) {
         </div>`;
       })}
       ${(() => { const list = (items || []).filter((i) => !i.market); return list.length ? html`<div class="mkgroup">
-        <div class="mkhead">anytime</div>
+        <div class="mkhead"><span>anytime</span><span class="mkcount">${list.filter((i) => !i.done).length || ""}</span></div>
         ${list.map((it) => html`<div class=${`buyline ${it.done ? "got" : ""}`} key=${it.id}>
           <button class="buychk" onClick=${() => toggleItem(it)}>${it.done ? "✓" : ""}</button>
           <span class="buylabel" onClick=${() => toggleItem(it)}>${it.label}${it.meal_night ? html`<span class="buymeal">${(mealOf(it.meal_night) || {}).cook_emoji || ""} ${NIGHTS.find((n) => n.key === it.meal_night).label.slice(0, 3)}</span>` : ""}</span>

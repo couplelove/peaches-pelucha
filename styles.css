@@ -1677,42 +1677,72 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 /* ---------------------------------------------------------- cooking 🍳 --- */
 .mkpill { font-size: 12px; font-weight: 700; color: var(--accent-press); background: var(--accent-soft);
   border-radius: 999px; padding: 5px 11px; white-space: nowrap; }
-.meallist { display: flex; flex-direction: column; gap: 14px; }
-.mealrow { display: flex; gap: 12px; align-items: flex-start; }
-.mealwho { display: flex; gap: 8px; align-items: center; min-width: 108px; padding-top: 3px; }
-.mealcook { font-size: 20px; line-height: 1; }
-.mealmeta { display: flex; flex-direction: column; }
-.mealmeta b { font-size: 14px; }
-.mealdish { flex: 1; min-width: 0; }
-.mealtitle { display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
-  font-family: var(--serif); font-size: 17px; color: var(--ink); padding: 2px 0; }
-.mealtitle.empty { color: var(--ink-2); opacity: .6; font-size: 14px; font-family: var(--sans); }
-.mealinput { width: 100%; font-family: var(--serif); font-size: 16px; padding: 6px 10px; }
-.ingrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
-.ingchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 3px 8px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--paper-2); cursor: pointer; }
+
+/* --- the three nights: a snapping carousel of day cards --- */
+.mealcarousel { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+  margin: 2px -16px 0; padding: 4px 16px 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.mealcarousel::-webkit-scrollbar { display: none; }
+.mealcard { flex: 0 0 72%; max-width: 250px; scroll-snap-align: center; border-radius: 18px;
+  padding: 16px 15px 14px; display: flex; flex-direction: column; align-items: center; text-align: center;
+  min-height: 172px; transition: background .3s ease, border-color .3s ease; }
+.mealcard.empty { border: 1.5px dashed var(--line); background: transparent; }
+.mealcard.draft { border: 1px solid var(--line); background: var(--paper-2); }
+.mealcard.locked { border: 1px solid rgba(193,95,60,.28);
+  background: linear-gradient(165deg, #fdeee6 0%, #fbdcc9 100%); }
+.mc-top { display: flex; flex-direction: column; align-items: center; gap: 1px; margin-bottom: 10px; }
+.mc-emoji { font-size: 22px; line-height: 1.2; }
+.mc-night { font-weight: 700; font-size: 14px; color: var(--ink); }
+.mc-cook { font-size: 11.5px; color: var(--ink-2); }
+.mealcard.locked .mc-night { color: #4a2c1a; }
+.mealcard.locked .mc-cook { color: rgba(74,44,26,.65); }
+.mc-pick { border: none; background: none; color: var(--ink-2); opacity: .75; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; padding: 8px 6px; margin: auto 0; }
+.mc-plus { width: 34px; height: 34px; border: 1.5px dashed var(--line); border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; font-size: 17px; }
+.mc-dish { border: none; background: none; cursor: pointer; font-family: var(--serif); font-size: 19px;
+  line-height: 1.25; color: var(--ink); padding: 2px 0 0; max-width: 100%; }
+.mealcard.locked .mc-dish { color: #4a2c1a; }
+.mc-input { width: 100%; font-family: var(--serif); font-size: 16px; text-align: center; padding: 7px 10px; }
+.mc-lock { margin-top: 9px; border: none; border-radius: 999px; background: var(--accent); color: #fff;
+  font-weight: 700; font-size: 12.5px; padding: 7px 14px; cursor: pointer; }
+.mc-locked { margin-top: 8px; font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: #8a5a2a; }
+.mc-ings { justify-content: center; margin-top: 10px; }
+
+/* ingredient chips (shared by cards + list) */
+.ingrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ingchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 8px;
+  border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.55); cursor: pointer; }
 .ingchip.got { opacity: .45; text-decoration: line-through; }
-.ingmk { font-weight: 800; font-size: 10px; color: var(--accent-press); background: var(--accent-soft);
-  border-radius: 999px; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; }
+.ingmk { font-weight: 800; font-size: 9.5px; color: var(--accent-press); background: var(--accent-soft);
+  border-radius: 999px; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; }
 .ingx { opacity: .45; font-size: 10px; padding: 2px; }
 .ingadd { border: 1px dashed var(--line); background: none; border-radius: 999px; width: 24px; height: 24px;
   color: var(--ink-2); cursor: pointer; font-size: 13px; line-height: 1; }
-.inginput { font-size: 13px; padding: 4px 10px; border-radius: 999px; width: 130px; }
-.buybar { display: flex; gap: 8px; align-items: center; margin: 8px 0 4px; }
-.buybar input { flex: 1; min-width: 0; }
-.mkseg { display: flex; gap: 3px; }
-.mkseg button { border: 1px solid var(--line); background: none; border-radius: 999px; font-size: 11.5px; font-weight: 700;
-  padding: 5px 8px; color: var(--ink-2); cursor: pointer; }
+.inginput { font-size: 13px; padding: 4px 10px; border-radius: 999px; width: 128px; }
+
+/* --- shopping list: quiet, hairline, editorial --- */
+.buyhead { display: flex; align-items: baseline; justify-content: space-between; margin: 16px 0 8px; }
+.buytitle { font-family: var(--serif); font-size: 19px; color: var(--ink); }
+.buybar { display: flex; gap: 8px; align-items: center; margin-bottom: 2px; }
+.buybar input { flex: 1; min-width: 0; border-radius: 999px; }
+.mkseg { display: flex; gap: 4px; }
+.mkseg button { width: 30px; height: 30px; border: 1px solid var(--line); background: none; border-radius: 999px;
+  font-size: 11.5px; font-weight: 800; color: var(--ink-2); cursor: pointer; padding: 0; }
 .mkseg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.mkgroup { margin-top: 12px; }
-.mkhead { font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 5px; }
-.mknext { color: var(--accent-press); margin-left: 4px; letter-spacing: 0; text-transform: none; font-weight: 700; }
-.buyline { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
-.buyline:last-child { border-bottom: none; }
-.buyline.got .buylabel { opacity: .4; text-decoration: line-through; }
-.buychk { width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--line); background: none;
-  color: var(--accent-press); font-weight: 800; cursor: pointer; flex: none; font-size: 13px; line-height: 1; }
-.buyline.got .buychk { background: var(--accent-soft); border-color: var(--accent); }
+.mkgroup { margin-top: 14px; }
+.mkhead { display: flex; align-items: baseline; justify-content: space-between;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2);
+  padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.mkcount { font-weight: 700; letter-spacing: 0; color: var(--accent-press); }
+.mknext { color: var(--accent-press); margin-left: 5px; letter-spacing: .02em; text-transform: none; font-weight: 700; }
+.buyline { display: flex; align-items: center; gap: 11px; padding: 8px 2px; }
+.buyline + .buyline { border-top: 1px solid rgba(20,33,46,.05); }
+.buyline.got .buylabel { opacity: .38; text-decoration: line-through; }
+.buychk { width: 21px; height: 21px; border-radius: 999px; border: 1.5px solid var(--line); background: none;
+  color: #fff; font-weight: 800; cursor: pointer; flex: none; font-size: 12px; line-height: 1; padding: 0;
+  transition: background .15s ease, border-color .15s ease; }
+.buyline.got .buychk { background: var(--accent); border-color: var(--accent); }
 .buylabel { flex: 1; min-width: 0; font-size: 14.5px; cursor: pointer; }
 .buymeal { font-size: 11px; color: var(--ink-2); margin-left: 7px; }
-.buyx { background: none; border: none; color: var(--ink-2); opacity: .5; cursor: pointer; font-size: 11px; }
+.buyx { background: none; border: none; color: var(--ink-2); opacity: .4; cursor: pointer; font-size: 11px; }

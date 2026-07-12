@@ -51,9 +51,9 @@ function seed() {
     ],
     watch_state: [],
     meals: [
-      { id: uid(), night: "sun", title: "Lemon pasta", cook_name: "Peaches", cook_emoji: "🍑", updated_at: nowISO() },
-      { id: uid(), night: "mon", title: "", cook_name: "Pelucha", cook_emoji: "🧸", updated_at: nowISO() },
-      { id: uid(), night: "tue", title: "Tacos night", cook_name: "together", cook_emoji: "🍑🧸", updated_at: nowISO() },
+      { id: uid(), night: "sun", title: "Lemon pasta", cook_name: "Peaches", cook_emoji: "🍑", confirmed: true, updated_at: nowISO() },
+      { id: uid(), night: "mon", title: "", cook_name: "Pelucha", cook_emoji: "🧸", confirmed: false, updated_at: nowISO() },
+      { id: uid(), night: "tue", title: "Tacos night", cook_name: "together", cook_emoji: "🍑🧸", confirmed: false, updated_at: nowISO() },
     ],
     shopping_items: [
       { id: uid(), label: "lemons", meal_night: "sun", market: "sat", done: false, created_by: peaches, created_at: nowISO() },
@@ -176,7 +176,7 @@ const DEFAULTS = {
   memories: { kind: "photo", uploaded_by: null, place: null, lat: null, lng: null, thumb_path: null, blur: null },
   social_links: { platform: "other", video_id: null, mode: "share", sender_id: null, recipient_id: null, note: null, seen_at: null, reactions: [], status: "active", archived_at: null },
   todos: { due_on: null, done: false, done_at: null, created_by: null },
-  meals: { night: "", title: "", cook_name: "", cook_emoji: "", updated_at: null },
+  meals: { night: "", title: "", cook_name: "", cook_emoji: "", confirmed: false, updated_at: null },
   shopping_items: { label: "", meal_night: null, market: null, done: false, created_by: null },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },
