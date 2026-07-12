@@ -1673,3 +1673,46 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 .bookpara { font-family: var(--serif); font-size: 16.5px; line-height: 1.75; color: var(--ink);
   margin: 16px 2px 20px; max-width: 62ch; }
 .bookend { text-align: center; color: var(--ink-2); font-size: 15px; letter-spacing: .5em; margin: 6px 0 18px; padding-left: .5em; }
+
+/* ---------------------------------------------------------- cooking 🍳 --- */
+.mkpill { font-size: 12px; font-weight: 700; color: var(--accent-press); background: var(--accent-soft);
+  border-radius: 999px; padding: 5px 11px; white-space: nowrap; }
+.meallist { display: flex; flex-direction: column; gap: 14px; }
+.mealrow { display: flex; gap: 12px; align-items: flex-start; }
+.mealwho { display: flex; gap: 8px; align-items: center; min-width: 108px; padding-top: 3px; }
+.mealcook { font-size: 20px; line-height: 1; }
+.mealmeta { display: flex; flex-direction: column; }
+.mealmeta b { font-size: 14px; }
+.mealdish { flex: 1; min-width: 0; }
+.mealtitle { display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  font-family: var(--serif); font-size: 17px; color: var(--ink); padding: 2px 0; }
+.mealtitle.empty { color: var(--ink-2); opacity: .6; font-size: 14px; font-family: var(--sans); }
+.mealinput { width: 100%; font-family: var(--serif); font-size: 16px; padding: 6px 10px; }
+.ingrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+.ingchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 3px 8px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--paper-2); cursor: pointer; }
+.ingchip.got { opacity: .45; text-decoration: line-through; }
+.ingmk { font-weight: 800; font-size: 10px; color: var(--accent-press); background: var(--accent-soft);
+  border-radius: 999px; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; }
+.ingx { opacity: .45; font-size: 10px; padding: 2px; }
+.ingadd { border: 1px dashed var(--line); background: none; border-radius: 999px; width: 24px; height: 24px;
+  color: var(--ink-2); cursor: pointer; font-size: 13px; line-height: 1; }
+.inginput { font-size: 13px; padding: 4px 10px; border-radius: 999px; width: 130px; }
+.buybar { display: flex; gap: 8px; align-items: center; margin: 8px 0 4px; }
+.buybar input { flex: 1; min-width: 0; }
+.mkseg { display: flex; gap: 3px; }
+.mkseg button { border: 1px solid var(--line); background: none; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  padding: 5px 8px; color: var(--ink-2); cursor: pointer; }
+.mkseg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mkgroup { margin-top: 12px; }
+.mkhead { font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 5px; }
+.mknext { color: var(--accent-press); margin-left: 4px; letter-spacing: 0; text-transform: none; font-weight: 700; }
+.buyline { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.buyline:last-child { border-bottom: none; }
+.buyline.got .buylabel { opacity: .4; text-decoration: line-through; }
+.buychk { width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--line); background: none;
+  color: var(--accent-press); font-weight: 800; cursor: pointer; flex: none; font-size: 13px; line-height: 1; }
+.buyline.got .buychk { background: var(--accent-soft); border-color: var(--accent); }
+.buylabel { flex: 1; min-width: 0; font-size: 14.5px; cursor: pointer; }
+.buymeal { font-size: 11px; color: var(--ink-2); margin-left: 7px; }
+.buyx { background: none; border: none; color: var(--ink-2); opacity: .5; cursor: pointer; font-size: 11px; }

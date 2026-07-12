@@ -2,6 +2,7 @@ import { h } from "https://esm.sh/preact@10.23.2";
 import { useState, useEffect, useCallback } from "https://esm.sh/preact@10.23.2/hooks";
 import htm from "https://esm.sh/htm@3.1.1";
 import { notifyTurn } from "./push.js";
+import { CookingCard } from "./cooking.js";
 
 const html = htm.bind(h);
 
@@ -444,6 +445,8 @@ export function PlansTab({ client, me, players, flash }) {
       ${showPast && html`<div class="list" style="opacity:.6">${past.map(Row)}</div>`}
       `}
     </div>
+
+    <${CookingCard} client=${client} me=${me} players=${players} flash=${flash} />
 
     <${TodoCard} client=${client} me=${me} players=${players} flash=${flash} />
 
