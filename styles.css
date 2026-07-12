@@ -247,6 +247,9 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 
 .verse { margin: 0; padding: 0; text-align: center; }
 .verse-text { font-family: var(--serif); font-size: 22px; line-height: 1.5; font-style: italic; color: var(--ink); margin: 0 0 12px; }
+/* longer passages sit smaller so the card never balloons */
+.verse-text.long { font-size: 18px; line-height: 1.55; }
+.verse-text.xlong { font-size: 16px; line-height: 1.6; }
 
 /* ---- magazine home ---- */
 
