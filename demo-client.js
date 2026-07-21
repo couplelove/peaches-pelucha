@@ -50,11 +50,21 @@ function seed() {
         reactions: [], status: "watched", archived_at: new Date(Date.now() - 5 * 864e5).toISOString(), created_at: new Date(Date.now() - 6 * 864e5).toISOString() },
     ],
     watch_state: [],
-    meals: [
-      { id: uid(), night: "sun", title: "Lemon pasta", cook_name: "Peaches", cook_emoji: "🍑", confirmed: true, updated_at: nowISO() },
-      { id: uid(), night: "mon", title: "", cook_name: "Pelucha", cook_emoji: "🧸", confirmed: false, updated_at: nowISO() },
-      { id: uid(), night: "tue", title: "Tacos night", cook_name: "together", cook_emoji: "🍑🧸", confirmed: false, updated_at: nowISO() },
-    ],
+    meals: (() => {
+      const t = new Date();
+      const s = new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay());
+      const ws = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+      const mk = (night, extra) => ({ id: uid(), week_start: ws, night, title: "", cook_name: "", cook_emoji: "", confirmed: false, eating_out: false, updated_at: nowISO(), ...extra });
+      return [
+        mk("sun", { title: "Lemon pasta", cook_name: "Peaches", cook_emoji: "🍑", confirmed: true }),
+        mk("mon", { cook_name: "Pelucha", cook_emoji: "🧸" }),
+        mk("tue", { title: "Tacos night", cook_name: "together", cook_emoji: "🍑🧸" }),
+        mk("wed", {}),
+        mk("thu", { eating_out: true }),
+        mk("fri", {}),
+        mk("sat", {}),
+      ];
+    })(),
     shopping_items: [
       { id: uid(), label: "lemons", meal_night: "sun", market: "sat", done: false, created_by: peaches, created_at: nowISO() },
       { id: uid(), label: "basil", meal_night: "sun", market: "sat", done: true, created_by: peaches, created_at: nowISO() },
@@ -176,7 +186,7 @@ const DEFAULTS = {
   memories: { kind: "photo", uploaded_by: null, place: null, lat: null, lng: null, thumb_path: null, blur: null },
   social_links: { platform: "other", video_id: null, mode: "share", sender_id: null, recipient_id: null, note: null, seen_at: null, reactions: [], status: "active", archived_at: null },
   todos: { due_on: null, done: false, done_at: null, created_by: null },
-  meals: { night: "", title: "", cook_name: "", cook_emoji: "", confirmed: false, updated_at: null },
+  meals: { week_start: null, night: "", title: "", cook_name: "", cook_emoji: "", confirmed: false, eating_out: false, updated_at: null },
   shopping_items: { label: "", meal_night: null, market: null, done: false, created_by: null },
   date_ideas: { emoji: "✨", category: "food", active: true, added_by: null },
   date_spins: { emoji: "✨", category: "food", spun_by: null },

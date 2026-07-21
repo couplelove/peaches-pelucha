@@ -592,13 +592,16 @@ on conflict (slug) do nothing;
 -- list (their market days: Sat / Mon / Wed).
 create table if not exists meals (
   id         uuid primary key default gen_random_uuid(),
-  night      text not null unique,            -- 'sun' | 'mon' | 'tue'
+  week_start date,                            -- Sunday that anchors the week (weekly reset)
+  night      text not null,                   -- 'sun'..'sat' — all 7 nights
   title      text not null default '',        -- the dish they're planning
   cook_name  text not null default '',
   cook_emoji text not null default '',
-  confirmed  boolean not null default false,   -- night is incomplete until the dinner is locked in
+  confirmed  boolean not null default false,  -- night is incomplete until the dinner is locked in
+  eating_out boolean not null default false,  -- 🍽 night off — no cooking
   updated_at timestamptz not null default now()
 );
+create unique index if not exists meals_week_night on meals (week_start, night);
 alter table meals enable row level security;
 drop policy if exists anon_all on meals;
 create policy anon_all on meals for all to anon, authenticated using (true) with check (true);
